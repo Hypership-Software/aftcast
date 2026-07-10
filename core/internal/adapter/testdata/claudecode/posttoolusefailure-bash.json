@@ -1,0 +1,20 @@
+{
+  "session_id": "spike-sess-7777-8888-9999",
+  "transcript_path": "C:\\Users\\dev\\.claude\\projects\\C--Users-dev-project\\spike-transcript-0007.jsonl",
+  "cwd": "C:\\Users\\dev\\project",
+  "prompt_id": "spike-prompt-cccc-dddd",
+  "permission_mode": "default",
+  "effort": {
+    "level": "xhigh"
+  },
+  "hook_event_name": "PostToolUseFailure",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "node -e \"console.error('boom'); process.exit(5)\"",
+    "description": "Run node script that prints boom to stderr and exits 5"
+  },
+  "tool_use_id": "toolu_SAMPLEfailure0001",
+  "error": "Exit code 5\nboom",
+  "is_interrupt": false,
+  "duration_ms": 13677
+}

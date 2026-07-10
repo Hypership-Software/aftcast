@@ -1,0 +1,12 @@
+{
+  "session_id": "synthetic-mcp-0001",
+  "cwd": "/home/dev/project",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "mcp__github__create_issue",
+  "tool_input": {
+    "title": "bug report",
+    "body": "something broke"
+  },
+  "tool_use_id": "toolu_mcp0001"
+}

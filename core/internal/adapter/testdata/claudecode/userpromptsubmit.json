@@ -1,0 +1,6 @@
+{
+  "session_id": "synthetic-prompt-0001",
+  "cwd": "/home/dev/project",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "add a test for the parser"
+}

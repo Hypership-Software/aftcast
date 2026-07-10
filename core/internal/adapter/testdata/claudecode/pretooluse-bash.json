@@ -1,0 +1,17 @@
+{
+  "session_id": "spike-sess-1111-2222-3333",
+  "transcript_path": "C:\\Users\\dev\\.claude\\projects\\C--Users-dev-project\\spike-transcript-0001.jsonl",
+  "cwd": "C:\\Users\\dev\\project",
+  "prompt_id": "spike-prompt-aaaa-bbbb",
+  "permission_mode": "bypassPermissions",
+  "effort": {
+    "level": "xhigh"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "node -e \"console.log(42)\"",
+    "description": "Run node one-liner printing 42"
+  },
+  "tool_use_id": "toolu_SAMPLEsuccess0001"
+}

@@ -1,0 +1,155 @@
+package adapter
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+
+	"github.com/Hypership-Software/atlas/internal/schema"
+)
+
+func cc(t *testing.T) Adapter {
+	t.Helper()
+	a, ok := Get("claudecode")
+	if !ok {
+		t.Fatal("claudecode adapter not registered")
+	}
+	return a
+}
+
+func fixture(t *testing.T, name string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", "claudecode", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+// normalize reads a fixture and normalizes it with event="" so the payload's own
+// hook_event_name drives the mapping (the real-payload path).
+func normalize(t *testing.T, name string) (schema.Descriptor, schema.TelemetryEvent) {
+	t.Helper()
+	d, e, err := cc(t).Normalize("", fixture(t, name))
+	if err != nil {
+		t.Fatalf("Normalize %s: %v", name, err)
+	}
+	return d, e
+}
+
+func TestNormalizeBashPreTool(t *testing.T) {
+	d, e := normalize(t, "pretooluse-bash.json")
+	if e.EventType != schema.EventPreTool {
+		t.Errorf("event type = %v, want pre_tool", e.EventType)
+	}
+	if d.ToolClass != schema.ClassExec {
+		t.Errorf("class = %v, want exec", d.ToolClass)
+	}
+	wantArgv := []string{"node", "-e", "console.log(42)"}
+	if !reflect.DeepEqual(d.Argv, wantArgv) {
+		t.Errorf("argv = %v, want %v", d.Argv, wantArgv)
+	}
+	if !reflect.DeepEqual(d.Verbs, []string{"node"}) {
+		t.Errorf("verbs = %v, want [node]", d.Verbs)
+	}
+}
+
+func TestNormalizePostToolUseFailureCarriesExitCode(t *testing.T) {
+	_, e := normalize(t, "posttoolusefailure-bash.json")
+	if e.EventType != schema.EventPostTool {
+		t.Errorf("event type = %v, want post_tool", e.EventType)
+	}
+	if e.ToolOK != schema.OutcomeFailed {
+		t.Errorf("tool_ok = %v, want failed", e.ToolOK)
+	}
+	if e.BashExitCode != 5 {
+		t.Errorf("bash_exit_code = %d, want 5", e.BashExitCode)
+	}
+}
+
+func TestNormalizePostToolUseSuccess(t *testing.T) {
+	_, e := normalize(t, "posttooluse-bash-success.json")
+	if e.ToolOK != schema.OutcomeOK {
+		t.Errorf("tool_ok = %v, want ok", e.ToolOK)
+	}
+	if e.BashExitCode != 0 {
+		t.Errorf("bash_exit_code = %d, want 0", e.BashExitCode)
+	}
+}
+
+func TestNormalizeReadFileClass(t *testing.T) {
+	d, _ := normalize(t, "pretooluse-read.json")
+	if d.ToolClass != schema.ClassFileRead {
+		t.Errorf("class = %v, want file_read", d.ToolClass)
+	}
+	if !reflect.DeepEqual(d.Files, []string{"/home/dev/project/.env"}) {
+		t.Errorf("files = %v", d.Files)
+	}
+}
+
+func TestNormalizeWebFetchDomain(t *testing.T) {
+	d, _ := normalize(t, "pretooluse-webfetch.json")
+	if d.ToolClass != schema.ClassNetFetch {
+		t.Errorf("class = %v, want net_fetch", d.ToolClass)
+	}
+	if d.Domain != "evil.example.com" {
+		t.Errorf("domain = %q, want evil.example.com", d.Domain)
+	}
+}
+
+func TestNormalizeMCPSplit(t *testing.T) {
+	d, _ := normalize(t, "pretooluse-mcp.json")
+	if d.ToolClass != schema.ClassMCP {
+		t.Errorf("class = %v, want mcp", d.ToolClass)
+	}
+	if d.MCPServer != "github" || d.MCPTool != "create_issue" {
+		t.Errorf("mcp split = (%q,%q), want (github,create_issue)", d.MCPServer, d.MCPTool)
+	}
+}
+
+func TestNormalizeUserPrompt(t *testing.T) {
+	_, e := normalize(t, "userpromptsubmit.json")
+	if e.EventType != schema.EventUserPrompt {
+		t.Errorf("event type = %v, want user_prompt", e.EventType)
+	}
+}
+
+func TestRespondDecisions(t *testing.T) {
+	a := cc(t)
+	for _, tc := range []struct {
+		v    schema.Verdict
+		want string
+	}{
+		{schema.VerdictAllow, "allow"},
+		{schema.VerdictDeny, "deny"},
+		{schema.VerdictAsk, "ask"},
+	} {
+		raw, err := a.Respond(tc.v, "because")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out struct {
+			HookSpecificOutput struct {
+				PermissionDecision       string `json:"permissionDecision"`
+				PermissionDecisionReason string `json:"permissionDecisionReason"`
+			} `json:"hookSpecificOutput"`
+		}
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatal(err)
+		}
+		if out.HookSpecificOutput.PermissionDecision != tc.want {
+			t.Errorf("verdict %v -> %q, want %q", tc.v, out.HookSpecificOutput.PermissionDecision, tc.want)
+		}
+		if tc.v == schema.VerdictDeny && out.HookSpecificOutput.PermissionDecisionReason != "because" {
+			t.Errorf("deny reason not surfaced: %q", out.HookSpecificOutput.PermissionDecisionReason)
+		}
+	}
+}
+
+func TestGetUnknownHarness(t *testing.T) {
+	if _, ok := Get("nope"); ok {
+		t.Error("Get returned an adapter for an unknown harness")
+	}
+}

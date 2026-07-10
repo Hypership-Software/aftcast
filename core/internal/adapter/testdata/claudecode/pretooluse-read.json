@@ -1,0 +1,11 @@
+{
+  "session_id": "synthetic-read-0001",
+  "cwd": "/home/dev/project",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/home/dev/project/.env"
+  },
+  "tool_use_id": "toolu_read0001"
+}
