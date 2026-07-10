@@ -15,3 +15,15 @@ func TestVersionSubcommand(t *testing.T) {
 		t.Fatalf("want name, got: %s", out)
 	}
 }
+
+func TestDaemonUnknownSubcommand(t *testing.T) {
+	if code := run([]string{"daemon", "bogus"}); code != 2 {
+		t.Fatalf("daemon bogus: exit = %d, want 2", code)
+	}
+}
+
+func TestDaemonInstallNotWiredYet(t *testing.T) {
+	if code := run([]string{"daemon", "install"}); code != 2 {
+		t.Fatalf("daemon install: exit = %d, want 2 (deferred to install sprint)", code)
+	}
+}

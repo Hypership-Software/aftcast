@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/Hypership-Software/atlas/internal/hookcmd"
 	"github.com/Hypership-Software/atlas/internal/meta"
+	"github.com/Hypership-Software/atlas/internal/svc"
 )
 
 const usage = "usage: gated <daemon|hook|init|policy|approvals|audit|insights|status|doctor|off|version>"
@@ -27,8 +31,37 @@ func run(args []string) int {
 			harness = args[1]
 		}
 		return hookcmd.Run(harness, os.Stdin, os.Stdout, os.Stderr)
+	case "daemon":
+		return daemon(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand %q\n%s\n", args[0], usage)
+		return 2
+	}
+}
+
+// daemon runs and manages the resident gate. `run` serves in the foreground
+// until interrupted (Ctrl+C / SIGTERM). OS-service registration (install/
+// uninstall for auto-start) is deferred to the install sprint — foreground run
+// is a complete, dogfoodable gate today.
+func daemon(args []string) int {
+	sub := "run"
+	if len(args) > 0 {
+		sub = args[0]
+	}
+	switch sub {
+	case "run":
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := svc.Run(ctx, svc.Options{}); err != nil {
+			fmt.Fprintf(os.Stderr, "gated daemon: %v\n", err)
+			return 1
+		}
+		return 0
+	case "install", "uninstall":
+		fmt.Fprintf(os.Stderr, "gated daemon %s: OS-service registration is not wired yet — run `gated daemon run` in the foreground for now.\n", sub)
+		return 2
+	default:
+		fmt.Fprintf(os.Stderr, "usage: gated daemon <run>\n")
 		return 2
 	}
 }

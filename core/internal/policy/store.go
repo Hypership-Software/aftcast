@@ -72,6 +72,29 @@ func StarterSet() (*Set, error) {
 	return acc.set(), nil
 }
 
+// LoadWithStarter compiles the embedded starter pack FIRST, then merges every
+// *.cedar file from dirs on top (org dirs last, so an @id collision resolves in
+// the org's favour). This is the daemon's effective policy: the starter baseline
+// (self-protection + secret-read forbids) is always active, with user/org
+// policies layered over it. A nonexistent dir is skipped — a fresh install has
+// no user policy directory yet, and that must not fail the daemon. (Cedar is
+// deny-overrides, so layering can only tighten the baseline, never weaken it.)
+func LoadWithStarter(dirs ...string) (*Set, error) {
+	acc := newAccumulator()
+	if err := acc.addFS(assets.StarterPack, assets.StarterPackDir, "starter-pack"); err != nil {
+		return nil, err
+	}
+	for _, dir := range dirs {
+		if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err := acc.addFS(os.DirFS(dir), ".", dir); err != nil {
+			return nil, err
+		}
+	}
+	return acc.set(), nil
+}
+
 type accumulator struct {
 	ps    *cedar.PolicySet
 	texts map[cedar.PolicyID]string

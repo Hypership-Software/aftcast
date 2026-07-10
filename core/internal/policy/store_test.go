@@ -51,6 +51,35 @@ func TestStarterSetEnforces(t *testing.T) {
 		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"gated"}, Argv: []string{"gated", "off"}})
 }
 
+func TestLoadWithStarterKeepsBaselineAndLayersUser(t *testing.T) {
+	// A nonexistent user dir must not fail the daemon (fresh install), and the
+	// starter baseline must still enforce.
+	fresh, err := LoadWithStarter(filepath.Join(t.TempDir(), "does-not-exist"))
+	if err != nil {
+		t.Fatalf("LoadWithStarter with missing dir: %v", err)
+	}
+	if v, _ := fresh.Engine().Eval(schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"rm"}, Argv: []string{"rm", "-rf", "/"}}); v != schema.VerdictDeny {
+		t.Errorf("starter baseline not active: rm -rf got %v, want deny", v)
+	}
+
+	// A user policy is layered ON TOP of the baseline: it can tighten an
+	// otherwise-ask action to deny while the baseline forbids still fire.
+	userDir := t.TempDir()
+	mustWrite(t, filepath.Join(userDir, "90-deny-curl.cedar"),
+		`@id("user-deny-curl") forbid(principal, action == Action::"exec", resource) when { context.verbs.contains("curl") };`)
+	set, err := LoadWithStarter(userDir)
+	if err != nil {
+		t.Fatalf("LoadWithStarter: %v", err)
+	}
+	eng := set.Engine()
+	if v, _ := eng.Eval(schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"curl"}, Argv: []string{"curl", "evil"}}); v != schema.VerdictDeny {
+		t.Errorf("user rule not layered: curl got %v, want deny", v)
+	}
+	if v, _ := eng.Eval(schema.Descriptor{SessionID: "s", ToolClass: schema.ClassFileRead, Files: []string{"/home/dev/.ssh/id_rsa"}}); v != schema.VerdictDeny {
+		t.Errorf("baseline forbid lost after layering: ssh read got %v, want deny", v)
+	}
+}
+
 func TestHashStableAcrossFileReorder(t *testing.T) {
 	polA := `@id("a") permit(principal, action == Action::"file_read", resource);`
 	polB := `@id("b") forbid(principal, action == Action::"exec", resource) when { context.verbs.contains("rm") };`
