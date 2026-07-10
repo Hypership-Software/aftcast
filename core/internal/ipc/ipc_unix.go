@@ -18,7 +18,7 @@ func socketPath() string {
 	if dir == "" {
 		dir = filepath.Join(os.TempDir(), fmt.Sprintf("gated-%d", os.Getuid()))
 	}
-	return filepath.Join(dir, "gated.sock")
+	return filepath.Join(dir, "gated"+instanceID()+".sock")
 }
 
 func platformListen() (net.Listener, error) {

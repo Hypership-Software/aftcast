@@ -11,18 +11,18 @@ import (
 	winio "github.com/Microsoft/go-winio"
 )
 
-const pipePath = `\\.\pipe\gated`
+func pipePath() string { return `\\.\pipe\gated` + instanceID() }
 
 func platformListen() (net.Listener, error) {
 	sddl, err := ownerOnlySDDL()
 	if err != nil {
 		return nil, err
 	}
-	return winio.ListenPipe(pipePath, &winio.PipeConfig{SecurityDescriptor: sddl})
+	return winio.ListenPipe(pipePath(), &winio.PipeConfig{SecurityDescriptor: sddl})
 }
 
 func platformDial(timeout time.Duration) (net.Conn, error) {
-	return winio.DialPipe(pipePath, &timeout)
+	return winio.DialPipe(pipePath(), &timeout)
 }
 
 // ownerOnlySDDL grants full access to only the current user's SID, protected

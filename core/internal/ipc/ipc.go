@@ -9,8 +9,14 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"time"
 )
+
+// instanceID isolates the control-plane endpoint via GATED_IPC_ID. Empty in
+// production (a single daemon per user); set by tests so parallel package test
+// binaries don't collide on the one fixed socket/pipe path.
+func instanceID() string { return os.Getenv("GATED_IPC_ID") }
 
 // MaxFrame bounds a single control-plane message — a guard against a hostile or
 // buggy peer. 1 MiB is far above any real descriptor or telemetry event.
