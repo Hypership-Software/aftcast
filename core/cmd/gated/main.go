@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/Hypership-Software/atlas/internal/hookcmd"
+	"github.com/Hypership-Software/atlas/internal/install"
 	"github.com/Hypership-Software/atlas/internal/meta"
 	"github.com/Hypership-Software/atlas/internal/svc"
 )
@@ -33,6 +34,26 @@ func run(args []string) int {
 		return hookcmd.Run(harness, os.Stdin, os.Stdout, os.Stderr)
 	case "daemon":
 		return daemon(args[1:])
+	case "init":
+		if err := install.Init(install.Options{}, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "gated init: %v\n", err)
+			return 1
+		}
+		return 0
+	case "uninstall":
+		if err := install.Uninstall(install.Options{}, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "gated uninstall: %v\n", err)
+			return 1
+		}
+		return 0
+	case "doctor":
+		if install.Doctor(install.Options{}, os.Stdout) {
+			return 0
+		}
+		return 1
+	case "off":
+		fmt.Fprintln(os.Stderr, "gated off: time-boxed disable is not wired yet — stop the daemon (Ctrl+C) or run `gated uninstall` to remove the hooks.")
+		return 2
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand %q\n%s\n", args[0], usage)
 		return 2

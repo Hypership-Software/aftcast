@@ -27,3 +27,9 @@ func TestDaemonInstallNotWiredYet(t *testing.T) {
 		t.Fatalf("daemon install: exit = %d, want 2 (deferred to install sprint)", code)
 	}
 }
+
+func TestOffNotWiredYet(t *testing.T) {
+	if code := run([]string{"off"}); code != 2 {
+		t.Fatalf("off: exit = %d, want 2 (deferred; guidance printed)", code)
+	}
+}
