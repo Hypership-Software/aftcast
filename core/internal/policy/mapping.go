@@ -4,6 +4,8 @@
 package policy
 
 import (
+	"path/filepath"
+
 	"github.com/Hypership-Software/atlas/internal/schema"
 	"github.com/cedar-policy/cedar-go"
 	"github.com/cedar-policy/cedar-go/types"
@@ -73,6 +75,10 @@ func buildContext(d schema.Descriptor) types.Record {
 	}
 	if len(d.Files) > 0 {
 		rec["files"] = stringSet(d.Files)
+		// Primary path as a String, normalized to forward slashes, so starter-pack
+		// `like` rules ("*/.ssh/*", "*.env") are portable across Windows/macOS.
+		// The verbatim path is preserved in the TelemetryEvent for audit.
+		rec["file"] = cedar.String(filepath.ToSlash(d.Files[0]))
 	}
 	if len(d.Verbs) > 0 {
 		rec["verbs"] = stringSet(d.Verbs)
