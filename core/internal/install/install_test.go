@@ -2,6 +2,8 @@ package install
 
 import (
 	"bytes"
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +11,64 @@ import (
 
 	"github.com/Hypership-Software/atlas/internal/svc"
 )
+
+func TestDoctorReportsStaleDaemonAsDown(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "h")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A stale record pointing at a port nothing listens on must read as down.
+	if err := os.WriteFile(filepath.Join(home, "daemon.json"),
+		[]byte(`{"pid":999999,"http_port":1,"http_url":"http://127.0.0.1:1/hook"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(settings, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if Doctor(Options{Home: home, SettingsPath: settings}, &out) {
+		t.Error("doctor reported healthy despite a stale daemon record")
+	}
+	if !strings.Contains(out.String(), "[FAIL] daemon running") {
+		t.Errorf("stale daemon record not reported as down:\n%s", out.String())
+	}
+}
+
+func TestStatusFlagsPortMismatch(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "h")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A bare listener stands in for a live daemon on an ephemeral port.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+	if err := os.WriteFile(filepath.Join(home, "daemon.json"),
+		[]byte(fmt.Sprintf(`{"pid":1,"http_port":%d,"http_url":"http://127.0.0.1:%d/hook"}`, port, port)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Settings wired at a different port than the daemon actually bound.
+	settings := filepath.Join(dir, "settings.json")
+	body := fmt.Sprintf(`{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"http","url":"http://127.0.0.1:%d/hook"}]}],"SessionStart":[{"hooks":[{"type":"command","command":"gated hook claudecode"}]}]}}`, port+1)
+	if err := os.WriteFile(settings, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if Status(Options{Home: home, SettingsPath: settings}, &out) {
+		t.Error("status reported healthy despite settings pointing at the wrong port")
+	}
+	if !strings.Contains(out.String(), "port") {
+		t.Errorf("status did not flag the port mismatch:\n%s", out.String())
+	}
+}
 
 func TestInitStartsDaemonAndPointsHooksAtBoundPort(t *testing.T) {
 	dir := t.TempDir()

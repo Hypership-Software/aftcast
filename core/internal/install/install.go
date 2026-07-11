@@ -153,24 +153,25 @@ func Doctor(opts Options, w io.Writer) bool {
 		return false
 	}
 
-	info, derr := readDaemonInfo(resolveHome(opts.Home))
-	pass("daemon record", derr == nil, hintErr(derr, " at "+filepath.Join(resolveHome(opts.Home), "daemon.json")))
-
-	hookURL := defaultHookURL()
-	if derr == nil && info.HTTPURL != "" {
-		hookURL = info.HTTPURL
+	info, up := svc.Running(resolveHome(opts.Home))
+	if up {
+		pass("daemon running", true, fmt.Sprintf(" (port %d)", info.HTTPPort))
+	} else {
+		pass("daemon running", false, " — start it with `gated init` or `gated daemon run`")
 	}
-	reachErr := selfVerify(hookURL)
-	pass("daemon reachable", reachErr == nil, hintErr(reachErr, " ("+hookURL+")"))
 
 	orig, serr := readSettings(settingsPath)
 	hasHTTP, hasSession := hooksPresent(orig)
 	pass("http hooks in settings", serr == nil && hasHTTP, ": "+settingsPath)
 	pass("SessionStart shim in settings", serr == nil && hasSession, "")
 
-	if derr == nil {
+	if up {
 		match := settingsPointAt(orig, info.HTTPURL)
-		pass("settings port matches daemon", match, " ("+info.HTTPURL+")")
+		detail := " (" + info.HTTPURL + ")"
+		if !match {
+			detail += " — re-run `gated init` to repoint the hooks"
+		}
+		pass("settings port matches daemon", match, detail)
 	}
 	return ok
 }
@@ -181,11 +182,14 @@ func Doctor(opts Options, w io.Writer) bool {
 func Status(opts Options, w io.Writer) bool {
 	info, up := svc.Running(resolveHome(opts.Home))
 
-	wired := false
+	wired, portMatch := false, true
 	if settingsPath, err := resolveSettingsPath(opts.SettingsPath); err == nil {
 		if orig, rerr := readSettings(settingsPath); rerr == nil {
 			http, session := hooksPresent(orig)
 			wired = http && session
+			if up && wired {
+				portMatch = settingsPointAt(orig, info.HTTPURL)
+			}
 		}
 	}
 
@@ -199,7 +203,10 @@ func Status(opts Options, w io.Writer) bool {
 	} else {
 		fmt.Fprintln(w, "hooks:   not wired — run `gated init`")
 	}
-	return up && wired
+	if !portMatch {
+		fmt.Fprintf(w, "port:    settings point at a different port than the daemon bound (%d) — re-run `gated init`\n", info.HTTPPort)
+	}
+	return up && wired && portMatch
 }
 
 // --- helpers ---
@@ -350,11 +357,4 @@ func resolveHome(home string) string {
 
 func defaultHookURL() string {
 	return fmt.Sprintf("http://127.0.0.1:%d/hook", defaultHookPort)
-}
-
-func hintErr(err error, suffix string) string {
-	if err != nil {
-		return ": " + err.Error()
-	}
-	return suffix
 }
