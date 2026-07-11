@@ -1,6 +1,7 @@
 package svc_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,40 @@ import (
 
 	"github.com/Hypership-Software/atlas/internal/svc"
 )
+
+// TestRunSecondInstanceForSameHomeExitsClean: two daemons for one home would both
+// append to the same HMAC log and corrupt the chain — the risk when multiple
+// terminal tabs each fire SessionStart with the daemon down. The second instance
+// must refuse (single-instance lock) and exit cleanly without serving, leaving the
+// first daemon healthy.
+func TestRunSecondInstanceForSameHomeExitsClean(t *testing.T) {
+	home := t.TempDir()
+	_, cancelA, errcA := startDaemon(t, "svc-single-a", svc.Options{Home: home})
+	t.Cleanup(func() { cancelA(); <-errcA })
+
+	// A different control-plane id isolates the test to the home lock, not the pipe.
+	t.Setenv("GATED_IPC_ID", "svc-single-b")
+	ctxB, cancelB := context.WithCancel(context.Background())
+	defer cancelB()
+	readyB := make(chan svc.Info, 1)
+	errcB := make(chan error, 1)
+	go func() { errcB <- svc.Run(ctxB, svc.Options{Home: home, IntegrityTick: -1, Ready: readyB}) }()
+
+	select {
+	case err := <-errcB:
+		if err != nil {
+			t.Fatalf("second instance errored, want a clean nil exit: %v", err)
+		}
+	case <-readyB:
+		t.Fatal("second instance became ready; expected it to refuse (single-instance)")
+	case <-time.After(5 * time.Second):
+		t.Fatal("second instance neither refused nor errored within 5s")
+	}
+
+	if _, ok := svc.Running(home); !ok {
+		t.Error("first daemon no longer running after the second instance attempt")
+	}
+}
 
 // writeTestDaemonFile writes a daemon.json recording pid, mirroring what a live
 // daemon writes, so Stop has a record to act on.

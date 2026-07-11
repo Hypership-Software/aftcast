@@ -5,8 +5,25 @@ package svc
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 )
+
+// acquireInstanceLock takes an exclusive flock on <dir>/daemon.lock, held for the
+// daemon's lifetime and released by the OS on exit (so a crash leaves no stale
+// lock). ok=false with a nil error means another daemon holds it. A non-nil error
+// is a real filesystem failure.
+func acquireInstanceLock(dir string) (release func(), ok bool, err error) {
+	f, err := os.OpenFile(filepath.Join(dir, "daemon.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, false, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		return nil, false, nil
+	}
+	return func() { f.Close() }, true, nil
+}
 
 // spawnDetached launches the daemon in its own session (Setsid) with stdio to
 // /dev/null, so it outlives the launching process and holds no terminal.

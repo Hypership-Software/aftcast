@@ -62,12 +62,15 @@ func Ensure(opts EnsureOptions) (info Info, started bool, err error) {
 	}
 	deadline := time.Now().Add(wait)
 	for time.Now().Before(deadline) {
-		if df, derr := readDaemonFile(home); derr == nil && df.PID == pid && portOpen(df.HTTPPort) {
-			return infoOf(df), true, nil
+		// Any live daemon for this home counts as ready, not specifically the pid we
+		// spawned: under a multi-tab race a sibling may win the single-instance lock
+		// and be the one serving, while ours exited cleanly.
+		if info, ok := Running(home); ok {
+			return info, true, nil
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return Info{}, true, fmt.Errorf("daemon started (pid %d) but was not ready within %s", pid, wait)
+	return Info{}, true, fmt.Errorf("daemon started (pid %d) but no daemon was ready within %s", pid, wait)
 }
 
 // Stop terminates the daemon recorded for home and clears its record. It reports

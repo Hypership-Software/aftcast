@@ -95,6 +95,20 @@ func Run(ctx context.Context, opts Options) error {
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return fmt.Errorf("create gate home %s: %w", home, err)
 	}
+
+	// One daemon per home: two would both append to the same HMAC log and break
+	// the chain (the race when several terminal tabs fire SessionStart at once).
+	// Take the lock before opening the log or binding, so a loser touches nothing.
+	release, ok, err := acquireInstanceLock(home)
+	if err != nil {
+		return fmt.Errorf("acquire instance lock: %w", err)
+	}
+	if !ok {
+		logf("another Atlas daemon is already running for %s; exiting", home)
+		return nil
+	}
+	defer release()
+
 	var (
 		logDir     = filepath.Join(home, "log")
 		policyDir  = filepath.Join(home, "policies")
