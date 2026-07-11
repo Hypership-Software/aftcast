@@ -13,7 +13,41 @@ import (
 	"github.com/Hypership-Software/atlas/internal/daemon"
 	"github.com/Hypership-Software/atlas/internal/ipc"
 	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/atlas/internal/svc"
 )
+
+const sessionStart = `{"session_id":"s","cwd":"/p","hook_event_name":"SessionStart","source":"startup"}`
+
+// SessionStart is the once-per-session moment Atlas brings the daemon up (so the
+// session's tool-call hooks reach a live endpoint). It must not fire for
+// per-tool-call events, which would add a daemon-start attempt to every call.
+func TestRunEnsuresDaemonOnSessionStart(t *testing.T) {
+	called := false
+	prev := ensureDaemon
+	ensureDaemon = func(svc.EnsureOptions) (svc.Info, bool, error) { called = true; return svc.Info{}, true, nil }
+	t.Cleanup(func() { ensureDaemon = prev })
+	t.Setenv("GATED_IPC_ID", "hookcmd-sessionstart")
+	t.Setenv("GATED_HOME", t.TempDir())
+
+	Run("claudecode", strings.NewReader(sessionStart), new(bytes.Buffer), new(bytes.Buffer))
+	if !called {
+		t.Error("SessionStart did not ensure the daemon is running")
+	}
+}
+
+func TestRunDoesNotEnsureOnToolEvents(t *testing.T) {
+	called := false
+	prev := ensureDaemon
+	ensureDaemon = func(svc.EnsureOptions) (svc.Info, bool, error) { called = true; return svc.Info{}, false, nil }
+	t.Cleanup(func() { ensureDaemon = prev })
+	t.Setenv("GATED_IPC_ID", "hookcmd-notool")
+	t.Setenv("GATED_HOME", t.TempDir())
+
+	Run("claudecode", strings.NewReader(preToolBash), new(bytes.Buffer), new(bytes.Buffer))
+	if called {
+		t.Error("a per-tool-call event must not trigger a daemon start")
+	}
+}
 
 type dangerEval struct{}
 

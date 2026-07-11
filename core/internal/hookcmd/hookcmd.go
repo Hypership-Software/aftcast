@@ -17,9 +17,20 @@ import (
 	"github.com/Hypership-Software/atlas/internal/daemon"
 	"github.com/Hypership-Software/atlas/internal/ipc"
 	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/atlas/internal/svc"
 )
 
-const dialTimeout = 2 * time.Second
+const (
+	dialTimeout = 2 * time.Second
+	// sessionStartEnsureWait bounds how long SessionStart blocks bringing the
+	// daemon up. A few seconds so the session's first tool-call hook reaches a live
+	// endpoint, capped so a stuck start never hangs the session.
+	sessionStartEnsureWait = 3 * time.Second
+)
+
+// ensureDaemon brings the daemon up; a package var so tests can observe it
+// without spawning a real process.
+var ensureDaemon = svc.Ensure
 
 // Run always exits 0: a telemetry shim must never disrupt the session. The event
 // is spooled if the daemon is unreachable.
@@ -38,6 +49,14 @@ func Run(harness string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintf(stderr, "gated: normalize hook payload: %v\n", err)
 		return 0
+	}
+
+	// SessionStart is the once-per-session hook (a command hook, so the Windows
+	// Git-Bash spawn cost is paid once, not per tool call). Bring the daemon up
+	// here so the session's per-tool-call HTTP hooks reach a live endpoint —
+	// best-effort, since observation never disrupts the session.
+	if ev.EventType == schema.EventSessionStart {
+		_, _, _ = ensureDaemon(svc.EnsureOptions{WaitFor: sessionStartEnsureWait})
 	}
 
 	if derr := deliver(daemon.Request{Event: ev, Descriptor: desc}); derr != nil {
