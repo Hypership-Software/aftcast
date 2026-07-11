@@ -10,11 +10,10 @@ import (
 
 // Serve accepts control-plane connections and handles one framed Request /
 // Response exchange per connection (the shim dials, sends one event, reads the
-// verdict, and closes). It returns when ctx is cancelled.
+// classification ack, and closes). It returns when ctx is cancelled.
 //
-// A connection dropped without a response is the shim's fail-closed signal
-// (Task 9: no verdict => exit 2 for pre_tool), so on any protocol error we close
-// the connection rather than inventing a verdict.
+// Atlas observes rather than gates, so a dropped connection is not a failure
+// mode to guard against: on any protocol error we simply close the connection.
 func Serve(ctx context.Context, ln net.Listener, h *Handler) error {
 	go func() {
 		<-ctx.Done()

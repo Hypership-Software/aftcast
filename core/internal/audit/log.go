@@ -1,5 +1,5 @@
 // Package audit is the tamper-evident event log — the single source of truth for
-// the whole system. Every hook produces one TelemetryEvent (enforcement records
+// the whole system. Every hook produces one TelemetryEvent (risk classification
 // and telemetry share this one stream); each is HMAC-chained to its predecessor,
 // so any reorder, insertion, deletion, or edit is detectable by Verify. The
 // SQLite read-model and the taint ledger are both rebuildable projections of

@@ -7,10 +7,10 @@ package adapter
 
 import "github.com/Hypership-Software/atlas/internal/schema"
 
-// Adapter translates between a harness's hook wire format and the gate's schema.
+// Adapter translates a harness's hook wire format into Atlas's schema.
 type Adapter interface {
 	// Normalize turns a raw hook payload for the named event into a Descriptor
-	// (populated for gating events) and a TelemetryEvent (for every event). The
+	// (populated for tool events) and a TelemetryEvent (for every event). The
 	// event name is authoritative from the shim/HTTP path; if empty, the payload's
 	// own event field is used.
 	Normalize(event string, raw []byte) (schema.Descriptor, schema.TelemetryEvent, error)

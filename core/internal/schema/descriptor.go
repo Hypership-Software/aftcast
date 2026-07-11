@@ -2,8 +2,8 @@ package schema
 
 import "encoding/json"
 
-// Descriptor is the enforcement-input view of a single tool call — everything
-// the Cedar evaluator needs and nothing it doesn't. It carries eval-only
+// Descriptor is the classification-input view of a single tool call — everything
+// the Cedar classifier needs and nothing it doesn't. It carries eval-only
 // context (Argv, Cwd, ProjectRoot, MCP split) that is deliberately absent from
 // the persisted TelemetryEvent contract, so growing the eval inputs never
 // widens the append-only log.

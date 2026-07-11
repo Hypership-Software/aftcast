@@ -175,8 +175,9 @@ func hookConfig(opts Options) (HookConfig, error) {
 }
 
 // selfVerify posts a benign PreToolUse probe to the hook endpoint and confirms
-// the response carries our decision, proving the settings URL reaches a live
-// gate. It records one allow event (a visible marker that init ran).
+// the daemon answers 200, proving the settings URL reaches a live daemon. Atlas
+// observes, so the response carries no decision — a clean 200 is the signal. The
+// probe also records one event (a visible marker that init ran).
 func selfVerify(hookURL string) error {
 	payload := `{"hook_event_name":"PreToolUse","session_id":"gated-init-selfcheck","tool_name":"Read","tool_input":{"file_path":"/tmp/gated-selfcheck"}}`
 	client := &http.Client{Timeout: probeTimeout}
@@ -185,8 +186,8 @@ func selfVerify(hookURL string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
-	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "permissionDecision") {
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected response (status %d)", resp.StatusCode)
 	}
 	return nil

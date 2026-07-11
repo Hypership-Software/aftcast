@@ -1,5 +1,5 @@
 // Package daemon defines the request/response protocol between the hook shim and
-// the resident gate, and the Handler that observes a single tool call:
+// the resident daemon, and the Handler that observes a single tool call:
 // classify risk -> record. Atlas never blocks; the classification is telemetry.
 package daemon
 

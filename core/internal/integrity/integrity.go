@@ -1,8 +1,9 @@
 // Package integrity detects tampering with the gate's own installation: whether
 // our hook entries are still present in the harness settings and whether the
 // running binary still matches the install manifest. The daemon runs Check on
-// SessionStart and on a ticker (Task 23); any Drift becomes an integrity
-// telemetry event plus a loud warning, and on the org tier can deny by policy.
+// SessionStart and on a ticker; any Drift becomes an integrity telemetry event
+// plus a loud warning — surfacing that the observer itself may have been
+// tampered with (an agent trying to blind its own monitoring).
 package integrity
 
 import (

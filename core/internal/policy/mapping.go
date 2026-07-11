@@ -1,6 +1,6 @@
-// Package policy maps enforcement descriptors onto Cedar authorization requests
-// and resolves the three-valued verdict (deny/allow/ask) over a compiled Cedar
-// policy set.
+// Package policy maps a tool-call descriptor onto Cedar authorization requests
+// and classifies it into a three-valued risk (danger/safe/unknown) over a
+// compiled Cedar policy set.
 package policy
 
 import (

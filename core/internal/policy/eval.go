@@ -18,7 +18,7 @@ import (
 //   - PolicySet.Get(id).Effect() reports permit vs forbid; Effect is a bool and
 //     cedar.Permit is the only exported constant (forbid is the zero value).
 //
-// This is why we resolve the three-valued verdict from the Diagnostic rather
+// This is why we resolve the three-valued risk from the Diagnostic rather
 // than trusting Cedar's binary Decision.
 const unclassifiedRuleID = "unclassified"
 

@@ -1,20 +1,17 @@
-// Package svc is the daemon lifecycle: it wires the tested libraries (policy
-// engine, taint ledger, HMAC audit log, approval queue, integrity checker) into
-// a resident gate and serves the two local transports — the control-plane
-// stream (Task 7 UDS/named pipe) for the CLI and the SessionStart shim, and the
-// localhost HTTP hook listener (Rev 4) that Claude Code calls per tool call.
+// Package svc is the daemon lifecycle: it wires the observer libraries (risk
+// classifier, taint ledger, HMAC audit log, integrity checker) into a resident
+// daemon and serves the two local transports — the control-plane stream
+// (UDS/named pipe) for the CLI and the SessionStart shim, and the localhost HTTP
+// hook listener that Claude Code calls per tool call. Every hook is recorded and
+// classified; the daemon returns no decision, so Atlas observes without blocking.
 //
-// This is the seam that turns Tasks 1–15's libraries into a runnable, dogfoodable
-// gate. It runs in the foreground (`gated daemon run`); registering it with the
-// OS service manager for auto-start is a later install-sprint concern.
+// It runs in the foreground (`gated daemon run`); registering it with the OS
+// service manager for auto-start is a later install-sprint concern.
 //
-// Deferred by design (marked inline): the SQLite read-model projection tick
-// (Task 16's telemetry.Store now exists, but wiring a periodic Project call into
-// this daemon is a later concern — the live gate path records to the HMAC log,
-// which is the source of truth; the projection is a downstream analytics
-// rebuild) and the interactive approvals-over-IPC protocol (Task 14 — the queue
-// is wired, so an `ask` blocks then safely denies on timeout until the TUI
-// client lands).
+// Deferred by design: a periodic SQLite read-model projection tick
+// (telemetry.Store exists; wiring Project onto a timer is a later concern — the
+// HMAC log is the source of truth and the projection is a downstream analytics
+// rebuild).
 package svc
 
 import (

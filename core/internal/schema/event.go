@@ -3,7 +3,7 @@ package schema
 import "encoding/json"
 
 // TelemetryEvent is the single record type written to the hash-chained log for
-// every hook, carrying BOTH enforcement records and full telemetry (one
+// every hook, carrying the risk classification and full telemetry (one
 // stream). Its field set is an append-only contract shared with the SIEM export
 // and the org rollup: never remove or repurpose a field, only add.
 //
