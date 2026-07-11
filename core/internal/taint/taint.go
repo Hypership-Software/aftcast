@@ -1,7 +1,7 @@
 // Package taint tracks session-level taint: once a session ingests untrusted
-// content (an external fetch/search or an MCP call), it is marked tainted and
-// the taint-effector policies cut its sensitive-effector rights (ADR-005, the
-// lethal-trifecta break).
+// content (an external fetch/search or an MCP call), it is marked tainted so the
+// risk classifier can flag the sensitive actions that follow it (ADR-005, the
+// lethal-trifecta signal).
 //
 // Taint is held in-memory and rebuilt from the event log on daemon restart
 // (Kyle 2026-07-10 — bbolt dropped). The HMAC event log is the single source of
@@ -32,8 +32,8 @@ func NewLedger(trustedDomains []string) *Ledger {
 	return &Ledger{tainted: map[string]bool{}, trusted: trusted}
 }
 
-// Apply injects the session's stored taint into the descriptor before evaluation
-// so taint-effector policies can gate on it.
+// Apply injects the session's stored taint into the descriptor before
+// classification so taint-effector rules can flag actions in a tainted session.
 func (l *Ledger) Apply(d *schema.Descriptor) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -60,15 +60,13 @@ func (l *Ledger) IsTainted(sessionID string) bool {
 }
 
 // Rebuild reconstructs taint state by replaying the event log (called on daemon
-// startup). Denied actions never ran, so they don't taint.
+// startup). Every taint-source action taints the session: Atlas observes, so the
+// action ran regardless of how its risk was classified.
 func (l *Ledger) Rebuild(events []schema.TelemetryEvent) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.tainted = map[string]bool{}
 	for _, e := range events {
-		if e.Verdict == schema.VerdictDeny {
-			continue
-		}
 		if l.isTaintSource(schema.Descriptor{ToolClass: e.ToolClass, Domain: e.Domain}) {
 			l.tainted[e.SessionID] = true
 		}

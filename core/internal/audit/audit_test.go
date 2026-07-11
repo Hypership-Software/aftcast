@@ -21,7 +21,7 @@ func ev(session string, ts string) schema.TelemetryEvent {
 		EventType: schema.EventPreTool,
 		ToolClass: schema.ClassExec,
 		ToolRaw:   "Bash",
-		Verdict:   schema.VerdictAllow,
+		Risk:      schema.RiskSafe,
 		TS:        ts,
 	}
 }

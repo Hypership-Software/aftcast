@@ -81,11 +81,11 @@ func TestRunClassifiesOverControlPlane(t *testing.T) {
 	if err := json.Unmarshal(respRaw, &resp); err != nil {
 		t.Fatal(err)
 	}
-	if resp.Verdict != schema.VerdictDeny {
-		t.Fatalf("classification = %q (rule %q), want deny (dangerous)", resp.Verdict, resp.RuleID)
+	if resp.Risk != schema.RiskDanger {
+		t.Fatalf("classification = %q (rule %q), want deny (dangerous)", resp.Risk, resp.RuleID)
 	}
-	if resp.RuleID != "deny-rm-rf" {
-		t.Errorf("ruleID = %q, want deny-rm-rf", resp.RuleID)
+	if resp.RuleID != "danger-rm-rf" {
+		t.Errorf("ruleID = %q, want danger-rm-rf", resp.RuleID)
 	}
 
 	cancel()
@@ -149,8 +149,8 @@ func TestRunObservesOverHTTP(t *testing.T) {
 			got = e
 		}
 	}
-	if got.Verdict != schema.VerdictDeny {
-		t.Errorf("rm -rf classified as %q, want deny (dangerous)", got.Verdict)
+	if got.Risk != schema.RiskDanger {
+		t.Errorf("rm -rf classified as %q, want deny (dangerous)", got.Risk)
 	}
 }
 

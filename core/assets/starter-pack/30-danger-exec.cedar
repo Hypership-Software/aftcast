@@ -1,9 +1,8 @@
-// Dangerous shell operations. BEST-EFFORT (ADR-006): these match the tokenized
-// argv/verbs only, so deliberately obfuscated shell can evade them. Faithful
-// coverage arrives with the real adapter payloads (Task 10). Precise
-// "outside the project root" detection needs a computed in_project flag the
-// daemon will supply later; for now recursive-force removal is denied broadly.
-@id("deny-rm-rf")
+// Classify dangerous shell operations as DANGER. BEST-EFFORT (ADR-006): these
+// match the tokenized argv/verbs only, so deliberately obfuscated shell can
+// evade them — acceptable for a risk signal, because Atlas observes rather than
+// blocks, so a miss is an unflagged event, never an unsafe allow.
+@id("danger-rm-rf")
 forbid (
     principal,
     action == Action::"exec",
@@ -17,7 +16,7 @@ when {
      context.argv.contains("--recursive"))
 };
 
-@id("deny-force-push")
+@id("danger-force-push")
 forbid (
     principal,
     action == Action::"exec",

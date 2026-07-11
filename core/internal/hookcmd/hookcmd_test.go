@@ -17,8 +17,8 @@ import (
 
 type dangerEval struct{}
 
-func (dangerEval) Eval(schema.Descriptor) (schema.Verdict, string) {
-	return schema.VerdictDeny, "no-exec"
+func (dangerEval) Eval(schema.Descriptor) (schema.Risk, string) {
+	return schema.RiskDanger, "no-exec"
 }
 
 type noTaint struct{}
@@ -74,8 +74,8 @@ func TestRunObservesAndEmitsNoDecision(t *testing.T) {
 	if len(evs) != 1 {
 		t.Fatalf("daemon recorded %d events, want 1", len(evs))
 	}
-	if evs[0].Verdict != schema.VerdictDeny || evs[0].EventType != schema.EventPreTool {
-		t.Errorf("recorded %v/%v, want pre_tool classified deny", evs[0].EventType, evs[0].Verdict)
+	if evs[0].Risk != schema.RiskDanger || evs[0].EventType != schema.EventPreTool {
+		t.Errorf("recorded %v/%v, want pre_tool classified deny", evs[0].EventType, evs[0].Risk)
 	}
 }
 

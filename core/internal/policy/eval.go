@@ -20,42 +20,43 @@ import (
 //
 // This is why we resolve the three-valued verdict from the Diagnostic rather
 // than trusting Cedar's binary Decision.
-const defaultAskRuleID = "default-ask"
+const unclassifiedRuleID = "unclassified"
 
-// Engine resolves a Descriptor to a three-valued Verdict over a compiled Cedar
-// PolicySet: deny (a forbid fired), allow (a permit fired), or ask (no match).
+// Engine classifies a Descriptor into a three-valued Risk over a compiled Cedar
+// PolicySet: danger (a forbid rule matched), safe (a permit matched), or unknown
+// (no match). The result is a label for telemetry, never an enforcement action.
 type Engine struct {
 	ps *cedar.PolicySet
 }
 
 func NewEngine(ps *cedar.PolicySet) *Engine { return &Engine{ps: ps} }
 
-// Eval returns the verdict and the determining rule ID.
-func (e *Engine) Eval(d schema.Descriptor) (schema.Verdict, string) {
+// Eval returns the risk classification and the determining rule ID.
+func (e *Engine) Eval(d schema.Descriptor) (schema.Risk, string) {
 	req, entities := ToCedar(d)
 	decision, diag := e.ps.IsAuthorized(entities, req)
 
 	// Fail safe first: a forbid that errored during eval was silently skipped by
-	// Cedar and so did not deny. Treat it as a deny regardless of the Decision —
-	// a forbid referencing a missing attribute must never be a path to allow.
+	// Cedar. Treat it as danger regardless of the Decision — a danger rule
+	// referencing a missing attribute must never be a path to "safe".
 	for _, evalErr := range diag.Errors {
 		if e.isForbid(evalErr.PolicyID) {
-			return schema.VerdictDeny, string(evalErr.PolicyID)
+			return schema.RiskDanger, string(evalErr.PolicyID)
 		}
 	}
 
 	if decision == cedar.Allow {
-		return schema.VerdictAllow, firstReason(diag)
+		return schema.RiskSafe, firstReason(diag)
 	}
 
-	// Decision is Deny: either a forbid was determining, or nothing matched and
-	// this is Cedar's default deny — which for us means Ask.
+	// Decision is Deny: either a danger (forbid) rule was determining, or nothing
+	// matched and this is Cedar's default deny — which for us means unknown.
 	for _, r := range diag.Reasons {
 		if e.isForbid(r.PolicyID) {
-			return schema.VerdictDeny, string(r.PolicyID)
+			return schema.RiskDanger, string(r.PolicyID)
 		}
 	}
-	return schema.VerdictAsk, defaultAskRuleID
+	return schema.RiskUnknown, unclassifiedRuleID
 }
 
 func (e *Engine) isForbid(id cedar.PolicyID) bool {

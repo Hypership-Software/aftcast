@@ -1,6 +1,6 @@
-// Package schema defines the canonical data contracts shared across the gate:
-// the enforcement-input Descriptor, the three-valued Verdict, and the
-// append-only TelemetryEvent written to the hash-chained log. The enum wire
+// Package schema defines the canonical data contracts shared across Atlas: the
+// Descriptor a tool call is classified from, the three-valued Risk level, and
+// the append-only TelemetryEvent written to the hash-chained log. The enum wire
 // values here are part of the SIEM + org-rollup contract and must never change.
 package schema
 
@@ -8,14 +8,16 @@ package schema
 // append-only log can be read forward across format additions.
 const SchemaVersion = 1
 
-// Verdict is the three-valued authorization result: forbid->Deny, permit->Allow,
-// no-match->Ask. Ask is the safe default for anything a policy doesn't cover.
-type Verdict string
+// Risk is the three-valued classification Atlas assigns each tool call: a
+// danger rule matched (danger), a known-safe rule matched (safe), or nothing
+// matched (unknown). It is a label, not a decision — Atlas observes and records,
+// it never blocks.
+type Risk string
 
 const (
-	VerdictAllow Verdict = "allow"
-	VerdictDeny  Verdict = "deny"
-	VerdictAsk   Verdict = "ask"
+	RiskSafe    Risk = "safe"
+	RiskDanger  Risk = "danger"
+	RiskUnknown Risk = "unknown"
 )
 
 // ToolClass is the harness-independent classification of a tool call. Adapters
@@ -36,8 +38,8 @@ const (
 
 // ToolOutcome is the tri-state result of a tool call, serialized as tool_ok.
 // It is deliberately NOT a bool: a bool cannot distinguish "ran and passed"
-// from "never ran" (denied, interrupted, or no PostToolUse signal). Frozen at
-// the schema layer because the log is append-only.
+// from "never ran" (interrupted, or no PostToolUse signal). Frozen at the schema
+// layer because the log is append-only.
 type ToolOutcome string
 
 const (
@@ -55,6 +57,5 @@ const (
 	EventPreTool      EventType = "pre_tool"
 	EventPostTool     EventType = "post_tool"
 	EventStop         EventType = "stop"
-	EventBlock        EventType = "block"
 	EventIntegrity    EventType = "integrity"
 )

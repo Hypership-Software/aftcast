@@ -64,7 +64,7 @@ func TestEmptyPolicySetAlwaysAsks(t *testing.T) {
 	r := rand.New(rand.NewSource(2))
 	for i := 0; i < 2000; i++ {
 		d := randDesc(r)
-		if v, _ := eng.Eval(d); v != schema.VerdictAsk {
+		if v, _ := eng.Eval(d); v != schema.RiskUnknown {
 			t.Fatalf("empty policy set gave %v for %+v, want ask", v, d)
 		}
 	}
@@ -80,10 +80,10 @@ func TestForbidDominatesPermitAll(t *testing.T) {
 		d := randDesc(r)
 		v, _ := eng.Eval(d)
 		if d.ToolClass == schema.ClassExec {
-			if v != schema.VerdictDeny {
+			if v != schema.RiskDanger {
 				t.Fatalf("exec must be denied (forbid dominates), got %v", v)
 			}
-		} else if v != schema.VerdictAllow {
+		} else if v != schema.RiskSafe {
 			t.Fatalf("non-exec must be allowed by permit-all, got %v for %+v", v, d)
 		}
 	}

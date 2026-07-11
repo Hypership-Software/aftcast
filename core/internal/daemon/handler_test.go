@@ -11,12 +11,12 @@ import (
 )
 
 type fakeEval struct {
-	v     schema.Verdict
+	v     schema.Risk
 	id    string
 	calls int
 }
 
-func (f *fakeEval) Eval(schema.Descriptor) (schema.Verdict, string) {
+func (f *fakeEval) Eval(schema.Descriptor) (schema.Risk, string) {
 	f.calls++
 	return f.v, f.id
 }
@@ -47,14 +47,14 @@ func preToolReq() Request {
 // A dangerous action is classified and recorded, but never blocked: it stays a
 // pre_tool event (the tool call happened) carrying the risk classification.
 func TestHandleClassifiesDangerButDoesNotBlock(t *testing.T) {
-	ev := &fakeEval{v: schema.VerdictDeny, id: "no-exec"}
+	ev := &fakeEval{v: schema.RiskDanger, id: "no-exec"}
 	rec := &fakeRecorder{}
 	resp, err := handlerWith(ev, &fakeTaint{}, rec).Handle(preToolReq())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.Verdict != schema.VerdictDeny || resp.RuleID != "no-exec" {
-		t.Fatalf("classification = %v/%q, want deny/no-exec", resp.Verdict, resp.RuleID)
+	if resp.Risk != schema.RiskDanger || resp.RuleID != "no-exec" {
+		t.Fatalf("classification = %v/%q, want deny/no-exec", resp.Risk, resp.RuleID)
 	}
 	if len(rec.events) != 1 {
 		t.Fatalf("recorded %d events, want exactly 1", len(rec.events))
@@ -62,29 +62,29 @@ func TestHandleClassifiesDangerButDoesNotBlock(t *testing.T) {
 	if rec.events[0].EventType != schema.EventPreTool {
 		t.Errorf("recorded as %v, want pre_tool (nothing is blocked)", rec.events[0].EventType)
 	}
-	if rec.events[0].Verdict != schema.VerdictDeny {
-		t.Errorf("recorded classification = %v, want deny", rec.events[0].Verdict)
+	if rec.events[0].Risk != schema.RiskDanger {
+		t.Errorf("recorded classification = %v, want deny", rec.events[0].Risk)
 	}
 }
 
 // An uncovered action is classified ask and recorded; no approver is consulted
 // (there is none) and the action proceeds.
 func TestHandleAskIsRecordedNotResolved(t *testing.T) {
-	ev := &fakeEval{v: schema.VerdictAsk, id: "default-ask"}
+	ev := &fakeEval{v: schema.RiskUnknown, id: "default-ask"}
 	rec := &fakeRecorder{}
 	resp, _ := handlerWith(ev, &fakeTaint{}, rec).Handle(preToolReq())
-	if resp.Verdict != schema.VerdictAsk {
-		t.Fatalf("classification = %v, want ask", resp.Verdict)
+	if resp.Risk != schema.RiskUnknown {
+		t.Fatalf("classification = %v, want ask", resp.Risk)
 	}
-	if len(rec.events) != 1 || rec.events[0].Verdict != schema.VerdictAsk {
-		t.Fatalf("recorded %d events (verdict %v), want 1 ask", len(rec.events), rec.events[0].Verdict)
+	if len(rec.events) != 1 || rec.events[0].Risk != schema.RiskUnknown {
+		t.Fatalf("recorded %d events (verdict %v), want 1 ask", len(rec.events), rec.events[0].Risk)
 	}
 }
 
 // Every pre_tool applies stored taint and marks any new taint source — taint is
 // a risk signal now, tracked regardless of classification.
 func TestHandlePreToolAppliesAndMarksTaint(t *testing.T) {
-	ev := &fakeEval{v: schema.VerdictAllow, id: "permit"}
+	ev := &fakeEval{v: schema.RiskSafe, id: "permit"}
 	tt := &fakeTaint{}
 	handlerWith(ev, tt, &fakeRecorder{}).Handle(preToolReq())
 	if tt.applyCalls != 1 {
@@ -96,7 +96,7 @@ func TestHandlePreToolAppliesAndMarksTaint(t *testing.T) {
 }
 
 func TestHandlePostToolRecordsOnlyAndSkipsEval(t *testing.T) {
-	ev := &fakeEval{v: schema.VerdictDeny, id: "should-not-be-used"}
+	ev := &fakeEval{v: schema.RiskDanger, id: "should-not-be-used"}
 	rec := &fakeRecorder{}
 	req := Request{Event: schema.TelemetryEvent{EventType: schema.EventPostTool, SessionID: "s"}}
 	handlerWith(ev, &fakeTaint{}, rec).Handle(req)
@@ -116,7 +116,7 @@ func TestServeRoundTrip(t *testing.T) {
 	}
 	defer ln.Close()
 
-	h := handlerWith(&fakeEval{v: schema.VerdictDeny, id: "no-exec"}, &fakeTaint{}, &fakeRecorder{})
+	h := handlerWith(&fakeEval{v: schema.RiskDanger, id: "no-exec"}, &fakeTaint{}, &fakeRecorder{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() { _ = Serve(ctx, ln, h) }()
@@ -139,8 +139,8 @@ func TestServeRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(respRaw, &resp); err != nil {
 		t.Fatal(err)
 	}
-	if resp.Verdict != schema.VerdictDeny {
-		t.Fatalf("classification = %v, want deny", resp.Verdict)
+	if resp.Risk != schema.RiskDanger {
+		t.Fatalf("classification = %v, want deny", resp.Risk)
 	}
 	if resp.RuleID != "no-exec" {
 		t.Errorf("ruleID = %q, want no-exec", resp.RuleID)

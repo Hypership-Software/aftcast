@@ -1,8 +1,8 @@
-// Self-protection: the agent must not read/write the gate's own state directory
-// or disable the gate. Same-user malware can still defeat the free tier (that is
-// the managed-tier argument, ADR-007) — this stops the agent, not a determined
-// local attacker.
-@id("deny-self-directory-access")
+// Classify tampering with Atlas itself as DANGER: the agent reading/writing the
+// gate's own state directory, or trying to disable Atlas. This surfaces "the
+// agent tried to turn off its own monitoring" as a risk signal — it does not
+// prevent it (non-removability is the managed tier's job, ADR-007).
+@id("danger-self-directory-access")
 forbid (
     principal,
     action in [Action::"file_read", Action::"file_write"],
@@ -13,7 +13,7 @@ when {
     (context.file like "*/.gated/*" || context.file like "*/.atlas/*")
 };
 
-@id("deny-self-disable")
+@id("danger-self-disable")
 forbid (
     principal,
     action == Action::"exec",

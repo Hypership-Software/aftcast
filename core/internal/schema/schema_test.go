@@ -38,8 +38,8 @@ func sampleEvent() TelemetryEvent {
 		TurnIndex:  3,
 		ToolClass:  ClassExec,
 		ToolRaw:    "Bash",
-		Verdict:    VerdictDeny,
-		RuleID:     "no-rm-rf",
+		Risk:       RiskDanger,
+		RuleID:     "danger-rm-rf",
 		ToolOK:     OutcomeNotRun,
 		LatencyMS:  12,
 		Files:      []string{"/tmp/x"},
@@ -146,9 +146,9 @@ func TestEventJSONRoundTripPreservesFields(t *testing.T) {
 func TestEnumWireValuesAreStable(t *testing.T) {
 	// These strings are part of the append-only SIEM/rollup contract — pin them.
 	cases := map[string]string{
-		string(VerdictAllow):   "allow",
-		string(VerdictDeny):    "deny",
-		string(VerdictAsk):     "ask",
+		string(RiskSafe):       "safe",
+		string(RiskDanger):     "danger",
+		string(RiskUnknown):    "unknown",
 		string(OutcomeOK):      "ok",
 		string(OutcomeFailed):  "failed",
 		string(OutcomeNotRun):  "not_run",

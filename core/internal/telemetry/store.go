@@ -26,7 +26,7 @@ type Session struct {
 	ExitReason      string
 	TurnCount       int
 	ToolCalls       int
-	BlockedCount    int
+	DangerDetected  int
 	Taint           bool
 	Outcome         string
 	OneShot         bool
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 	exit_reason      TEXT,
 	turn_count       INTEGER,
 	tool_calls       INTEGER,
-	blocked_count    INTEGER,
+	danger_detected  INTEGER,
 	taint            INTEGER,
 	outcome          TEXT,
 	one_shot         INTEGER,
@@ -99,7 +99,7 @@ func (s *Store) Close() error { return s.db.Close() }
 // Sessions returns every folded session row, ordered by session_id.
 func (s *Store) Sessions() ([]Session, error) {
 	rows, err := s.db.Query(`SELECT session_id, user, org, harness, started, ended, exit_reason,
-		turn_count, tool_calls, blocked_count, taint,
+		turn_count, tool_calls, danger_detected, taint,
 		outcome, one_shot, correction_turns, task_type, skills_used, duration_ms
 		FROM sessions ORDER BY session_id`)
 	if err != nil {
@@ -112,7 +112,7 @@ func (s *Store) Sessions() ([]Session, error) {
 		var s Session
 		var taint, oneShot int
 		if err := rows.Scan(&s.SessionID, &s.User, &s.Org, &s.Harness, &s.Started, &s.Ended, &s.ExitReason,
-			&s.TurnCount, &s.ToolCalls, &s.BlockedCount, &taint,
+			&s.TurnCount, &s.ToolCalls, &s.DangerDetected, &taint,
 			&s.Outcome, &oneShot, &s.CorrectionTurns, &s.TaskType, &s.SkillsUsed, &s.DurationMS); err != nil {
 			return nil, err
 		}

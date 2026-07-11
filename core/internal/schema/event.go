@@ -8,7 +8,7 @@ import "encoding/json"
 // and the org rollup: never remove or repurpose a field, only add.
 //
 // It intentionally does NOT embed Descriptor. The two share enum types
-// (ToolClass, Verdict, ToolOutcome) so those can't drift, but the persisted
+// (ToolClass, Risk, ToolOutcome) so those can't drift, but the persisted
 // contract stays an explicit, frozen list — eval-only context on the Descriptor
 // (argv, cwd, project_root, mcp split) must never leak into the log.
 type TelemetryEvent struct {
@@ -24,7 +24,7 @@ type TelemetryEvent struct {
 	TurnIndex int         `json:"turn_index"`
 	ToolClass ToolClass   `json:"tool_class,omitempty"`
 	ToolRaw   string      `json:"tool_raw,omitempty"`
-	Verdict   Verdict     `json:"verdict,omitempty"`
+	Risk      Risk        `json:"risk,omitempty"`
 	RuleID    string      `json:"rule_id,omitempty"`
 	ToolOK    ToolOutcome `json:"tool_ok,omitempty"`
 	// BashExitCode is the numeric exit code parsed from a PostToolUseFailure

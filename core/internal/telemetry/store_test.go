@@ -15,14 +15,14 @@ func ts(sec int) string {
 }
 
 // twoSessions is the canonical fixture: one clean single-turn session (s1, three
-// allowed tool calls, no blocks) and one two-turn session (s2, two allowed calls
-// plus one blocked action, and a tainted event). Recording semantics match the
-// daemon: a denied call is an EventBlock (not a pre_tool), turns are user_prompt
-// events, and allowed calls emit pre_tool + post_tool.
+// safe tool calls) and one two-turn session (s2, three tool calls — one
+// classified dangerous — and a tainted event). Recording semantics match the
+// daemon: every tool call is a pre_tool carrying its risk classification, turns
+// are user_prompt events, and each call emits pre_tool + post_tool.
 func twoSessions() []schema.TelemetryEvent {
 	pre := func(sess string, sec int) schema.TelemetryEvent {
 		return schema.TelemetryEvent{SessionID: sess, User: "kyle", Harness: "claudecode",
-			EventType: schema.EventPreTool, ToolClass: schema.ClassFileRead, Verdict: schema.VerdictAllow, TS: ts(sec)}
+			EventType: schema.EventPreTool, ToolClass: schema.ClassFileRead, Risk: schema.RiskSafe, TS: ts(sec)}
 	}
 	post := func(sess string, sec int) schema.TelemetryEvent {
 		return schema.TelemetryEvent{SessionID: sess, User: "kyle", Harness: "claudecode",
@@ -49,20 +49,19 @@ func twoSessions() []schema.TelemetryEvent {
 		pre("s1", 4), post("s1", 5),
 		func() schema.TelemetryEvent { e := pre("s1", 6); e.Skill = "brainstorming"; return e }(), post("s1", 7),
 		stop("s1", 8),
-		// s2 — two turns, 2 allowed calls + 1 blocked action, second turn tainted.
+		// s2 — two turns, 3 tool calls (one classified dangerous), second turn tainted.
 		start("s2", 9),
 		prompt("s2", 1, 10),
 		pre("s2", 11), post("s2", 12),
 		func() schema.TelemetryEvent {
 			e := pre("s2", 13)
-			e.EventType = schema.EventBlock
-			e.Verdict = schema.VerdictDeny
-			e.RuleID = "no-rm-rf"
+			e.Risk = schema.RiskDanger
+			e.RuleID = "danger-rm-rf"
 			return e
-		}(),
-		prompt("s2", 2, 14),
-		func() schema.TelemetryEvent { e := pre("s2", 15); e.Taint = true; return e }(), post("s2", 16),
-		stop("s2", 17),
+		}(), post("s2", 14),
+		prompt("s2", 2, 15),
+		func() schema.TelemetryEvent { e := pre("s2", 16); e.Taint = true; return e }(), post("s2", 17),
+		stop("s2", 18),
 	}
 }
 
@@ -122,11 +121,11 @@ func TestProjectFoldsTwoSessions(t *testing.T) {
 
 	by := sessionsByID(t, s)
 	s1, s2 := by["s1"], by["s2"]
-	if s1.TurnCount != 1 || s1.ToolCalls != 3 || s1.BlockedCount != 0 {
-		t.Errorf("s1 = {turns:%d tools:%d blocked:%d}, want {1 3 0}", s1.TurnCount, s1.ToolCalls, s1.BlockedCount)
+	if s1.TurnCount != 1 || s1.ToolCalls != 3 || s1.DangerDetected != 0 {
+		t.Errorf("s1 = {turns:%d tools:%d danger:%d}, want {1 3 0}", s1.TurnCount, s1.ToolCalls, s1.DangerDetected)
 	}
-	if s2.TurnCount != 2 || s2.ToolCalls != 2 || s2.BlockedCount != 1 {
-		t.Errorf("s2 = {turns:%d tools:%d blocked:%d}, want {2 2 1}", s2.TurnCount, s2.ToolCalls, s2.BlockedCount)
+	if s2.TurnCount != 2 || s2.ToolCalls != 3 || s2.DangerDetected != 1 {
+		t.Errorf("s2 = {turns:%d tools:%d danger:%d}, want {2 3 1}", s2.TurnCount, s2.ToolCalls, s2.DangerDetected)
 	}
 	if s1.Harness != "claudecode" || s1.User != "kyle" {
 		t.Errorf("s1 identity = {harness:%q user:%q}, want {claudecode kyle}", s1.Harness, s1.User)
@@ -153,8 +152,8 @@ func TestProjectIsIdempotent(t *testing.T) {
 		t.Fatalf("after re-projecting, %d sessions, want 2 (no dupes)", len(rows))
 	}
 	by := sessionsByID(t, s)
-	if by["s1"].ToolCalls != 3 || by["s2"].BlockedCount != 1 {
-		t.Errorf("re-projection changed aggregates: s1.tools=%d s2.blocked=%d", by["s1"].ToolCalls, by["s2"].BlockedCount)
+	if by["s1"].ToolCalls != 3 || by["s2"].DangerDetected != 1 {
+		t.Errorf("re-projection changed aggregates: s1.tools=%d s2.danger=%d", by["s1"].ToolCalls, by["s2"].DangerDetected)
 	}
 }
 

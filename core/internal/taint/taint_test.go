@@ -62,19 +62,19 @@ func TestApplyReflectsStoredTaint(t *testing.T) {
 func TestRebuildFromLogReconstructsTaint(t *testing.T) {
 	l := NewLedger([]string{"internal.example.com"})
 	events := []schema.TelemetryEvent{
-		{SessionID: "s1", ToolClass: schema.ClassNetFetch, Domain: "evil.example.com", Verdict: schema.VerdictAllow},
-		{SessionID: "s2", ToolClass: schema.ClassNetFetch, Domain: "internal.example.com", Verdict: schema.VerdictAllow},
-		// a denied fetch never ran, so it must not taint
-		{SessionID: "s3", ToolClass: schema.ClassNetFetch, Domain: "evil.example.com", Verdict: schema.VerdictDeny},
+		{SessionID: "s1", ToolClass: schema.ClassNetFetch, Domain: "evil.example.com", Risk: schema.RiskSafe},
+		{SessionID: "s2", ToolClass: schema.ClassNetFetch, Domain: "internal.example.com", Risk: schema.RiskSafe},
+		// a fetch classified dangerous still ran (Atlas observes), so it taints
+		{SessionID: "s3", ToolClass: schema.ClassNetFetch, Domain: "evil.example.com", Risk: schema.RiskDanger},
 	}
 	l.Rebuild(events)
 	if !l.IsTainted("s1") {
-		t.Error("s1 (allowed untrusted fetch) should be tainted after rebuild")
+		t.Error("s1 (untrusted fetch) should be tainted after rebuild")
 	}
 	if l.IsTainted("s2") {
 		t.Error("s2 (trusted fetch) should not be tainted")
 	}
-	if l.IsTainted("s3") {
-		t.Error("s3 (denied fetch) should not be tainted — it never ran")
+	if !l.IsTainted("s3") {
+		t.Error("s3 (untrusted fetch, classified dangerous) should be tainted — it still ran")
 	}
 }

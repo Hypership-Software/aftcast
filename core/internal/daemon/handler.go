@@ -17,8 +17,8 @@ type Request struct {
 // informational — Atlas observes and records, it does not block — so a caller
 // may surface the classification but is never expected to act on it.
 type Response struct {
-	Verdict schema.Verdict `json:"verdict"`
-	RuleID  string         `json:"rule_id"`
+	Risk   schema.Risk `json:"risk"`
+	RuleID string      `json:"rule_id"`
 }
 
 // The Handler depends on these behaviours as interfaces (defined by the consumer,
@@ -26,7 +26,7 @@ type Response struct {
 // without an import cycle.
 type (
 	Evaluator interface {
-		Eval(d schema.Descriptor) (schema.Verdict, string)
+		Eval(d schema.Descriptor) (schema.Risk, string)
 	}
 	Tainter interface {
 		Apply(d *schema.Descriptor)
@@ -65,7 +65,7 @@ func (h *Handler) Handle(req Request) (Response, error) {
 	// classify the action's risk.
 	d := req.Descriptor
 	h.deps.Taint.Apply(&d)
-	verdict, ruleID := h.deps.Eval.Eval(d)
+	risk, ruleID := h.deps.Eval.Eval(d)
 
 	// The action runs regardless of classification (Atlas does not block). A
 	// taint-source action (e.g. a WebFetch to an untrusted domain) taints the
@@ -73,10 +73,10 @@ func (h *Handler) Handle(req Request) (Response, error) {
 	h.deps.Taint.MarkFromResult(d.SessionID, d)
 
 	ev := req.Event
-	ev.Verdict = verdict
+	ev.Risk = risk
 	ev.RuleID = ruleID
 	if err := h.deps.Record.Record(ev); err != nil {
 		return Response{}, err
 	}
-	return Response{Verdict: verdict, RuleID: ruleID}, nil
+	return Response{Risk: risk, RuleID: ruleID}, nil
 }

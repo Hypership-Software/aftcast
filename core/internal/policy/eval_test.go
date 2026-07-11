@@ -30,8 +30,8 @@ func TestEvalPermitAllows(t *testing.T) {
 	ps := cedar.NewPolicySet()
 	ps.Add("permit-all", mustPolicy(t, `permit(principal, action, resource);`))
 	v, _ := NewEngine(ps).Eval(execDesc())
-	if v != schema.VerdictAllow {
-		t.Fatalf("verdict = %v, want allow", v)
+	if v != schema.RiskSafe {
+		t.Fatalf("risk = %v, want safe", v)
 	}
 }
 
@@ -39,8 +39,8 @@ func TestEvalForbidDenies(t *testing.T) {
 	ps := cedar.NewPolicySet()
 	ps.Add("no-exec", mustPolicy(t, `forbid(principal, action == Action::"exec", resource);`))
 	v, id := NewEngine(ps).Eval(execDesc())
-	if v != schema.VerdictDeny {
-		t.Fatalf("verdict = %v, want deny", v)
+	if v != schema.RiskDanger {
+		t.Fatalf("risk = %v, want danger", v)
 	}
 	if id != "no-exec" {
 		t.Errorf("ruleID = %q, want no-exec", id)
@@ -50,11 +50,11 @@ func TestEvalForbidDenies(t *testing.T) {
 func TestEvalNoMatchAsks(t *testing.T) {
 	ps := cedar.NewPolicySet()
 	v, id := NewEngine(ps).Eval(execDesc())
-	if v != schema.VerdictAsk {
-		t.Fatalf("verdict = %v, want ask", v)
+	if v != schema.RiskUnknown {
+		t.Fatalf("risk = %v, want unknown", v)
 	}
-	if id != "default-ask" {
-		t.Errorf("ruleID = %q, want default-ask", id)
+	if id != "unclassified" {
+		t.Errorf("ruleID = %q, want unclassified", id)
 	}
 }
 
@@ -63,8 +63,8 @@ func TestEvalForbidDominatesPermit(t *testing.T) {
 	ps.Add("permit-all", mustPolicy(t, `permit(principal, action, resource);`))
 	ps.Add("no-exec", mustPolicy(t, `forbid(principal, action == Action::"exec", resource);`))
 	v, _ := NewEngine(ps).Eval(execDesc())
-	if v != schema.VerdictDeny {
-		t.Fatalf("verdict = %v, want deny (forbid dominates)", v)
+	if v != schema.RiskDanger {
+		t.Fatalf("risk = %v, want danger (forbid dominates)", v)
 	}
 }
 
@@ -76,8 +76,8 @@ func TestEvalForbidWithEvalErrorFailsClosed(t *testing.T) {
 	ps := cedar.NewPolicySet()
 	ps.Add("bad-forbid", mustPolicy(t, `forbid(principal, action, resource) when { context.nope == "x" };`))
 	v, id := NewEngine(ps).Eval(execDesc())
-	if v != schema.VerdictDeny {
-		t.Fatalf("forbid eval-error must fail closed to deny, got %v", v)
+	if v != schema.RiskDanger {
+		t.Fatalf("forbid eval-error must fail closed to danger, got %v", v)
 	}
 	if id != "bad-forbid" {
 		t.Errorf("ruleID = %q, want bad-forbid", id)

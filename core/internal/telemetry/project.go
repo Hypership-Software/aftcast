@@ -57,14 +57,14 @@ func (s *Store) Project(log *audit.Log) error {
 
 	upsert, err := tx.Prepare(`INSERT INTO sessions
 		(session_id, user, org, harness, started, ended, exit_reason,
-		 turn_count, tool_calls, blocked_count, taint, skills_used, duration_ms,
+		 turn_count, tool_calls, danger_detected, taint, skills_used, duration_ms,
 		 outcome, one_shot, correction_turns, task_type)
 		VALUES (?,?,?,?,?,?,?, ?,?,?,?,?,?, '',0,0,'')
 		ON CONFLICT(session_id) DO UPDATE SET
 			user=excluded.user, org=excluded.org, harness=excluded.harness,
 			started=excluded.started, ended=excluded.ended, exit_reason=excluded.exit_reason,
 			turn_count=excluded.turn_count, tool_calls=excluded.tool_calls,
-			blocked_count=excluded.blocked_count, taint=excluded.taint,
+			danger_detected=excluded.danger_detected, taint=excluded.taint,
 			skills_used=excluded.skills_used, duration_ms=excluded.duration_ms`)
 	if err != nil {
 		return err
@@ -73,7 +73,7 @@ func (s *Store) Project(log *audit.Log) error {
 	for _, sess := range foldSessions(evs) {
 		if _, err := upsert.Exec(sess.SessionID, sess.User, sess.Org, sess.Harness,
 			sess.Started, sess.Ended, sess.ExitReason,
-			sess.TurnCount, sess.ToolCalls, sess.BlockedCount, b2i(sess.Taint), sess.SkillsUsed, sess.DurationMS); err != nil {
+			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint), sess.SkillsUsed, sess.DurationMS); err != nil {
 			return err
 		}
 	}
@@ -122,8 +122,9 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 			s.TurnCount++
 		case schema.EventPreTool:
 			s.ToolCalls++
-		case schema.EventBlock:
-			s.BlockedCount++
+			if e.Risk == schema.RiskDanger {
+				s.DangerDetected++ // a tool call the classifier flagged dangerous
+			}
 		case schema.EventStop:
 			s.ExitReason = "stopped"
 		}

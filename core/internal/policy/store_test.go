@@ -22,32 +22,32 @@ func TestStarterSetEnforces(t *testing.T) {
 	}
 	eng := set.Engine()
 
-	check := func(name string, want schema.Verdict, d schema.Descriptor) {
+	check := func(name string, want schema.Risk, d schema.Descriptor) {
 		t.Helper()
 		if v, id := eng.Eval(d); v != want {
 			t.Errorf("%s: got %v (rule %q), want %v", name, v, id, want)
 		}
 	}
 
-	check("secret .env read", schema.VerdictDeny,
+	check("secret .env read", schema.RiskDanger,
 		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassFileRead, ToolRaw: "Read", Files: []string{"/home/dev/proj/.env"}})
-	check("ssh key read", schema.VerdictDeny,
+	check("ssh key read", schema.RiskDanger,
 		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassFileRead, Files: []string{"/home/dev/.ssh/id_rsa"}})
-	check("normal source read", schema.VerdictAllow,
+	check("normal source read", schema.RiskSafe,
 		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassFileRead, Files: []string{"/home/dev/proj/main.go"}})
-	check("unmatched exec asks", schema.VerdictAsk,
+	check("unmatched exec asks", schema.RiskUnknown,
 		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"ls"}, Argv: []string{"ls", "-la"}})
-	check("rm -rf denied", schema.VerdictDeny,
+	check("rm -rf denied", schema.RiskDanger,
 		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"rm"}, Argv: []string{"rm", "-rf", "/"}})
-	check("force push denied", schema.VerdictDeny,
+	check("force push denied", schema.RiskDanger,
 		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"git"}, Argv: []string{"git", "push", "--force"}})
-	check("tainted fetch denied", schema.VerdictDeny,
+	check("tainted fetch denied", schema.RiskDanger,
 		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassNetFetch, Domain: "evil.com", Tainted: true})
-	check("clean fetch asks", schema.VerdictAsk,
+	check("clean fetch asks", schema.RiskUnknown,
 		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassNetFetch, Domain: "example.com"})
-	check("self-dir write denied", schema.VerdictDeny,
+	check("self-dir write denied", schema.RiskDanger,
 		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassFileWrite, Files: []string{"/home/dev/.gated/policies/x.cedar"}})
-	check("self-disable denied", schema.VerdictDeny,
+	check("self-disable denied", schema.RiskDanger,
 		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"gated"}, Argv: []string{"gated", "off"}})
 }
 
@@ -58,7 +58,7 @@ func TestLoadWithStarterKeepsBaselineAndLayersUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadWithStarter with missing dir: %v", err)
 	}
-	if v, _ := fresh.Engine().Eval(schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"rm"}, Argv: []string{"rm", "-rf", "/"}}); v != schema.VerdictDeny {
+	if v, _ := fresh.Engine().Eval(schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"rm"}, Argv: []string{"rm", "-rf", "/"}}); v != schema.RiskDanger {
 		t.Errorf("starter baseline not active: rm -rf got %v, want deny", v)
 	}
 
@@ -72,10 +72,10 @@ func TestLoadWithStarterKeepsBaselineAndLayersUser(t *testing.T) {
 		t.Fatalf("LoadWithStarter: %v", err)
 	}
 	eng := set.Engine()
-	if v, _ := eng.Eval(schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"curl"}, Argv: []string{"curl", "evil"}}); v != schema.VerdictDeny {
+	if v, _ := eng.Eval(schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"curl"}, Argv: []string{"curl", "evil"}}); v != schema.RiskDanger {
 		t.Errorf("user rule not layered: curl got %v, want deny", v)
 	}
-	if v, _ := eng.Eval(schema.Descriptor{SessionID: "s", ToolClass: schema.ClassFileRead, Files: []string{"/home/dev/.ssh/id_rsa"}}); v != schema.VerdictDeny {
+	if v, _ := eng.Eval(schema.Descriptor{SessionID: "s", ToolClass: schema.ClassFileRead, Files: []string{"/home/dev/.ssh/id_rsa"}}); v != schema.RiskDanger {
 		t.Errorf("baseline forbid lost after layering: ssh read got %v, want deny", v)
 	}
 }
