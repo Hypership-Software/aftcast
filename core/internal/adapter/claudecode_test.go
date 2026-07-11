@@ -1,7 +1,6 @@
 package adapter
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -113,38 +112,6 @@ func TestNormalizeUserPrompt(t *testing.T) {
 	_, e := normalize(t, "userpromptsubmit.json")
 	if e.EventType != schema.EventUserPrompt {
 		t.Errorf("event type = %v, want user_prompt", e.EventType)
-	}
-}
-
-func TestRespondDecisions(t *testing.T) {
-	a := cc(t)
-	for _, tc := range []struct {
-		v    schema.Verdict
-		want string
-	}{
-		{schema.VerdictAllow, "allow"},
-		{schema.VerdictDeny, "deny"},
-		{schema.VerdictAsk, "ask"},
-	} {
-		raw, err := a.Respond(tc.v, "because")
-		if err != nil {
-			t.Fatal(err)
-		}
-		var out struct {
-			HookSpecificOutput struct {
-				PermissionDecision       string `json:"permissionDecision"`
-				PermissionDecisionReason string `json:"permissionDecisionReason"`
-			} `json:"hookSpecificOutput"`
-		}
-		if err := json.Unmarshal(raw, &out); err != nil {
-			t.Fatal(err)
-		}
-		if out.HookSpecificOutput.PermissionDecision != tc.want {
-			t.Errorf("verdict %v -> %q, want %q", tc.v, out.HookSpecificOutput.PermissionDecision, tc.want)
-		}
-		if tc.v == schema.VerdictDeny && out.HookSpecificOutput.PermissionDecisionReason != "because" {
-			t.Errorf("deny reason not surfaced: %q", out.HookSpecificOutput.PermissionDecisionReason)
-		}
 	}
 }
 

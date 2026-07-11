@@ -78,26 +78,6 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 	return desc, ev, nil
 }
 
-// Respond renders the Claude Code PreToolUse hook decision. Deny blocks with the
-// reason surfaced to the model; ask defers to the harness's native prompt so
-// there is no double-prompt in interactive mode.
-func (claudeCode) Respond(v schema.Verdict, reason string) ([]byte, error) {
-	decision := "ask"
-	switch v {
-	case schema.VerdictAllow:
-		decision = "allow"
-	case schema.VerdictDeny:
-		decision = "deny"
-	}
-	return json.Marshal(map[string]any{
-		"hookSpecificOutput": map[string]any{
-			"hookEventName":            "PreToolUse",
-			"permissionDecision":       decision,
-			"permissionDecisionReason": reason,
-		},
-	})
-}
-
 func eventType(event string) schema.EventType {
 	switch event {
 	case "PreToolUse":

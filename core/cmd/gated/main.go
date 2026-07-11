@@ -13,7 +13,7 @@ import (
 	"github.com/Hypership-Software/atlas/internal/svc"
 )
 
-const usage = "usage: gated <daemon|hook|init|policy|approvals|audit|insights|status|doctor|off|version>"
+const usage = "usage: gated <daemon|hook|init|uninstall|doctor|version>"
 
 func main() { os.Exit(run(os.Args[1:])) }
 
@@ -51,9 +51,6 @@ func run(args []string) int {
 			return 0
 		}
 		return 1
-	case "off":
-		fmt.Fprintln(os.Stderr, "gated off: time-boxed disable is not wired yet — stop the daemon (Ctrl+C) or run `gated uninstall` to remove the hooks.")
-		return 2
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand %q\n%s\n", args[0], usage)
 		return 2

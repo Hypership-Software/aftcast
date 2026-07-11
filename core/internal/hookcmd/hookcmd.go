@@ -1,9 +1,10 @@
 // Package hookcmd implements the `gated hook` shim. In production the per-call
-// hot path is HTTP hooks straight to the daemon (Rev 4); this shim survives for
+// hot path is HTTP hooks straight to the daemon (ADR-001); this shim survives for
 // the once-per-session SessionStart command-hook fallback (SessionStart does not
-// fire over HTTP in 2.1.205) and an optional per-call hybrid where an org
-// contractually requires fail-closed. It also exposes the daemon-liveness check
-// the watchdog relies on.
+// fire over HTTP in 2.1.205). It is pure observation: it delivers the event to
+// the daemon for recording, spooling it if the daemon is down, and never blocks
+// or emits a hook decision. It also exposes the daemon-liveness check the
+// watchdog relies on.
 package hookcmd
 
 import (
@@ -22,89 +23,60 @@ import (
 
 const dialTimeout = 2 * time.Second
 
-// Run reads a hook payload from stdin, asks the daemon for a verdict over the
-// control-plane transport, and writes the harness hook response to stdout.
-//
-// Fail mode is PER EVENT (Rev 2.1): a PreToolUse with an unreachable daemon
-// fails CLOSED (exit 2, no verdict). Every other event fails QUIET (exit 0)
-// after spooling its telemetry for later ingestion — exit 2 on
-// UserPromptSubmit/Stop would erase the prompt or force the agent to keep
-// running, both safety inversions. A deny verdict is exit 0 plus deny JSON
-// (Claude Code honors a deny only via exit-0 + JSON; exit 2 is the no-verdict
-// fail-closed path).
+// Run reads a hook payload from stdin and delivers it to the daemon for
+// recording. Atlas observes — the shim never blocks and never emits a hook
+// decision. If the daemon is unreachable the event is spooled for ingestion on
+// the daemon's next start. It always exits 0: a telemetry shim must never
+// disrupt the session.
 func Run(harness string, stdin io.Reader, stdout, stderr io.Writer) int {
 	a, ok := adapter.Get(harness)
 	if !ok {
 		fmt.Fprintf(stderr, "gated: unknown harness %q\n", harness)
-		return 2
+		return 0
 	}
 	raw, err := io.ReadAll(stdin)
 	if err != nil {
 		fmt.Fprintf(stderr, "gated: read hook payload: %v\n", err)
-		return 2
+		return 0
 	}
 	desc, ev, err := a.Normalize("", raw)
 	if err != nil {
 		fmt.Fprintf(stderr, "gated: normalize hook payload: %v\n", err)
-		return 2
+		return 0
 	}
 
-	resp, err := ask(daemon.Request{Event: ev, Descriptor: desc})
-	if err != nil {
-		return daemonDown(ev, stderr)
-	}
-
-	// Only gating events need a hook-response body; observations return exit 0.
-	if ev.EventType == schema.EventPreTool {
-		out, rerr := a.Respond(resp.Verdict, resp.Reason)
-		if rerr != nil {
-			fmt.Fprintf(stderr, "gated: render response: %v\n", rerr)
-			return 2
+	if derr := deliver(daemon.Request{Event: ev, Descriptor: desc}); derr != nil {
+		if serr := spool(ev); serr != nil {
+			fmt.Fprintf(stderr, "gated: spool telemetry: %v\n", serr)
 		}
-		_, _ = stdout.Write(out)
 	}
 	return 0
 }
 
-func ask(req daemon.Request) (daemon.Response, error) {
+// deliver sends the event to the daemon over the control-plane transport. The
+// daemon records it and replies with a classification we don't act on (Atlas
+// does not gate), so the ack is read and discarded.
+func deliver(req daemon.Request) error {
 	conn, err := ipc.Dial(dialTimeout)
 	if err != nil {
-		return daemon.Response{}, err
+		return err
 	}
 	defer conn.Close()
 
 	reqRaw, err := json.Marshal(req)
 	if err != nil {
-		return daemon.Response{}, err
+		return err
 	}
 	if err := ipc.WriteFrame(conn, reqRaw); err != nil {
-		return daemon.Response{}, err
+		return err
 	}
-	respRaw, err := ipc.ReadFrame(conn)
-	if err != nil {
-		return daemon.Response{}, err
-	}
-	var resp daemon.Response
-	if err := json.Unmarshal(respRaw, &resp); err != nil {
-		return daemon.Response{}, err
-	}
-	return resp, nil
-}
-
-func daemonDown(ev schema.TelemetryEvent, stderr io.Writer) int {
-	if ev.EventType == schema.EventPreTool {
-		fmt.Fprintln(stderr, "gated: gate daemon unreachable — blocking this action (fail-closed). Run `gated doctor`.")
-		return 2
-	}
-	if err := spool(ev); err != nil {
-		fmt.Fprintf(stderr, "gated: spool telemetry: %v\n", err)
-	}
-	return 0
+	_, _ = ipc.ReadFrame(conn) // ack; content unused
+	return nil
 }
 
 // Live reports whether the daemon is reachable on the control-plane transport.
 // The daemon-liveness watchdog (surfaced by `gated status`/insights) uses this:
-// HTTP hooks fail OPEN, so a down daemon means sessions run UNGATED, and that
+// HTTP hooks fail open, so a down daemon means sessions run UNOBSERVED, and that
 // gap must be detectable rather than silent.
 func Live(timeout time.Duration) bool {
 	conn, err := ipc.Dial(timeout)

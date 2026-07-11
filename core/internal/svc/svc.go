@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/Hypership-Software/atlas/internal/adapter"
-	"github.com/Hypership-Software/atlas/internal/approval"
 	"github.com/Hypership-Software/atlas/internal/audit"
 	"github.com/Hypership-Software/atlas/internal/daemon"
 	"github.com/Hypership-Software/atlas/internal/integrity"
@@ -45,9 +44,8 @@ import (
 )
 
 const (
-	defaultApprovalTimeout = 100 * time.Second
-	defaultIntegrityTick   = 5 * time.Minute
-	maxSpoolLine           = 4 << 20 // matches audit's scanner cap
+	defaultIntegrityTick = 5 * time.Minute
+	maxSpoolLine         = 4 << 20 // matches audit's scanner cap
 )
 
 // Options configures a daemon run. The zero value is a valid production run
@@ -61,9 +59,6 @@ type Options struct {
 	// TrustedDomains is the taint allowlist: fetches to these domains do not
 	// taint the session.
 	TrustedDomains []string
-	// ApprovalTimeout bounds how long an `ask` blocks before defaulting to deny.
-	// 0 => defaultApprovalTimeout.
-	ApprovalTimeout time.Duration
 	// IntegrityTick is the tamper-check interval. 0 => defaultIntegrityTick;
 	// negative disables the checker entirely (tests).
 	IntegrityTick time.Duration
@@ -114,7 +109,6 @@ func Run(ctx context.Context, opts Options) error {
 	var (
 		logDir     = filepath.Join(home, "log")
 		policyDir  = filepath.Join(home, "policies")
-		pendingDir = filepath.Join(policyDir, "pending")
 		keyPath    = filepath.Join(home, "audit.key")
 		daemonPath = filepath.Join(home, "daemon.json")
 		spoolPath  = filepath.Join(home, "spool", "spool.jsonl")
@@ -152,13 +146,7 @@ func Run(ctx context.Context, opts Options) error {
 		ledger.Rebuild(evs)
 	}
 
-	timeout := opts.ApprovalTimeout
-	if timeout == 0 {
-		timeout = defaultApprovalTimeout
-	}
-	queue := approval.NewQueue(timeout, pendingDir)
-
-	h := daemon.NewHandler(daemon.Deps{Eval: engine, Taint: ledger, Approve: queue, Record: alog})
+	h := daemon.NewHandler(daemon.Deps{Eval: engine, Taint: ledger, Record: alog})
 
 	// Fold in telemetry spooled by the shim while the daemon was down, before we
 	// start accepting new events (no concurrency during drain).
@@ -329,25 +317,12 @@ func hookHandler(h *daemon.Handler, adp adapter.Adapter, logf func(string, ...an
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		resp, err := h.Handle(daemon.Request{Event: ev, Descriptor: desc})
-		if err != nil {
+		if _, err := h.Handle(daemon.Request{Event: ev, Descriptor: desc}); err != nil {
 			logf("hook: handle: %v", err)
-			w.WriteHeader(http.StatusOK)
-			return
 		}
-		if ev.EventType != schema.EventPreTool {
-			w.WriteHeader(http.StatusOK) // observation: recorded, nothing to decide
-			return
-		}
-		out, err := adp.Respond(resp.Verdict, resp.Reason)
-		if err != nil {
-			logf("hook: render response: %v", err)
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
+		// Atlas observes; it never returns a hook decision. 200 with no body lets
+		// Claude Code proceed under its own permission flow.
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(out)
 	}
 }
 

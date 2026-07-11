@@ -44,10 +44,11 @@ func startDaemon(t *testing.T, ipcID string, opts svc.Options) (svc.Info, contex
 	return svc.Info{}, cancel, errc // unreachable
 }
 
-// TestRunDeniesOverControlPlane is the plan's acceptance test: svc.Run wires the
-// real engine + temp dirs and serves one loopback request end-to-end, then shuts
+// TestRunClassifiesOverControlPlane is the acceptance test: svc.Run wires the
+// real classifier + temp dirs and serves one loopback request end-to-end,
+// returning the risk classification (not an enforcement decision), then shuts
 // down cleanly on ctx cancel.
-func TestRunDeniesOverControlPlane(t *testing.T) {
+func TestRunClassifiesOverControlPlane(t *testing.T) {
 	home := t.TempDir()
 	_, cancel, errc := startDaemon(t, "svc-cp", svc.Options{Home: home})
 
@@ -81,7 +82,7 @@ func TestRunDeniesOverControlPlane(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp.Verdict != schema.VerdictDeny {
-		t.Fatalf("verdict = %q (rule %q), want deny", resp.Verdict, resp.RuleID)
+		t.Fatalf("classification = %q (rule %q), want deny (dangerous)", resp.Verdict, resp.RuleID)
 	}
 	if resp.RuleID != "deny-rm-rf" {
 		t.Errorf("ruleID = %q, want deny-rm-rf", resp.RuleID)
@@ -93,10 +94,11 @@ func TestRunDeniesOverControlPlane(t *testing.T) {
 	}
 }
 
-// TestRunDeniesOverHTTP exercises the production transport: a raw Claude Code
-// PreToolUse payload POSTed to the hook listener is normalized, evaluated, and
-// answered with a deny decision — and the block is recorded to the audit log.
-func TestRunDeniesOverHTTP(t *testing.T) {
+// TestRunObservesOverHTTP exercises the production transport: a raw Claude Code
+// PreToolUse payload POSTed to the hook listener is normalized, classified, and
+// recorded — and the response carries NO decision, because Atlas observes and
+// never blocks. The classified event must be durable in the tamper-evident log.
+func TestRunObservesOverHTTP(t *testing.T) {
 	home := t.TempDir()
 	info, cancel, errc := startDaemon(t, "svc-http", svc.Options{Home: home})
 
@@ -110,8 +112,8 @@ func TestRunDeniesOverHTTP(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", resp.StatusCode, body)
 	}
-	if !strings.Contains(string(body), `"permissionDecision":"deny"`) {
-		t.Fatalf("hook response missing deny decision: %s", body)
+	if strings.Contains(string(body), "permissionDecision") {
+		t.Fatalf("hook returned a decision; Atlas observes only: %s", body)
 	}
 
 	cancel()
@@ -119,7 +121,6 @@ func TestRunDeniesOverHTTP(t *testing.T) {
 		t.Fatalf("Run returned error on shutdown: %v", err)
 	}
 
-	// The block event must be durable in the tamper-evident log.
 	key, err := os.ReadFile(filepath.Join(home, "audit.key"))
 	if err != nil {
 		t.Fatal(err)
@@ -135,6 +136,21 @@ func TestRunDeniesOverHTTP(t *testing.T) {
 	}
 	if !rep.OK || rep.Count < 1 {
 		t.Fatalf("audit log verify = %+v, want OK with >=1 record", rep)
+	}
+	// The dangerous action must be recorded AND classified as dangerous — the
+	// whole point of observing without blocking.
+	evs, err := l.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got schema.TelemetryEvent
+	for _, e := range evs {
+		if e.SessionID == "s-http" && e.EventType == schema.EventPreTool {
+			got = e
+		}
+	}
+	if got.Verdict != schema.VerdictDeny {
+		t.Errorf("rm -rf classified as %q, want deny (dangerous)", got.Verdict)
 	}
 }
 

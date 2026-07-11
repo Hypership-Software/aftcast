@@ -26,17 +26,6 @@ type fakeTaint struct{ applyCalls, markCalls int }
 func (f *fakeTaint) Apply(*schema.Descriptor)                 { f.applyCalls++ }
 func (f *fakeTaint) MarkFromResult(string, schema.Descriptor) { f.markCalls++ }
 
-type fakeApprover struct {
-	v      schema.Verdict
-	reason string
-	calls  int
-}
-
-func (f *fakeApprover) Request(schema.Descriptor) (schema.Verdict, string) {
-	f.calls++
-	return f.v, f.reason
-}
-
 type fakeRecorder struct{ events []schema.TelemetryEvent }
 
 func (f *fakeRecorder) Record(e schema.TelemetryEvent) error {
@@ -44,8 +33,8 @@ func (f *fakeRecorder) Record(e schema.TelemetryEvent) error {
 	return nil
 }
 
-func handlerWith(e Evaluator, tt Tainter, a Approver, r Recorder) *Handler {
-	return NewHandler(Deps{Eval: e, Taint: tt, Approve: a, Record: r})
+func handlerWith(e Evaluator, tt Tainter, r Recorder) *Handler {
+	return NewHandler(Deps{Eval: e, Taint: tt, Record: r})
 }
 
 func preToolReq() Request {
@@ -55,62 +44,54 @@ func preToolReq() Request {
 	}
 }
 
-func TestHandleDenyRecordsOnceNoApprover(t *testing.T) {
+// A dangerous action is classified and recorded, but never blocked: it stays a
+// pre_tool event (the tool call happened) carrying the risk classification.
+func TestHandleClassifiesDangerButDoesNotBlock(t *testing.T) {
 	ev := &fakeEval{v: schema.VerdictDeny, id: "no-exec"}
-	ap := &fakeApprover{}
 	rec := &fakeRecorder{}
-	resp, err := handlerWith(ev, &fakeTaint{}, ap, rec).Handle(preToolReq())
+	resp, err := handlerWith(ev, &fakeTaint{}, rec).Handle(preToolReq())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.Verdict != schema.VerdictDeny {
-		t.Fatalf("verdict = %v, want deny", resp.Verdict)
-	}
-	if ap.calls != 0 {
-		t.Errorf("approver was called on a deny (%d times)", ap.calls)
+	if resp.Verdict != schema.VerdictDeny || resp.RuleID != "no-exec" {
+		t.Fatalf("classification = %v/%q, want deny/no-exec", resp.Verdict, resp.RuleID)
 	}
 	if len(rec.events) != 1 {
 		t.Fatalf("recorded %d events, want exactly 1", len(rec.events))
 	}
-	if rec.events[0].EventType != schema.EventBlock {
-		t.Errorf("deny recorded as %v, want block", rec.events[0].EventType)
+	if rec.events[0].EventType != schema.EventPreTool {
+		t.Errorf("recorded as %v, want pre_tool (nothing is blocked)", rec.events[0].EventType)
 	}
 	if rec.events[0].Verdict != schema.VerdictDeny {
-		t.Errorf("recorded verdict = %v, want deny", rec.events[0].Verdict)
+		t.Errorf("recorded classification = %v, want deny", rec.events[0].Verdict)
 	}
 }
 
-func TestHandleAskConsultsApprover(t *testing.T) {
+// An uncovered action is classified ask and recorded; no approver is consulted
+// (there is none) and the action proceeds.
+func TestHandleAskIsRecordedNotResolved(t *testing.T) {
 	ev := &fakeEval{v: schema.VerdictAsk, id: "default-ask"}
-	ap := &fakeApprover{v: schema.VerdictAllow, reason: "user approved"}
 	rec := &fakeRecorder{}
-	resp, _ := handlerWith(ev, &fakeTaint{}, ap, rec).Handle(preToolReq())
-	if ap.calls != 1 {
-		t.Fatalf("approver calls = %d, want 1", ap.calls)
+	resp, _ := handlerWith(ev, &fakeTaint{}, rec).Handle(preToolReq())
+	if resp.Verdict != schema.VerdictAsk {
+		t.Fatalf("classification = %v, want ask", resp.Verdict)
 	}
-	if resp.Verdict != schema.VerdictAllow {
-		t.Fatalf("verdict = %v, want allow", resp.Verdict)
-	}
-	if resp.Reason != "user approved" {
-		t.Errorf("reason = %q, want %q", resp.Reason, "user approved")
-	}
-	if len(rec.events) != 1 {
-		t.Fatalf("recorded %d events, want 1", len(rec.events))
+	if len(rec.events) != 1 || rec.events[0].Verdict != schema.VerdictAsk {
+		t.Fatalf("recorded %d events (verdict %v), want 1 ask", len(rec.events), rec.events[0].Verdict)
 	}
 }
 
-func TestHandleAllowAppliesAndMarksTaint(t *testing.T) {
+// Every pre_tool applies stored taint and marks any new taint source — taint is
+// a risk signal now, tracked regardless of classification.
+func TestHandlePreToolAppliesAndMarksTaint(t *testing.T) {
 	ev := &fakeEval{v: schema.VerdictAllow, id: "permit"}
 	tt := &fakeTaint{}
-	resp, _ := handlerWith(ev, tt, &fakeApprover{}, &fakeRecorder{}).Handle(preToolReq())
-	if resp.Verdict != schema.VerdictAllow {
-		t.Fatalf("verdict = %v, want allow", resp.Verdict)
-	}
+	handlerWith(ev, tt, &fakeRecorder{}).Handle(preToolReq())
 	if tt.applyCalls != 1 {
 		t.Errorf("Apply calls = %d, want 1", tt.applyCalls)
 	}
 	if tt.markCalls != 1 {
-		t.Errorf("MarkFromResult calls = %d, want 1 (allowed action marks taint)", tt.markCalls)
+		t.Errorf("MarkFromResult calls = %d, want 1", tt.markCalls)
 	}
 }
 
@@ -118,12 +99,9 @@ func TestHandlePostToolRecordsOnlyAndSkipsEval(t *testing.T) {
 	ev := &fakeEval{v: schema.VerdictDeny, id: "should-not-be-used"}
 	rec := &fakeRecorder{}
 	req := Request{Event: schema.TelemetryEvent{EventType: schema.EventPostTool, SessionID: "s"}}
-	resp, _ := handlerWith(ev, &fakeTaint{}, &fakeApprover{}, rec).Handle(req)
+	handlerWith(ev, &fakeTaint{}, rec).Handle(req)
 	if ev.calls != 0 {
-		t.Errorf("evaluator was called on a post_tool event (%d times)", ev.calls)
-	}
-	if resp.Verdict != schema.VerdictAllow {
-		t.Errorf("post_tool verdict = %v, want allow", resp.Verdict)
+		t.Errorf("classifier was called on a post_tool event (%d times)", ev.calls)
 	}
 	if len(rec.events) != 1 {
 		t.Fatalf("recorded %d events, want 1", len(rec.events))
@@ -138,7 +116,7 @@ func TestServeRoundTrip(t *testing.T) {
 	}
 	defer ln.Close()
 
-	h := handlerWith(&fakeEval{v: schema.VerdictDeny, id: "no-exec"}, &fakeTaint{}, &fakeApprover{}, &fakeRecorder{})
+	h := handlerWith(&fakeEval{v: schema.VerdictDeny, id: "no-exec"}, &fakeTaint{}, &fakeRecorder{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() { _ = Serve(ctx, ln, h) }()
@@ -162,7 +140,7 @@ func TestServeRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp.Verdict != schema.VerdictDeny {
-		t.Fatalf("verdict = %v, want deny", resp.Verdict)
+		t.Fatalf("classification = %v, want deny", resp.Verdict)
 	}
 	if resp.RuleID != "no-exec" {
 		t.Errorf("ruleID = %q, want no-exec", resp.RuleID)

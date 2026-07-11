@@ -14,8 +14,6 @@ type Adapter interface {
 	// event name is authoritative from the shim/HTTP path; if empty, the payload's
 	// own event field is used.
 	Normalize(event string, raw []byte) (schema.Descriptor, schema.TelemetryEvent, error)
-	// Respond renders a verdict into the harness's hook-response JSON.
-	Respond(v schema.Verdict, reason string) ([]byte, error)
 }
 
 var registry = map[string]Adapter{}
