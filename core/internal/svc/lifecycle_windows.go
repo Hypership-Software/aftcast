@@ -45,11 +45,18 @@ func spawnDetached(bin, home string) (int, error) {
 		CreationFlags: detachedProcess | createNewProcessGroup,
 		HideWindow:    true,
 	}
+	logf, err := openDaemonLog(home)
+	if err != nil {
+		return 0, err
+	}
+	cmd.Stdout, cmd.Stderr = logf, logf
 	if err := cmd.Start(); err != nil {
+		logf.Close()
 		return 0, err
 	}
 	pid := cmd.Process.Pid
 	_ = cmd.Process.Release()
+	logf.Close()
 	return pid, nil
 }
 

@@ -174,6 +174,8 @@ func Doctor(opts Options, w io.Writer) bool {
 		}
 		pass("settings port matches daemon", match, detail)
 	}
+
+	fmt.Fprintln(w, ui.Hint("daemon logs: "+filepath.Join(resolveHome(opts.Home), "daemon.log")))
 	return ok
 }
 

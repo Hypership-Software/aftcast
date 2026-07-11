@@ -31,18 +31,26 @@ func spawnDetached(bin, home string) (int, error) {
 	cmd := exec.Command(bin, "daemon", "run")
 	cmd.Env = append(os.Environ(), "GATED_HOME="+home)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	devNull, err := os.OpenFile(os.DevNull, os.O_RDONLY, 0)
 	if err != nil {
 		return 0, err
 	}
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = devNull, devNull, devNull
+	logf, err := openDaemonLog(home)
+	if err != nil {
+		devNull.Close()
+		return 0, err
+	}
+	cmd.Stdin = devNull
+	cmd.Stdout, cmd.Stderr = logf, logf
 	if err := cmd.Start(); err != nil {
 		devNull.Close()
+		logf.Close()
 		return 0, err
 	}
 	pid := cmd.Process.Pid
 	_ = cmd.Process.Release()
 	devNull.Close()
+	logf.Close()
 	return pid, nil
 }
 

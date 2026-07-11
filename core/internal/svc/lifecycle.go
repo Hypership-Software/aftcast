@@ -114,6 +114,16 @@ func readDaemonFile(dir string) (daemonFile, error) {
 	return df, nil
 }
 
+// openDaemonLog opens <home>/daemon.log for the detached daemon's stdout/stderr,
+// so its diagnostics survive (a background process with no visible log is
+// undebuggable). Appends across restarts; volume is low (a line or two per start).
+func openDaemonLog(home string) (*os.File, error) {
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		return nil, err
+	}
+	return os.OpenFile(filepath.Join(home, "daemon.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+}
+
 func portOpen(port int) bool {
 	if port <= 0 {
 		return false
