@@ -152,6 +152,64 @@ func TestEmptyKeyRejected(t *testing.T) {
 	}
 }
 
+func TestRecordStampsTimestampWhenEmpty(t *testing.T) {
+	dir := t.TempDir()
+	l, err := NewLog(dir, testKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	// Record an event with no timestamp (as the adapter currently produces).
+	if err := l.Record(schema.TelemetryEvent{SessionID: "s1", EventType: schema.EventPreTool}); err != nil {
+		t.Fatal(err)
+	}
+	evs, err := l.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(evs) != 1 {
+		t.Fatalf("got %d events, want 1", len(evs))
+	}
+	if evs[0].TS == "" {
+		t.Fatal("Record left ts empty; it must stamp a capture time")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, evs[0].TS); err != nil {
+		t.Errorf("stamped ts %q is not RFC3339Nano: %v", evs[0].TS, err)
+	}
+}
+
+func TestRecordPreservesProvidedTimestamp(t *testing.T) {
+	dir := t.TempDir()
+	l, _ := NewLog(dir, testKey)
+	defer l.Close()
+	want := "2026-07-01T00:00:00Z"
+	if err := l.Record(schema.TelemetryEvent{SessionID: "s1", EventType: schema.EventPreTool, TS: want}); err != nil {
+		t.Fatal(err)
+	}
+	evs, _ := l.Events()
+	if evs[0].TS != want {
+		t.Errorf("ts = %q, want %q (provided ts must not be overwritten)", evs[0].TS, want)
+	}
+}
+
+func TestRecordStampsIdentityWhenEmpty(t *testing.T) {
+	dir := t.TempDir()
+	l, _ := NewLog(dir, testKey)
+	defer l.Close()
+	l.SetIdentity("kyle", "devbox")
+	// event with empty user/host gets the daemon identity...
+	_ = l.Record(schema.TelemetryEvent{SessionID: "s1", EventType: schema.EventPreTool})
+	// ...but an event that already carries them is left alone.
+	_ = l.Record(schema.TelemetryEvent{SessionID: "s2", EventType: schema.EventPreTool, User: "other", Host: "elsewhere"})
+	evs, _ := l.Events()
+	if evs[0].User != "kyle" || evs[0].Host != "devbox" {
+		t.Errorf("stamped identity = {%q,%q}, want {kyle,devbox}", evs[0].User, evs[0].Host)
+	}
+	if evs[1].User != "other" || evs[1].Host != "elsewhere" {
+		t.Errorf("overwrote provided identity = {%q,%q}, want {other,elsewhere}", evs[1].User, evs[1].Host)
+	}
+}
+
 func TestEventsReturnsAllInOrder(t *testing.T) {
 	dir := t.TempDir()
 	l, err := NewLog(dir, testKey)

@@ -137,6 +137,10 @@ func Run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("open audit log: %w", err)
 	}
 	defer alog.Close()
+	// Stamp this machine's identity onto every recorded event that doesn't carry
+	// it (the harness payload has neither user nor host).
+	host, _ := os.Hostname()
+	alog.SetIdentity(currentUser(), host)
 
 	// Rebuild session taint from the log so a mid-session daemon restart doesn't
 	// lose the tainted flag (Task 12). Non-fatal on read error — a fresh log is
@@ -218,6 +222,17 @@ func Run(ctx context.Context, opts Options) error {
 	mu.Lock()
 	defer mu.Unlock()
 	return runErr
+}
+
+// currentUser reports the OS user running the daemon, from the environment so
+// it stays CGO-free and cross-platform (USERNAME on Windows, USER on Unix).
+func currentUser() string {
+	for _, k := range []string{"USERNAME", "USER"} {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func resolveHome(home string) string {

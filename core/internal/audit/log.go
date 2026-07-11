@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/Hypership-Software/atlas/internal/schema"
 )
@@ -41,6 +42,17 @@ type Log struct {
 	seq       uint64
 	prevHash  string
 	sinceCkpt int
+	user      string
+	host      string
+}
+
+// SetIdentity records the machine identity the daemon stamps onto events that
+// don't already carry it. Called once at daemon startup; safe to leave unset
+// (fields simply stay empty).
+func (l *Log) SetIdentity(user, host string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.user, l.host = user, host
 }
 
 // NewLog opens (creating if needed) the log in dir, keyed by hmacKey, and
@@ -77,6 +89,18 @@ func (l *Log) Record(e schema.TelemetryEvent) error {
 	e.PrevHash = l.prevHash
 	if e.V == 0 {
 		e.V = schema.SchemaVersion
+	}
+	// Stamp capture-time facts the harness payload doesn't carry, before hashing
+	// so they're covered by the chain. Only fill what's absent — a shim that
+	// spooled with its own hook-time timestamp keeps it.
+	if e.TS == "" {
+		e.TS = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	if e.User == "" {
+		e.User = l.user
+	}
+	if e.Host == "" {
+		e.Host = l.host
 	}
 	hash, err := hashEvent(e, l.key)
 	if err != nil {
