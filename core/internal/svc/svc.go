@@ -9,15 +9,16 @@
 // OS service manager for auto-start is a later install-sprint concern.
 //
 // Deferred by design (marked inline): the SQLite read-model projection tick
-// (Task 16 is unbuilt — the live gate path records to the HMAC log, which is the
-// source of truth; the projection is a downstream analytics rebuild) and the
-// interactive approvals-over-IPC protocol (Task 14 — the queue is wired, so an
-// `ask` blocks then safely denies on timeout until the TUI client lands).
+// (Task 16's telemetry.Store now exists, but wiring a periodic Project call into
+// this daemon is a later concern — the live gate path records to the HMAC log,
+// which is the source of truth; the projection is a downstream analytics
+// rebuild) and the interactive approvals-over-IPC protocol (Task 14 — the queue
+// is wired, so an `ask` blocks then safely denies on timeout until the TUI
+// client lands).
 package svc
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -141,7 +142,7 @@ func Run(ctx context.Context, opts Options) error {
 	// lose the tainted flag (Task 12). Non-fatal on read error — a fresh log is
 	// empty and taint simply starts clean.
 	ledger := taint.NewLedger(opts.TrustedDomains)
-	if evs, rerr := readEvents(alog); rerr != nil {
+	if evs, rerr := alog.Events(); rerr != nil {
 		logf("taint rebuild: reading log: %v", rerr)
 	} else {
 		ledger.Rebuild(evs)
@@ -252,30 +253,6 @@ func loadOrCreateKey(path string) ([]byte, error) {
 		return nil, err
 	}
 	return key, nil
-}
-
-// readEvents replays the whole log into memory (via the NDJSON export) so the
-// taint ledger can be rebuilt. Session taint is small and session-scoped; the
-// cost is a one-time startup read.
-func readEvents(l *audit.Log) ([]schema.TelemetryEvent, error) {
-	var buf bytes.Buffer
-	if err := l.Export(&buf, time.Time{}); err != nil {
-		return nil, err
-	}
-	var evs []schema.TelemetryEvent
-	dec := json.NewDecoder(&buf)
-	for {
-		var e schema.TelemetryEvent
-		err := dec.Decode(&e)
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return evs, err
-		}
-		evs = append(evs, e)
-	}
-	return evs, nil
 }
 
 // drainSpool folds shim-spooled telemetry into the log and clears the spool. On

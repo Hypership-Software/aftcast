@@ -66,6 +66,32 @@ func (l *Log) Verify() (Report, error) {
 	return Report{OK: true, Count: count}, nil
 }
 
+// Events replays the on-disk log and returns every record in order. It is the
+// typed counterpart to Export: the SQLite read-model projector (Task 16) and
+// the taint rebuild fold over these events. A missing/empty log yields nil.
+func (l *Log) Events() ([]schema.TelemetryEvent, error) {
+	f, err := os.Open(filepath.Join(l.dir, eventsFile))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), maxLine)
+	var evs []schema.TelemetryEvent
+	for sc.Scan() {
+		var e schema.TelemetryEvent
+		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
+			return nil, fmt.Errorf("audit: corrupt log line: %w", err)
+		}
+		evs = append(evs, e)
+	}
+	return evs, sc.Err()
+}
+
 // Export streams the log as NDJSON, emitting only records at or after since.
 // Records with an unparseable timestamp are included (fail open on export — a
 // missing filter must not silently drop audit data).

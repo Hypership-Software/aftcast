@@ -151,3 +151,46 @@ func TestEmptyKeyRejected(t *testing.T) {
 		t.Fatal("expected NewLog to reject an empty HMAC key")
 	}
 }
+
+func TestEventsReturnsAllInOrder(t *testing.T) {
+	dir := t.TempDir()
+	l, err := NewLog(dir, testKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	_ = l.Record(ev("s1", "2026-07-10T12:00:00Z"))
+	_ = l.Record(ev("s2", "2026-07-10T12:00:01Z"))
+	_ = l.Record(ev("s1", "2026-07-10T12:00:02Z"))
+
+	evs, err := l.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(evs) != 3 {
+		t.Fatalf("Events() returned %d, want 3", len(evs))
+	}
+	for i, e := range evs {
+		if e.Seq != uint64(i+1) {
+			t.Errorf("event %d has seq %d, want %d", i, e.Seq, i+1)
+		}
+	}
+	if evs[0].SessionID != "s1" || evs[1].SessionID != "s2" || evs[2].SessionID != "s1" {
+		t.Errorf("session order = %q,%q,%q", evs[0].SessionID, evs[1].SessionID, evs[2].SessionID)
+	}
+}
+
+func TestEventsEmptyLog(t *testing.T) {
+	l, err := NewLog(t.TempDir(), testKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	evs, err := l.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(evs) != 0 {
+		t.Fatalf("empty log Events() = %d, want 0", len(evs))
+	}
+}

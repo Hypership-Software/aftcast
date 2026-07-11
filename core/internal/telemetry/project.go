@@ -1,0 +1,197 @@
+package telemetry
+
+import (
+	"encoding/json"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/Hypership-Software/atlas/internal/audit"
+	"github.com/Hypership-Software/atlas/internal/schema"
+)
+
+// Project folds the entire audit log into the read-model: it upserts every
+// session summary and mirrors each event into the events table. It is
+// idempotent — sessions are keyed by session_id and events by seq, so
+// re-projecting the same log is a no-op — and rebuildable: dropping the store
+// and re-projecting reconstructs it exactly. A last-projected-seq watermark in
+// the meta table lets a repeated call short-circuit when nothing is new.
+//
+// Only the structural columns are written here. The analytical columns
+// (outcome, one_shot, correction_turns, task_type) are Task 17's; this fold
+// leaves them at their defaults on insert and never clobbers them on update.
+func (s *Store) Project(log *audit.Log) error {
+	evs, err := log.Events()
+	if err != nil {
+		return err
+	}
+	if len(evs) == 0 {
+		return nil
+	}
+	maxSeq := evs[len(evs)-1].Seq
+	if maxSeq <= s.lastProjectedSeq() {
+		return nil // already projected through here
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	insEvent, err := tx.Prepare(`INSERT OR IGNORE INTO events (seq, session_id, turn_index, event_type, ts, raw) VALUES (?,?,?,?,?,?)`)
+	if err != nil {
+		return err
+	}
+	defer insEvent.Close()
+	for _, e := range evs {
+		raw, err := json.Marshal(e)
+		if err != nil {
+			return err
+		}
+		if _, err := insEvent.Exec(e.Seq, e.SessionID, e.TurnIndex, string(e.EventType), e.TS, string(raw)); err != nil {
+			return err
+		}
+	}
+
+	upsert, err := tx.Prepare(`INSERT INTO sessions
+		(session_id, user, org, harness, started, ended, exit_reason,
+		 turn_count, tool_calls, blocked_count, taint, skills_used, duration_ms,
+		 outcome, one_shot, correction_turns, task_type)
+		VALUES (?,?,?,?,?,?,?, ?,?,?,?,?,?, '',0,0,'')
+		ON CONFLICT(session_id) DO UPDATE SET
+			user=excluded.user, org=excluded.org, harness=excluded.harness,
+			started=excluded.started, ended=excluded.ended, exit_reason=excluded.exit_reason,
+			turn_count=excluded.turn_count, tool_calls=excluded.tool_calls,
+			blocked_count=excluded.blocked_count, taint=excluded.taint,
+			skills_used=excluded.skills_used, duration_ms=excluded.duration_ms`)
+	if err != nil {
+		return err
+	}
+	defer upsert.Close()
+	for _, sess := range foldSessions(evs) {
+		if _, err := upsert.Exec(sess.SessionID, sess.User, sess.Org, sess.Harness,
+			sess.Started, sess.Ended, sess.ExitReason,
+			sess.TurnCount, sess.ToolCalls, sess.BlockedCount, b2i(sess.Taint), sess.SkillsUsed, sess.DurationMS); err != nil {
+			return err
+		}
+	}
+
+	if _, err := tx.Exec(`INSERT INTO meta (key, value) VALUES ('last_projected_seq', ?)
+		ON CONFLICT(key) DO UPDATE SET value=excluded.value`, strconv.FormatUint(maxSeq, 10)); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// foldSessions groups events by session_id and computes the structural summary
+// columns. It is a pure function of the event stream so it stays exhaustively
+// testable. Events must be in seq order (as Log.Events returns them) so the
+// first/last timestamps seen per session are its start/end.
+func foldSessions(evs []schema.TelemetryEvent) []Session {
+	type acc struct {
+		sess   *Session
+		skills map[string]struct{}
+	}
+	byID := make(map[string]*acc)
+	var order []string
+
+	for _, e := range evs {
+		a := byID[e.SessionID]
+		if a == nil {
+			a = &acc{sess: &Session{SessionID: e.SessionID, Started: e.TS}, skills: map[string]struct{}{}}
+			byID[e.SessionID] = a
+			order = append(order, e.SessionID)
+		}
+		s := a.sess
+		if s.User == "" {
+			s.User = e.User
+		}
+		if s.Org == "" {
+			s.Org = e.OrgID
+		}
+		if s.Harness == "" {
+			s.Harness = e.Harness
+		}
+		if e.TS != "" {
+			s.Ended = e.TS
+		}
+		switch e.EventType {
+		case schema.EventUserPrompt:
+			s.TurnCount++
+		case schema.EventPreTool:
+			s.ToolCalls++
+		case schema.EventBlock:
+			s.BlockedCount++
+		case schema.EventStop:
+			s.ExitReason = "stopped"
+		}
+		if e.Taint {
+			s.Taint = true
+		}
+		if e.Skill != "" {
+			a.skills[e.Skill] = struct{}{}
+		}
+	}
+
+	out := make([]Session, 0, len(order))
+	for _, id := range order {
+		a := byID[id]
+		a.sess.SkillsUsed = joinSorted(a.skills)
+		a.sess.DurationMS = durationMS(a.sess.Started, a.sess.Ended)
+		out = append(out, *a.sess)
+	}
+	return out
+}
+
+func joinSorted(set map[string]struct{}) string {
+	if len(set) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(set))
+	for k := range set {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ",")
+}
+
+// durationMS returns the elapsed milliseconds between two RFC3339 timestamps,
+// or 0 if either is empty or unparseable (timing is best-effort telemetry, not
+// an enforcement signal).
+func durationMS(start, end string) int64 {
+	if start == "" || end == "" {
+		return 0
+	}
+	st, err1 := time.Parse(time.RFC3339Nano, start)
+	et, err2 := time.Parse(time.RFC3339Nano, end)
+	if err1 != nil || err2 != nil {
+		return 0
+	}
+	d := et.Sub(st).Milliseconds()
+	if d < 0 {
+		return 0
+	}
+	return d
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// lastProjectedSeq reads the projection watermark; 0 if unset or unreadable.
+func (s *Store) lastProjectedSeq() uint64 {
+	var v string
+	if err := s.db.QueryRow(`SELECT value FROM meta WHERE key='last_projected_seq'`).Scan(&v); err != nil {
+		return 0
+	}
+	n, err := strconv.ParseUint(v, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return n
+}
