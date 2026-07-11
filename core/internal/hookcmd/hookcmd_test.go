@@ -47,8 +47,8 @@ func (c *capRecorder) all() []schema.TelemetryEvent {
 const preToolBash = `{"session_id":"t","cwd":"/p","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"rm -rf /"},"tool_use_id":"x"}`
 const postToolBash = `{"session_id":"t","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":{"stdout":"x"},"tool_use_id":"x"}`
 
-// The shim observes: it delivers the event to the daemon for recording and emits
-// NO hook decision, even for an action the classifier flags as dangerous.
+// The shim observes: it records via the daemon and emits NO decision, even for a
+// dangerous action.
 func TestRunObservesAndEmitsNoDecision(t *testing.T) {
 	t.Setenv("GATED_IPC_ID", "hookcmd-observe")
 	ln, err := ipc.Listen()
@@ -79,8 +79,8 @@ func TestRunObservesAndEmitsNoDecision(t *testing.T) {
 	}
 }
 
-// A pre_tool event with the daemon down is spooled and exits 0 — there is no
-// fail-closed block, because Atlas does not gate.
+// With the daemon down, a pre_tool event is spooled and exits 0 (Atlas does not
+// gate).
 func TestRunPreToolSpoolsWhenDaemonDown(t *testing.T) {
 	t.Setenv("GATED_IPC_ID", "hookcmd-down-pre")
 	home := t.TempDir()

@@ -44,8 +44,7 @@ func preToolReq() Request {
 	}
 }
 
-// A dangerous action is classified and recorded, but never blocked: it stays a
-// pre_tool event (the tool call happened) carrying the risk classification.
+// A dangerous action is classified and recorded, never blocked.
 func TestHandleClassifiesDangerButDoesNotBlock(t *testing.T) {
 	ev := &fakeEval{v: schema.RiskDanger, id: "no-exec"}
 	rec := &fakeRecorder{}
@@ -67,8 +66,7 @@ func TestHandleClassifiesDangerButDoesNotBlock(t *testing.T) {
 	}
 }
 
-// An uncovered action is classified ask and recorded; no approver is consulted
-// (there is none) and the action proceeds.
+// An uncovered action is classified unknown and recorded; the action proceeds.
 func TestHandleAskIsRecordedNotResolved(t *testing.T) {
 	ev := &fakeEval{v: schema.RiskUnknown, id: "default-ask"}
 	rec := &fakeRecorder{}
@@ -81,8 +79,7 @@ func TestHandleAskIsRecordedNotResolved(t *testing.T) {
 	}
 }
 
-// Every pre_tool applies stored taint and marks any new taint source — taint is
-// a risk signal now, tracked regardless of classification.
+// Every pre_tool applies stored taint and marks any new taint source.
 func TestHandlePreToolAppliesAndMarksTaint(t *testing.T) {
 	ev := &fakeEval{v: schema.RiskSafe, id: "permit"}
 	tt := &fakeTaint{}

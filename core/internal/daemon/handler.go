@@ -1,29 +1,26 @@
-// Package daemon defines the request/response protocol between the hook shim and
-// the resident daemon, and the Handler that observes a single tool call:
-// classify risk -> record. Atlas never blocks; the classification is telemetry.
+// Package daemon defines the shim<->daemon protocol and the Handler that observes
+// one tool call: classify risk, record. Atlas never blocks; the classification is
+// telemetry.
 package daemon
 
 import "github.com/Hypership-Software/atlas/internal/schema"
 
-// Request is one telemetry message from a harness (via the shim or the HTTP hook
-// path). Descriptor is populated for tool events (pre_tool); Event carries the
-// telemetry record for every event type.
+// Request is one telemetry message from a harness. Descriptor is populated for
+// tool events (pre_tool); Event carries the record for every event type.
 type Request struct {
 	Event      schema.TelemetryEvent `json:"event"`
 	Descriptor schema.Descriptor     `json:"descriptor"`
 }
 
-// Response reports how the daemon classified the action's risk. It is
-// informational — Atlas observes and records, it does not block — so a caller
-// may surface the classification but is never expected to act on it.
+// Response reports the risk classification. It is informational — a caller may
+// surface it but is never expected to act on it (Atlas observes, does not block).
 type Response struct {
 	Risk   schema.Risk `json:"risk"`
 	RuleID string      `json:"rule_id"`
 }
 
-// The Handler depends on these behaviours as interfaces (defined by the consumer,
-// Go-style) so the real risk classifier, taint ledger, and audit log slot in
-// without an import cycle.
+// Handler depends on these as consumer-defined interfaces so the classifier,
+// taint ledger, and audit log slot in without an import cycle.
 type (
 	Evaluator interface {
 		Eval(d schema.Descriptor) (schema.Risk, string)
@@ -37,22 +34,20 @@ type (
 	}
 )
 
-// Deps are the Handler's collaborators.
 type Deps struct {
 	Eval   Evaluator
 	Taint  Tainter
 	Record Recorder
 }
 
-// Handler classifies and records one Request. Every event is recorded; pre_tool
-// events are additionally run through the risk classifier and taint ledger. The
-// action always proceeds — Atlas observes, it does not gate.
+// Handler classifies and records one Request. The action always proceeds — Atlas
+// observes, it does not gate.
 type Handler struct{ deps Deps }
 
 func NewHandler(d Deps) *Handler { return &Handler{deps: d} }
 
-// Handle records telemetry for every event and classifies pre_tool events. Only
-// pre_tool consults the classifier; all other event types are pure observations.
+// Handle records every event; only pre_tool consults the classifier and taint
+// ledger.
 func (h *Handler) Handle(req Request) (Response, error) {
 	if req.Event.EventType != schema.EventPreTool {
 		if err := h.deps.Record.Record(req.Event); err != nil {
@@ -61,15 +56,13 @@ func (h *Handler) Handle(req Request) (Response, error) {
 		return Response{}, nil
 	}
 
-	// pre_tool: inject stored session taint so taint-effector rules see it, then
-	// classify the action's risk.
+	// Inject stored session taint so taint-effector rules see it, then classify.
 	d := req.Descriptor
 	h.deps.Taint.Apply(&d)
 	risk, ruleID := h.deps.Eval.Eval(d)
 
-	// The action runs regardless of classification (Atlas does not block). A
-	// taint-source action (e.g. a WebFetch to an untrusted domain) taints the
-	// session as a risk signal for the actions that follow it.
+	// The action runs regardless (Atlas does not block). A taint-source action
+	// taints the session as a risk signal for the actions that follow.
 	h.deps.Taint.MarkFromResult(d.SessionID, d)
 
 	ev := req.Event

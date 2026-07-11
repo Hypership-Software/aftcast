@@ -13,7 +13,6 @@ import (
 	"github.com/Hypership-Software/atlas/internal/schema"
 )
 
-// Report is the outcome of verifying the chain.
 type Report struct {
 	OK     bool
 	Count  int
@@ -21,8 +20,8 @@ type Report struct {
 	Detail string
 }
 
-// Verify replays the on-disk log and checks every record: monotonic seq,
-// prev_hash linkage, and HMAC hash. It stops at and reports the first break.
+// Verify replays the log and checks every record (monotonic seq, prev_hash
+// linkage, HMAC hash), reporting the first break.
 func (l *Log) Verify() (Report, error) {
 	f, err := os.Open(filepath.Join(l.dir, eventsFile))
 	if errors.Is(err, os.ErrNotExist) {
@@ -66,9 +65,8 @@ func (l *Log) Verify() (Report, error) {
 	return Report{OK: true, Count: count}, nil
 }
 
-// Events replays the on-disk log and returns every record in order. It is the
-// typed counterpart to Export: the SQLite read-model projector (Task 16) and
-// the taint rebuild fold over these events. A missing/empty log yields nil.
+// Events replays the log and returns every record in order. A missing/empty log
+// yields nil.
 func (l *Log) Events() ([]schema.TelemetryEvent, error) {
 	f, err := os.Open(filepath.Join(l.dir, eventsFile))
 	if errors.Is(err, os.ErrNotExist) {
@@ -92,9 +90,8 @@ func (l *Log) Events() ([]schema.TelemetryEvent, error) {
 	return evs, sc.Err()
 }
 
-// Export streams the log as NDJSON, emitting only records at or after since.
-// Records with an unparseable timestamp are included (fail open on export — a
-// missing filter must not silently drop audit data).
+// Export streams the log as NDJSON from since onward. Records with an
+// unparseable timestamp are included — fail open, never silently drop audit data.
 func (l *Log) Export(w io.Writer, since time.Time) error {
 	f, err := os.Open(filepath.Join(l.dir, eventsFile))
 	if errors.Is(err, os.ErrNotExist) {

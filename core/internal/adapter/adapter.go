@@ -1,18 +1,14 @@
 // Package adapter normalizes each harness's hook payloads into the shared schema
-// (Descriptor + TelemetryEvent) and renders verdicts back into the harness's
-// hook-response format. Claude Code is the MVP harness; the Adapter interface +
-// registry keep additional harnesses (Codex — deferred post-MVP) a drop-in with
-// no changes to the daemon.
+// (Descriptor + TelemetryEvent). The Adapter interface + registry keep additional
+// harnesses a drop-in with no daemon changes.
 package adapter
 
 import "github.com/Hypership-Software/atlas/internal/schema"
 
-// Adapter translates a harness's hook wire format into Atlas's schema.
 type Adapter interface {
-	// Normalize turns a raw hook payload for the named event into a Descriptor
-	// (populated for tool events) and a TelemetryEvent (for every event). The
-	// event name is authoritative from the shim/HTTP path; if empty, the payload's
-	// own event field is used.
+	// Normalize turns a raw hook payload into a Descriptor (for tool events) and a
+	// TelemetryEvent (every event). A non-empty event name is authoritative; if
+	// empty, the payload's own event field is used.
 	Normalize(event string, raw []byte) (schema.Descriptor, schema.TelemetryEvent, error)
 }
 
@@ -20,7 +16,6 @@ var registry = map[string]Adapter{}
 
 func register(name string, a Adapter) { registry[name] = a }
 
-// Get returns the adapter registered for a harness name (e.g. "claudecode").
 func Get(name string) (Adapter, bool) {
 	a, ok := registry[name]
 	return a, ok

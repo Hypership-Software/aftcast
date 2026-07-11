@@ -19,8 +19,18 @@ func TestInitWritesHooksAndBacksUp(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Pin the self-verify probe at a dead port (nothing binds :1 without root) so
+	// the "no daemon" assertion is deterministic even if a real daemon is running.
+	home := filepath.Join(dir, "gate-home")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "daemon.json"),
+		[]byte(`{"http_port":1,"http_url":"http://127.0.0.1:1/hook"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	opts := Options{
-		Home:         filepath.Join(dir, "gate-home"),
+		Home:         home,
 		SettingsPath: settings,
 		BinaryPath:   "C:/opt/gated.exe",
 	}

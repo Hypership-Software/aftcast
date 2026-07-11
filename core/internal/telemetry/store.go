@@ -1,9 +1,8 @@
-// Package telemetry projects the tamper-evident audit log into a SQLite
-// read-model — the query surface behind the insights TUI and the local
-// dashboard. The event log remains the single source of truth; this store is a
-// rebuildable projection of it (Project is idempotent and can be dropped and
-// rebuilt at any time). Uses the pure-Go modernc.org/sqlite driver so the whole
-// binary stays CGO-free and cross-compiles statically.
+// Package telemetry projects the audit log into a SQLite read-model — the query
+// surface behind the insights TUI and dashboard. The event log stays the single
+// source of truth; this store is a rebuildable projection (Project is
+// idempotent). Uses the pure-Go modernc.org/sqlite driver so the binary stays
+// CGO-free.
 package telemetry
 
 import (
@@ -12,10 +11,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Session is one row of the read-model's sessions table: a folded summary of a
-// single agent session. The structural columns (identity, counts, timing,
-// taint, skills) are computed by Task 16's Project; the analytical columns
-// (Outcome, OneShot, CorrectionTurns, TaskType) are populated by Task 17.
+// Session is one folded summary row of the sessions table. Structural columns
+// (identity, counts, timing, taint, skills) are computed by Project; the
+// analytical columns (Outcome, OneShot, CorrectionTurns, TaskType) are populated
+// separately.
 type Session struct {
 	SessionID       string
 	User            string
@@ -36,7 +35,6 @@ type Session struct {
 	DurationMS      int64
 }
 
-// Store is a handle to the SQLite read-model database.
 type Store struct {
 	db *sql.DB
 }
@@ -76,8 +74,6 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 `
 
-// OpenStore opens (creating if needed) the read-model at path and ensures the
-// schema exists.
 func OpenStore(path string) (*Store, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -93,7 +89,6 @@ func OpenStore(path string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
-// Close releases the underlying database.
 func (s *Store) Close() error { return s.db.Close() }
 
 // Sessions returns every folded session row, ordered by session_id.

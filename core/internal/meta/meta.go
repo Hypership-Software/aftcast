@@ -7,8 +7,8 @@ var version = "0.0.0-dev"
 
 func Version() string { return version }
 
-// ProductName is the display name. It intentionally returns the binary name
-// until the Task 31 trademark screen sets the final wordmark.
+// ProductName is the display name — intentionally the binary name until the
+// trademark screen sets the final wordmark.
 func ProductName() string { return "gated" }
 
 func BinaryName() string { return "gated" }

@@ -19,9 +19,8 @@ import (
 	"github.com/Hypership-Software/atlas/internal/svc"
 )
 
-// startDaemon runs svc.Run in the background with an isolated control-plane
-// endpoint and the integrity ticker disabled, and returns once both listeners
-// are bound. cancel + <-errc shut it down and surface Run's error.
+// startDaemon runs svc.Run in the background (isolated endpoint, integrity ticker
+// off) and returns once both listeners are bound. cancel + <-errc shut it down.
 func startDaemon(t *testing.T, ipcID string, opts svc.Options) (svc.Info, context.CancelFunc, <-chan error) {
 	t.Helper()
 	t.Setenv("GATED_IPC_ID", ipcID)
@@ -44,10 +43,9 @@ func startDaemon(t *testing.T, ipcID string, opts svc.Options) (svc.Info, contex
 	return svc.Info{}, cancel, errc // unreachable
 }
 
-// TestRunClassifiesOverControlPlane is the acceptance test: svc.Run wires the
-// real classifier + temp dirs and serves one loopback request end-to-end,
-// returning the risk classification (not an enforcement decision), then shuts
-// down cleanly on ctx cancel.
+// TestRunClassifiesOverControlPlane: svc.Run wires the real classifier and serves
+// one loopback request end-to-end, returning a risk classification (not a
+// decision), then shuts down cleanly.
 func TestRunClassifiesOverControlPlane(t *testing.T) {
 	home := t.TempDir()
 	_, cancel, errc := startDaemon(t, "svc-cp", svc.Options{Home: home})
@@ -94,10 +92,9 @@ func TestRunClassifiesOverControlPlane(t *testing.T) {
 	}
 }
 
-// TestRunObservesOverHTTP exercises the production transport: a raw Claude Code
-// PreToolUse payload POSTed to the hook listener is normalized, classified, and
-// recorded — and the response carries NO decision, because Atlas observes and
-// never blocks. The classified event must be durable in the tamper-evident log.
+// TestRunObservesOverHTTP exercises the production transport: a raw PreToolUse
+// payload POSTed to the hook listener is normalized, classified, and recorded,
+// and the response carries NO decision. The event must be durable in the log.
 func TestRunObservesOverHTTP(t *testing.T) {
 	home := t.TempDir()
 	info, cancel, errc := startDaemon(t, "svc-http", svc.Options{Home: home})
@@ -137,8 +134,8 @@ func TestRunObservesOverHTTP(t *testing.T) {
 	if !rep.OK || rep.Count < 1 {
 		t.Fatalf("audit log verify = %+v, want OK with >=1 record", rep)
 	}
-	// The dangerous action must be recorded AND classified as dangerous — the
-	// whole point of observing without blocking.
+	// The dangerous action must be recorded AND classified dangerous — the point
+	// of observing without blocking.
 	evs, err := l.Events()
 	if err != nil {
 		t.Fatal(err)

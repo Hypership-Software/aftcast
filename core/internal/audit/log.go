@@ -1,13 +1,8 @@
-// Package audit is the tamper-evident event log — the single source of truth for
-// the whole system. Every hook produces one TelemetryEvent (risk classification
-// and telemetry share this one stream); each is HMAC-chained to its predecessor,
-// so any reorder, insertion, deletion, or edit is detectable by Verify. The
-// SQLite read-model and the taint ledger are both rebuildable projections of
-// this log.
-//
-// The chain is metadata-only: TelemetryEvent carries no prompt/diff/output
-// content (opt-in content goes to a separate deletable sidecar, Task 18), so
-// right-to-erasure and tamper-evidence coexist.
+// Package audit is the tamper-evident event log — the single source of truth.
+// Each TelemetryEvent is HMAC-chained to its predecessor, so any reorder,
+// insertion, deletion, or edit is detectable by Verify; the SQLite read-model and
+// taint ledger are rebuildable projections of it. The chain is metadata-only (no
+// prompt/diff/output content), so right-to-erasure and tamper-evidence coexist.
 package audit
 
 import (
@@ -33,7 +28,6 @@ const (
 	maxLine         = 4 << 20 // 4 MiB scanner line cap
 )
 
-// Log is an append-only, HMAC-chained event log on disk.
 type Log struct {
 	mu        sync.Mutex
 	dir       string
@@ -46,17 +40,16 @@ type Log struct {
 	host      string
 }
 
-// SetIdentity records the machine identity the daemon stamps onto events that
-// don't already carry it. Called once at daemon startup; safe to leave unset
-// (fields simply stay empty).
+// SetIdentity sets the machine identity stamped onto events that don't already
+// carry it. Safe to leave unset — fields simply stay empty.
 func (l *Log) SetIdentity(user, host string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.user, l.host = user, host
 }
 
-// NewLog opens (creating if needed) the log in dir, keyed by hmacKey, and
-// recovers the chain head (last seq + hash) so a restart continues the chain.
+// NewLog opens the log in dir and recovers the chain head so a restart continues
+// the chain.
 func NewLog(dir string, hmacKey []byte) (*Log, error) {
 	if len(hmacKey) == 0 {
 		return nil, errors.New("audit: empty HMAC key")
@@ -76,10 +69,9 @@ func NewLog(dir string, hmacKey []byte) (*Log, error) {
 	return &Log{dir: dir, f: f, key: append([]byte(nil), hmacKey...), seq: seq, prevHash: prev}, nil
 }
 
-// Record appends an event to the log: it stamps seq and prev_hash, computes the
-// HMAC hash over the canonical form, writes the JSONL line, and fsyncs. In-memory
-// chain state is advanced only after the durable write, so a failed write leaves
-// the head unchanged. Record satisfies daemon.Recorder.
+// Record appends an event, chaining it to the log head. In-memory chain state is
+// advanced only after the durable write, so a failed write leaves the head
+// unchanged.
 func (l *Log) Record(e schema.TelemetryEvent) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -127,11 +119,10 @@ func (l *Log) Record(e schema.TelemetryEvent) error {
 	return nil
 }
 
-// Close releases the underlying file.
 func (l *Log) Close() error { return l.f.Close() }
 
 // hashEvent computes HMAC-SHA256(key, canonical(e)). Canonical excludes the hash
-// field (it can't sign itself) but includes seq and prev_hash, so tampering with
+// field (it can't sign itself) but covers seq and prev_hash, so tampering with
 // any of them breaks verification.
 func hashEvent(e schema.TelemetryEvent, key []byte) (string, error) {
 	canon, err := e.Canonical()

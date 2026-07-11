@@ -14,11 +14,10 @@ func ts(sec int) string {
 	return "2026-07-10T12:00:" + string(rune('0'+sec/10)) + string(rune('0'+sec%10)) + "Z"
 }
 
-// twoSessions is the canonical fixture: one clean single-turn session (s1, three
-// safe tool calls) and one two-turn session (s2, three tool calls — one
-// classified dangerous — and a tainted event). Recording semantics match the
-// daemon: every tool call is a pre_tool carrying its risk classification, turns
-// are user_prompt events, and each call emits pre_tool + post_tool.
+// twoSessions is the canonical fixture: a clean single-turn session (s1) and a
+// two-turn session (s2, one tool call classified dangerous, one tainted event).
+// Recording semantics match the daemon — every tool call is a pre_tool carrying
+// its risk, turns are user_prompt events.
 func twoSessions() []schema.TelemetryEvent {
 	pre := func(sess string, sec int) schema.TelemetryEvent {
 		return schema.TelemetryEvent{SessionID: sess, User: "kyle", Harness: "claudecode",

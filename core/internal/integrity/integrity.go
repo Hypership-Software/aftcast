@@ -1,9 +1,7 @@
-// Package integrity detects tampering with the gate's own installation: whether
-// our hook entries are still present in the harness settings and whether the
-// running binary still matches the install manifest. The daemon runs Check on
-// SessionStart and on a ticker; any Drift becomes an integrity telemetry event
-// plus a loud warning — surfacing that the observer itself may have been
-// tampered with (an agent trying to blind its own monitoring).
+// Package integrity detects tampering with the gate's own install — missing hook
+// entries or a changed binary. Any Drift becomes an integrity telemetry event
+// plus a loud warning, surfacing that the observer itself may have been tampered
+// with (an agent trying to blind its own monitoring).
 package integrity
 
 import (
@@ -16,7 +14,6 @@ import (
 	"github.com/Hypership-Software/atlas/internal/schema"
 )
 
-// DriftKind classifies a detected tamper.
 type DriftKind string
 
 const (
@@ -24,7 +21,6 @@ const (
 	DriftBinaryChanged DriftKind = "binary_changed"
 )
 
-// Drift is one detected deviation from the expected installed state.
 type Drift struct {
 	Kind   DriftKind
 	Detail string
@@ -38,14 +34,12 @@ type Config struct {
 	BinaryHash   string // expected SHA-256 hex from the install manifest
 }
 
-// Checker verifies installation integrity.
 type Checker struct{ cfg Config }
 
 func NewChecker(cfg Config) *Checker { return &Checker{cfg: cfg} }
 
-// Check returns every detected drift. A nil/empty result means the install is
-// intact. It reports drift as data rather than erroring so the daemon can record
-// and warn on each item.
+// Check returns every detected drift (nil means intact). Drift is data, not an
+// error, so the daemon can record and warn on each item.
 func (c *Checker) Check() []Drift {
 	var drift []Drift
 
@@ -72,9 +66,8 @@ func (c *Checker) Check() []Drift {
 	return drift
 }
 
-// DriftEvent renders a drift as an integrity telemetry event for the log. The
-// human-readable Detail goes to the daemon's warning; the append-only contract
-// carries the kind in rule_id.
+// DriftEvent renders a drift as an integrity telemetry event. Detail goes to the
+// daemon's warning; the append-only log carries the kind in rule_id.
 func DriftEvent(d Drift) schema.TelemetryEvent {
 	return schema.TelemetryEvent{
 		V:         schema.SchemaVersion,

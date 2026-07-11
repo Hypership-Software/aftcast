@@ -18,9 +18,8 @@ func init() { register("claudecode", claudeCode{}) }
 
 type claudeCode struct{}
 
-// ccHook is the subset of the Claude Code hook JSON we consume, verified against
-// captured 2.1.205 payloads (spike/samples). tool_response is present on a
-// successful PostToolUse; error ("Exit code N\n...") on PostToolUseFailure.
+// ccHook is the subset of the Claude Code hook JSON we consume. The error field
+// carries "Exit code N\n..." on PostToolUseFailure.
 type ccHook struct {
 	SessionID     string          `json:"session_id"`
 	Cwd           string          `json:"cwd"`
@@ -64,8 +63,8 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 		ev.Files, ev.Verbs, ev.Domain = desc.Files, desc.Verbs, desc.Domain
 	}
 
-	// tool_ok is tri-state and only meaningful for post-execution events. A
-	// PostToolUseFailure carries the numeric exit code in its error field.
+	// tool_ok is only meaningful for post-execution events; a PostToolUseFailure
+	// carries the exit code in its error field.
 	if ev.EventType == schema.EventPostTool {
 		if event == "PostToolUseFailure" || h.Error != "" {
 			ev.ToolOK = schema.OutcomeFailed
@@ -159,8 +158,8 @@ func extract(d *schema.Descriptor, class schema.ToolClass, h ccHook) {
 	}
 }
 
-// commandVerb reduces a command token to its bare verb: strips any directory and
-// a trailing .exe, so "/usr/bin/git" and "git.exe" both become "git".
+// commandVerb strips any directory and a trailing .exe, so "/usr/bin/git" and
+// "git.exe" both become "git".
 func commandVerb(tok string) string {
 	base := path.Base(filepath.ToSlash(tok))
 	return strings.TrimSuffix(base, ".exe")

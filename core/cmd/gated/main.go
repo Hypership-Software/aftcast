@@ -57,10 +57,8 @@ func run(args []string) int {
 	}
 }
 
-// daemon runs and manages the resident observer. `run` serves in the foreground
-// until interrupted (Ctrl+C / SIGTERM). OS-service registration (install/
-// uninstall for auto-start) is deferred to the install sprint — foreground run
-// is a complete, dogfoodable observer today.
+// daemon runs the resident observer. `run` serves in the foreground until
+// interrupted; OS-service registration for auto-start is deferred.
 func daemon(args []string) int {
 	sub := "run"
 	if len(args) > 0 {

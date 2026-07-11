@@ -1,10 +1,8 @@
-// Package hookcmd implements the `gated hook` shim. In production the per-call
-// hot path is HTTP hooks straight to the daemon (ADR-001); this shim survives for
-// the once-per-session SessionStart command-hook fallback (SessionStart does not
-// fire over HTTP in 2.1.205). It is pure observation: it delivers the event to
-// the daemon for recording, spooling it if the daemon is down, and never blocks
-// or emits a hook decision. It also exposes the daemon-liveness check the
-// watchdog relies on.
+// Package hookcmd is the `gated hook` shim. HTTP hooks are the per-call hot path
+// (ADR-001); this shim survives only for the SessionStart command-hook fallback,
+// since SessionStart does not fire over HTTP in 2.1.205. Pure observation — it
+// records via the daemon (spooling if it is down) and never blocks or emits a
+// hook decision.
 package hookcmd
 
 import (
@@ -23,11 +21,8 @@ import (
 
 const dialTimeout = 2 * time.Second
 
-// Run reads a hook payload from stdin and delivers it to the daemon for
-// recording. Atlas observes — the shim never blocks and never emits a hook
-// decision. If the daemon is unreachable the event is spooled for ingestion on
-// the daemon's next start. It always exits 0: a telemetry shim must never
-// disrupt the session.
+// Run always exits 0: a telemetry shim must never disrupt the session. The event
+// is spooled if the daemon is unreachable.
 func Run(harness string, stdin io.Reader, stdout, stderr io.Writer) int {
 	a, ok := adapter.Get(harness)
 	if !ok {
@@ -53,9 +48,8 @@ func Run(harness string, stdin io.Reader, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// deliver sends the event to the daemon over the control-plane transport. The
-// daemon records it and replies with a classification we don't act on (Atlas
-// does not gate), so the ack is read and discarded.
+// deliver sends the event to the daemon. The reply is a classification we don't
+// act on (Atlas does not gate), so the ack is read and discarded.
 func deliver(req daemon.Request) error {
 	conn, err := ipc.Dial(dialTimeout)
 	if err != nil {
@@ -70,14 +64,12 @@ func deliver(req daemon.Request) error {
 	if err := ipc.WriteFrame(conn, reqRaw); err != nil {
 		return err
 	}
-	_, _ = ipc.ReadFrame(conn) // ack; content unused
+	_, _ = ipc.ReadFrame(conn)
 	return nil
 }
 
-// Live reports whether the daemon is reachable on the control-plane transport.
-// The daemon-liveness watchdog (surfaced by `gated status`/insights) uses this:
-// HTTP hooks fail open, so a down daemon means sessions run UNOBSERVED, and that
-// gap must be detectable rather than silent.
+// Live reports whether the daemon is reachable. HTTP hooks fail open, so a down
+// daemon means sessions run UNOBSERVED — that gap must be detectable, not silent.
 func Live(timeout time.Duration) bool {
 	conn, err := ipc.Dial(timeout)
 	if err != nil {
@@ -87,8 +79,6 @@ func Live(timeout time.Duration) bool {
 	return true
 }
 
-// spool appends a telemetry event to the on-disk buffer the daemon drains on
-// startup, so an event isn't lost while the daemon is down.
 func spool(ev schema.TelemetryEvent) error {
 	dir := spoolDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {

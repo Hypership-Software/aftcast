@@ -20,11 +20,11 @@ const (
 	typeNone    types.EntityType = "None"
 )
 
-// ToCedar maps a Descriptor onto a Cedar request plus the entity store the
-// evaluator needs. Pure: the same descriptor always yields the same request and
-// entities. Principal = Session (carrying tainted/org as attributes so policies
-// can gate on `principal.tainted`); action = the tool class; resource depends on
-// the class; context carries the full descriptor detail for `when` clauses.
+// ToCedar maps a Descriptor onto a Cedar request plus its entity store. Pure —
+// the same descriptor always yields the same request. Principal = Session
+// (carrying tainted/org so policies can gate on `principal.tainted`); action =
+// tool class; resource depends on the class; context carries the descriptor
+// detail for `when` clauses.
 func ToCedar(d schema.Descriptor) (cedar.Request, types.EntityMap) {
 	principal := cedar.NewEntityUID(typeSession, cedar.String(d.SessionID))
 
@@ -48,8 +48,7 @@ func ToCedar(d schema.Descriptor) (cedar.Request, types.EntityMap) {
 }
 
 // resourceUID derives the Cedar resource from the tool class. Cedar requires a
-// resource on every request, so classes without a natural one get a None
-// sentinel rather than an empty UID.
+// resource on every request, so classes without a natural one get a None sentinel.
 func resourceUID(d schema.Descriptor) types.EntityUID {
 	switch d.ToolClass {
 	case schema.ClassFileRead, schema.ClassFileWrite:
@@ -75,9 +74,8 @@ func buildContext(d schema.Descriptor) types.Record {
 	}
 	if len(d.Files) > 0 {
 		rec["files"] = stringSet(d.Files)
-		// Primary path as a String, normalized to forward slashes, so starter-pack
-		// `like` rules ("*/.ssh/*", "*.env") are portable across Windows/macOS.
-		// The verbatim path is preserved in the TelemetryEvent for audit.
+		// Forward-slash-normalized so starter-pack `like` rules ("*/.ssh/*",
+		// "*.env") are portable across OSes. Verbatim path stays in the TelemetryEvent.
 		rec["file"] = cedar.String(filepath.ToSlash(d.Files[0]))
 	}
 	if len(d.Verbs) > 0 {
@@ -102,9 +100,8 @@ func buildContext(d schema.Descriptor) types.Record {
 }
 
 // stringSet builds a Cedar Set from a string slice. Cedar sets are unordered and
-// de-duplicated, which is the right model for policy membership checks
-// (`context.argv.contains("--force")`); the verbatim argv is preserved in the
-// TelemetryEvent for audit.
+// de-duplicated — fine for membership checks (`context.argv.contains("--force")`);
+// the verbatim argv is preserved in the TelemetryEvent.
 func stringSet(ss []string) types.Set {
 	vals := make([]types.Value, len(ss))
 	for i, s := range ss {

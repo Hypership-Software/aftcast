@@ -1,17 +1,15 @@
-// Package schema defines the canonical data contracts shared across Atlas: the
-// Descriptor a tool call is classified from, the three-valued Risk level, and
-// the append-only TelemetryEvent written to the hash-chained log. The enum wire
-// values here are part of the SIEM + org-rollup contract and must never change.
+// Package schema defines the canonical data contracts shared across Atlas. The
+// enum wire values here are part of the SIEM + org-rollup contract and must never
+// change.
 package schema
 
-// SchemaVersion is stamped into every Descriptor and TelemetryEvent so the
-// append-only log can be read forward across format additions.
+// SchemaVersion is stamped into every Descriptor and TelemetryEvent so the log
+// can be read forward across format additions.
 const SchemaVersion = 1
 
-// Risk is the three-valued classification Atlas assigns each tool call: a
-// danger rule matched (danger), a known-safe rule matched (safe), or nothing
-// matched (unknown). It is a label, not a decision — Atlas observes and records,
-// it never blocks.
+// Risk is the three-valued classification Atlas assigns each tool call: danger (a
+// forbid matched), safe (a permit matched), or unknown (no match). It is a label,
+// not a decision — Atlas observes, it never blocks.
 type Risk string
 
 const (
@@ -20,8 +18,8 @@ const (
 	RiskUnknown Risk = "unknown"
 )
 
-// ToolClass is the harness-independent classification of a tool call. Adapters
-// map each harness's raw tool name onto one of these.
+// ToolClass is the harness-independent class of a tool call; adapters map each
+// harness's raw tool name onto one.
 type ToolClass string
 
 const (
@@ -36,10 +34,9 @@ const (
 	ClassOther      ToolClass = "other"
 )
 
-// ToolOutcome is the tri-state result of a tool call, serialized as tool_ok.
-// It is deliberately NOT a bool: a bool cannot distinguish "ran and passed"
-// from "never ran" (interrupted, or no PostToolUse signal). Frozen at the schema
-// layer because the log is append-only.
+// ToolOutcome is the tri-state result of a tool call (tool_ok). Deliberately NOT
+// a bool: a bool cannot distinguish "ran and passed" from "never ran". Frozen
+// because the log is append-only.
 type ToolOutcome string
 
 const (
@@ -48,7 +45,6 @@ const (
 	OutcomeNotRun ToolOutcome = "not_run"
 )
 
-// EventType tags each record in the telemetry stream.
 type EventType string
 
 const (

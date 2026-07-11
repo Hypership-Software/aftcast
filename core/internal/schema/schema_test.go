@@ -51,9 +51,8 @@ func sampleEvent() TelemetryEvent {
 	}
 }
 
-// assertSortedKeys checks that the top-level JSON object keys appear in
-// ascending order (the canonical-form guarantee the hash chain relies on).
-// Both schema structs are flat (values are scalars or string arrays), so a
+// assertSortedKeys checks top-level JSON keys are in ascending order (the
+// canonical-form guarantee the hash chain relies on). Both structs are flat, so a
 // `"key":` substring search is unambiguous.
 func assertSortedKeys(t *testing.T, data []byte) {
 	t.Helper()
@@ -107,9 +106,8 @@ func TestEventCanonicalIsStableSortedAndExcludesHash(t *testing.T) {
 	}
 	assertSortedKeys(t, a)
 
-	// The hash field is self-referential — it cannot be part of the bytes the
-	// hash is computed over (Task 13). Canonical must exclude it, so changing
-	// only Hash must not change the canonical bytes.
+	// The hash field is self-referential — it can't be part of the bytes it's
+	// computed over, so changing only Hash must not change the canonical bytes.
 	var m map[string]any
 	if err := json.Unmarshal(a, &m); err != nil {
 		t.Fatal(err)

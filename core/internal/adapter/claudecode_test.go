@@ -27,8 +27,7 @@ func fixture(t *testing.T, name string) []byte {
 	return b
 }
 
-// normalize reads a fixture and normalizes it with event="" so the payload's own
-// hook_event_name drives the mapping (the real-payload path).
+// normalize uses event="" so the payload's own hook_event_name drives the mapping.
 func normalize(t *testing.T, name string) (schema.Descriptor, schema.TelemetryEvent) {
 	t.Helper()
 	d, e, err := cc(t).Normalize("", fixture(t, name))

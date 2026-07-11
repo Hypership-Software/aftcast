@@ -11,16 +11,14 @@ import (
 	"github.com/Hypership-Software/atlas/internal/schema"
 )
 
-// Project folds the entire audit log into the read-model: it upserts every
-// session summary and mirrors each event into the events table. It is
-// idempotent — sessions are keyed by session_id and events by seq, so
-// re-projecting the same log is a no-op — and rebuildable: dropping the store
-// and re-projecting reconstructs it exactly. A last-projected-seq watermark in
-// the meta table lets a repeated call short-circuit when nothing is new.
+// Project folds the audit log into the read-model, upserting session summaries
+// and mirroring events. Idempotent (sessions keyed by session_id, events by seq)
+// and rebuildable. A last-projected-seq watermark short-circuits when nothing is
+// new.
 //
-// Only the structural columns are written here. The analytical columns
-// (outcome, one_shot, correction_turns, task_type) are Task 17's; this fold
-// leaves them at their defaults on insert and never clobbers them on update.
+// Only structural columns are written here; this fold leaves the analytical
+// columns (outcome, one_shot, correction_turns, task_type) at their defaults on
+// insert and never clobbers them on update.
 func (s *Store) Project(log *audit.Log) error {
 	evs, err := log.Events()
 	if err != nil {
@@ -85,10 +83,9 @@ func (s *Store) Project(log *audit.Log) error {
 	return tx.Commit()
 }
 
-// foldSessions groups events by session_id and computes the structural summary
-// columns. It is a pure function of the event stream so it stays exhaustively
-// testable. Events must be in seq order (as Log.Events returns them) so the
-// first/last timestamps seen per session are its start/end.
+// foldSessions groups events by session_id into the structural summary columns.
+// Pure, and it requires events in seq order (as Log.Events returns them) so the
+// first/last timestamps per session are its start/end.
 func foldSessions(evs []schema.TelemetryEvent) []Session {
 	type acc struct {
 		sess   *Session
@@ -123,7 +120,7 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		case schema.EventPreTool:
 			s.ToolCalls++
 			if e.Risk == schema.RiskDanger {
-				s.DangerDetected++ // a tool call the classifier flagged dangerous
+				s.DangerDetected++
 			}
 		case schema.EventStop:
 			s.ExitReason = "stopped"
@@ -158,9 +155,8 @@ func joinSorted(set map[string]struct{}) string {
 	return strings.Join(keys, ",")
 }
 
-// durationMS returns the elapsed milliseconds between two RFC3339 timestamps,
-// or 0 if either is empty or unparseable (timing is best-effort telemetry, not
-// an enforcement signal).
+// durationMS returns elapsed ms between two RFC3339 timestamps, or 0 if either is
+// empty/unparseable (timing is best-effort telemetry).
 func durationMS(start, end string) int64 {
 	if start == "" || end == "" {
 		return 0

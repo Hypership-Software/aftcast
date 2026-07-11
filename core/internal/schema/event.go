@@ -2,15 +2,13 @@ package schema
 
 import "encoding/json"
 
-// TelemetryEvent is the single record type written to the hash-chained log for
-// every hook, carrying the risk classification and full telemetry (one
-// stream). Its field set is an append-only contract shared with the SIEM export
-// and the org rollup: never remove or repurpose a field, only add.
+// TelemetryEvent is the single record written to the hash-chained log for every
+// hook. Its field set is an append-only contract shared with the SIEM export and
+// org rollup: never remove or repurpose a field, only add.
 //
-// It intentionally does NOT embed Descriptor. The two share enum types
-// (ToolClass, Risk, ToolOutcome) so those can't drift, but the persisted
-// contract stays an explicit, frozen list — eval-only context on the Descriptor
-// (argv, cwd, project_root, mcp split) must never leak into the log.
+// It intentionally does NOT embed Descriptor — the persisted contract stays an
+// explicit frozen list, so eval-only Descriptor context (argv, cwd, mcp split)
+// can never leak into the log.
 type TelemetryEvent struct {
 	V         int         `json:"v"`
 	TS        string      `json:"ts"`
@@ -27,9 +25,8 @@ type TelemetryEvent struct {
 	Risk      Risk        `json:"risk,omitempty"`
 	RuleID    string      `json:"rule_id,omitempty"`
 	ToolOK    ToolOutcome `json:"tool_ok,omitempty"`
-	// BashExitCode is the numeric exit code parsed from a PostToolUseFailure
-	// (findings §E rev 2). Added post-Task-2 per the append-only rule; omitempty
-	// so it's absent on non-failing / non-exec events.
+	// BashExitCode is parsed from a PostToolUseFailure. Added later per the
+	// append-only rule; omitempty so it's absent on non-failing/non-exec events.
 	BashExitCode int      `json:"bash_exit_code,omitempty"`
 	LatencyMS    int64    `json:"latency_ms,omitempty"`
 	Files        []string `json:"files,omitempty"`
@@ -43,10 +40,9 @@ type TelemetryEvent struct {
 	Hash         string   `json:"hash,omitempty"`
 }
 
-// Canonical returns deterministic, sorted-key JSON for the event with the Hash
-// field excluded. Hash is derived from these bytes (Task 13), so it cannot be
-// part of the bytes it signs. PrevHash IS included — it is an input to this
-// record's identity, not a derived value.
+// Canonical returns deterministic sorted-key JSON with the Hash field excluded —
+// Hash is derived from these bytes, so it can't sign itself. PrevHash IS included;
+// it is an input to this record's identity, not a derived value.
 func (e TelemetryEvent) Canonical() ([]byte, error) {
 	raw, err := json.Marshal(e)
 	if err != nil {

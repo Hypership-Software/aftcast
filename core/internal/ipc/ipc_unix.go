@@ -10,9 +10,8 @@ import (
 	"time"
 )
 
-// socketPath places the control socket under $XDG_RUNTIME_DIR (a per-user,
-// tmpfs-backed runtime dir) when available, else a per-UID directory in the
-// system temp dir.
+// socketPath places the control socket under $XDG_RUNTIME_DIR when available,
+// else a per-UID directory in the system temp dir.
 func socketPath() string {
 	dir := os.Getenv("XDG_RUNTIME_DIR")
 	if dir == "" {

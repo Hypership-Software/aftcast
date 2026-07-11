@@ -147,10 +147,9 @@ func TestRemoveHooksRestoresSemantically(t *testing.T) {
 	}
 }
 
-// sameJSON compares two JSON blobs for semantic (not byte) equality. Byte
-// identity is not guaranteed through a JSON round-trip (key order / whitespace
-// normalize); semantic identity is the real contract — the user's config works
-// the same after uninstall.
+// sameJSON compares two JSON blobs for semantic (not byte) equality — byte
+// identity isn't guaranteed through a JSON round-trip, and semantic identity is
+// the real contract.
 func sameJSON(t *testing.T, a, b []byte) bool {
 	t.Helper()
 	var av, bv any

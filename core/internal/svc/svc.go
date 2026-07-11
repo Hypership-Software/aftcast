@@ -1,17 +1,12 @@
 // Package svc is the daemon lifecycle: it wires the observer libraries (risk
 // classifier, taint ledger, HMAC audit log, integrity checker) into a resident
-// daemon and serves the two local transports — the control-plane stream
-// (UDS/named pipe) for the CLI and the SessionStart shim, and the localhost HTTP
-// hook listener that Claude Code calls per tool call. Every hook is recorded and
-// classified; the daemon returns no decision, so Atlas observes without blocking.
+// daemon and serves the two local transports (control-plane stream + localhost
+// HTTP hook listener). Every hook is recorded and classified; the daemon returns
+// no decision, so Atlas observes without blocking.
 //
-// It runs in the foreground (`gated daemon run`); registering it with the OS
-// service manager for auto-start is a later install-sprint concern.
-//
-// Deferred by design: a periodic SQLite read-model projection tick
-// (telemetry.Store exists; wiring Project onto a timer is a later concern — the
-// HMAC log is the source of truth and the projection is a downstream analytics
-// rebuild).
+// It runs in the foreground (`gated daemon run`); OS-service auto-start and a
+// periodic read-model projection tick are deferred (the HMAC log is the source of
+// truth, the projection a downstream rebuild).
 package svc
 
 import (
@@ -48,30 +43,27 @@ const (
 // Options configures a daemon run. The zero value is a valid production run
 // against ~/.gated on the default hook port.
 type Options struct {
-	// Home is the gate's state directory. Empty => $GATED_HOME, else ~/.gated.
+	// Home is the gate's state directory. "" => $GATED_HOME, else ~/.gated.
 	Home string
-	// HTTPPort is the preferred localhost hook port. 0 => ipc.DefaultHTTPPort,
-	// with a fallback scan if it is taken (the bound port is reported in Info).
+	// HTTPPort is the preferred hook port. 0 => ipc.DefaultHTTPPort, with a
+	// fallback scan if taken (the bound port is reported in Info).
 	HTTPPort int
-	// TrustedDomains is the taint allowlist: fetches to these domains do not
-	// taint the session.
+	// TrustedDomains is the taint allowlist: fetches to these do not taint.
 	TrustedDomains []string
-	// IntegrityTick is the tamper-check interval. 0 => defaultIntegrityTick;
-	// negative disables the checker entirely (tests).
+	// IntegrityTick is the tamper-check interval. 0 => default; negative disables
+	// the checker (tests).
 	IntegrityTick time.Duration
-	// Integrity says what to verify (settings-file hook presence, binary hash).
-	// An empty Config makes each check a no-op.
+	// Integrity says what to verify; an empty Config makes each check a no-op.
 	Integrity integrity.Config
 	// Ready, if non-nil, receives Info once both listeners are bound. Buffer it
-	// (cap 1) or receive promptly — Run does not block on a full channel beyond
-	// this send.
+	// (cap 1) or receive promptly.
 	Ready chan<- Info
 	// Logf overrides the logger; nil logs to stderr.
 	Logf func(string, ...any)
 }
 
-// Info reports what a running daemon bound, for the CLI, doctor, and the
-// settings writer (which bakes HTTPURL into the harness hook config).
+// Info reports what a running daemon bound, for the CLI, doctor, and settings
+// writer (which bakes HTTPURL into the hook config).
 type Info struct {
 	HTTPPort   int    `json:"http_port"`
 	HTTPURL    string `json:"http_url"`
@@ -128,14 +120,13 @@ func Run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("open audit log: %w", err)
 	}
 	defer alog.Close()
-	// Stamp this machine's identity onto every recorded event that doesn't carry
-	// it (the harness payload has neither user nor host).
+	// Stamp this machine's identity onto events that don't carry it (the harness
+	// payload has neither user nor host).
 	host, _ := os.Hostname()
 	alog.SetIdentity(currentUser(), host)
 
-	// Rebuild session taint from the log so a mid-session daemon restart doesn't
-	// lose the tainted flag (Task 12). Non-fatal on read error — a fresh log is
-	// empty and taint simply starts clean.
+	// Rebuild session taint from the log so a restart doesn't lose the tainted
+	// flag. Non-fatal on read error — a fresh log is empty and taint starts clean.
 	ledger := taint.NewLedger(opts.TrustedDomains)
 	if evs, rerr := alog.Events(); rerr != nil {
 		logf("taint rebuild: reading log: %v", rerr)
@@ -145,8 +136,8 @@ func Run(ctx context.Context, opts Options) error {
 
 	h := daemon.NewHandler(daemon.Deps{Eval: engine, Taint: ledger, Record: alog})
 
-	// Fold in telemetry spooled by the shim while the daemon was down, before we
-	// start accepting new events (no concurrency during drain).
+	// Drain telemetry the shim spooled while the daemon was down, before accepting
+	// new events (no concurrency during drain).
 	drainSpool(spoolPath, alog, logf)
 
 	adp, ok := adapter.Get("claudecode")
@@ -209,8 +200,8 @@ func Run(ctx context.Context, opts Options) error {
 	return runErr
 }
 
-// currentUser reports the OS user running the daemon, from the environment so
-// it stays CGO-free and cross-platform (USERNAME on Windows, USER on Unix).
+// currentUser reports the OS user from the environment so it stays CGO-free
+// (USERNAME on Windows, USER on Unix).
 func currentUser() string {
 	for _, k := range []string{"USERNAME", "USER"} {
 		if v := os.Getenv(k); v != "" {
@@ -232,8 +223,8 @@ func resolveHome(home string) string {
 }
 
 // loadOrCreateKey returns the HMAC key at path, generating a fresh 32-byte key
-// (0600) on first run. (Hardening the key at rest via DPAPI/Keychain, per Task
-// 6e, is a later managed-tier concern; a 0600 file matches Task 13's default.)
+// (0600) on first run. Hardening the key at rest (DPAPI/Keychain) is a later
+// managed-tier concern.
 func loadOrCreateKey(path string) ([]byte, error) {
 	b, err := os.ReadFile(path)
 	if err == nil {
@@ -296,10 +287,9 @@ func drainSpool(spoolPath string, alog *audit.Log, logf func(string, ...any)) {
 	}
 }
 
-// hookHandler bridges an HTTP hook to the daemon: normalize the raw payload,
-// resolve a verdict, and (for gating events) answer with the harness decision
-// JSON. HTTP hooks fail OPEN by design (Rev 4) — a payload we can't process
-// returns 200 with no decision so the session continues rather than wedging.
+// hookHandler bridges an HTTP hook to the daemon: normalize, classify, record.
+// HTTP hooks fail OPEN by design (Rev 4) — a payload we can't process returns 200
+// with no decision so the session continues rather than wedging.
 func hookHandler(h *daemon.Handler, adp adapter.Adapter, logf func(string, ...any)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(io.LimitReader(r.Body, ipc.MaxFrame))
@@ -317,14 +307,14 @@ func hookHandler(h *daemon.Handler, adp adapter.Adapter, logf func(string, ...an
 		if _, err := h.Handle(daemon.Request{Event: ev, Descriptor: desc}); err != nil {
 			logf("hook: handle: %v", err)
 		}
-		// Atlas observes; it never returns a hook decision. 200 with no body lets
-		// Claude Code proceed under its own permission flow.
+		// Atlas observes; it never returns a decision. 200 with no body lets Claude
+		// Code proceed under its own permission flow.
 		w.WriteHeader(http.StatusOK)
 	}
 }
 
-// serveHTTP serves the hook listener until ctx is cancelled, then drains it with
-// a short grace period. A clean shutdown returns nil.
+// serveHTTP serves the hook listener until ctx is cancelled, then drains with a
+// short grace period. Clean shutdown returns nil.
 func serveHTTP(ctx context.Context, ln net.Listener, handler http.Handler) error {
 	srv := &http.Server{Handler: handler}
 	go func() {
@@ -340,9 +330,8 @@ func serveHTTP(ctx context.Context, ln net.Listener, handler http.Handler) error
 	return err
 }
 
-// runIntegrityTicker runs the tamper check once at startup (the SessionStart
-// equivalent) and then on the tick, recording each drift as an integrity event
-// plus a loud warning.
+// runIntegrityTicker runs the tamper check once at startup and then on each tick,
+// recording each drift as an integrity event plus a loud warning.
 func runIntegrityTicker(ctx context.Context, cfg integrity.Config, rec *audit.Log, logf func(string, ...any), tick time.Duration) {
 	checker := integrity.NewChecker(cfg)
 	check := func() {

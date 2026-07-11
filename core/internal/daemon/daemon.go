@@ -8,12 +8,10 @@ import (
 	"github.com/Hypership-Software/atlas/internal/ipc"
 )
 
-// Serve accepts control-plane connections and handles one framed Request /
-// Response exchange per connection (the shim dials, sends one event, reads the
-// classification ack, and closes). It returns when ctx is cancelled.
-//
-// Atlas observes rather than gates, so a dropped connection is not a failure
-// mode to guard against: on any protocol error we simply close the connection.
+// Serve accepts control-plane connections, one framed Request/Response exchange
+// each, until ctx is cancelled. Atlas observes rather than gates, so a dropped
+// connection is not a failure to guard against — on any protocol error we just
+// close the connection.
 func Serve(ctx context.Context, ln net.Listener, h *Handler) error {
 	go func() {
 		<-ctx.Done()

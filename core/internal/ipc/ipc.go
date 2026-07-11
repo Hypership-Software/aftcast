@@ -1,7 +1,6 @@
 // Package ipc provides the gate's two local transports: a control-plane stream
-// (Unix socket / Windows named pipe) for CLI<->daemon commands and the Task 9
-// shim, and a localhost HTTP listener that receives harness hooks — the Rev-4
-// transport the Sprint-0 spike measured and validated. Both are local-only.
+// (Unix socket / Windows named pipe) for CLI<->daemon commands and the shim, and
+// a localhost HTTP listener for harness hooks. Both are local-only.
 package ipc
 
 import (
@@ -14,16 +13,16 @@ import (
 )
 
 // instanceID isolates the control-plane endpoint via GATED_IPC_ID. Empty in
-// production (a single daemon per user); set by tests so parallel package test
-// binaries don't collide on the one fixed socket/pipe path.
+// production; set by tests so parallel test binaries don't collide on the one
+// fixed socket/pipe path.
 func instanceID() string { return os.Getenv("GATED_IPC_ID") }
 
 // MaxFrame bounds a single control-plane message — a guard against a hostile or
 // buggy peer. 1 MiB is far above any real descriptor or telemetry event.
 const MaxFrame = 1 << 20
 
-// WriteFrame writes b as a length-prefixed frame: a 4-byte big-endian length
-// followed by the payload.
+// WriteFrame writes b as a length-prefixed frame (4-byte big-endian length, then
+// payload).
 func WriteFrame(w io.Writer, b []byte) error {
 	if len(b) > MaxFrame {
 		return fmt.Errorf("ipc: frame too large: %d bytes (max %d)", len(b), MaxFrame)
@@ -37,7 +36,6 @@ func WriteFrame(w io.Writer, b []byte) error {
 	return err
 }
 
-// ReadFrame reads one length-prefixed frame written by WriteFrame.
 func ReadFrame(r io.Reader) ([]byte, error) {
 	var hdr [4]byte
 	if _, err := io.ReadFull(r, hdr[:]); err != nil {
@@ -54,25 +52,23 @@ func ReadFrame(r io.Reader) ([]byte, error) {
 	return buf, nil
 }
 
-// Listen creates the control-plane listener (Unix socket / Windows named pipe),
-// restricted to the current user.
+// Listen creates the control-plane listener, restricted to the current user.
 func Listen() (net.Listener, error) { return platformListen() }
 
-// Dial connects to the control-plane endpoint, timing out after timeout.
 func Dial(timeout time.Duration) (net.Conn, error) { return platformDial(timeout) }
 
 // DefaultHTTPPort is the fixed localhost port baked into the harness hook
-// settings. It must stay stable across installs; HTTPListen falls back to a
-// nearby port only if it is already taken, and `gated doctor` reconciles the
-// written settings with the port actually bound.
+// settings; it must stay stable across installs. HTTPListen falls back to a
+// nearby port only if it is taken, and `gated doctor` reconciles settings with
+// the bound port.
 const DefaultHTTPPort = 47100
 
 // httpPortScan is how many ports past the preferred one HTTPListen will try.
 const httpPortScan = 16
 
-// HTTPListen binds a localhost-only TCP listener for the hook transport. It
-// prefers the given port (0 means DefaultHTTPPort) and falls back to the next
-// few ports if it is in use, returning the listener and the port actually bound.
+// HTTPListen binds a localhost-only TCP listener for hooks. It prefers the given
+// port (0 => DefaultHTTPPort), falling back to the next few ports if it is in
+// use, and returns the port actually bound.
 func HTTPListen(preferred int) (net.Listener, int, error) {
 	if preferred == 0 {
 		preferred = DefaultHTTPPort
