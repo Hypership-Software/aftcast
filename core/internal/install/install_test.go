@@ -6,7 +6,73 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Hypership-Software/atlas/internal/svc"
 )
+
+func TestInitStartsDaemonAndPointsHooksAtBoundPort(t *testing.T) {
+	dir := t.TempDir()
+	settings := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(settings, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	prev := ensureDaemon
+	ensureDaemon = func(svc.EnsureOptions) (svc.Info, bool, error) {
+		return svc.Info{HTTPPort: 47105, HTTPURL: "http://127.0.0.1:47105/hook"}, true, nil
+	}
+	t.Cleanup(func() { ensureDaemon = prev })
+
+	var out bytes.Buffer
+	opts := Options{Home: filepath.Join(dir, "h"), SettingsPath: settings, BinaryPath: "C:/opt/gated.exe"}
+	if err := Init(opts, &out); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	got, _ := os.ReadFile(settings)
+	if !strings.Contains(string(got), "http://127.0.0.1:47105/hook") {
+		t.Errorf("hooks not pointed at the daemon's actually-bound port:\n%s", got)
+	}
+	if !strings.Contains(out.String(), "started the Atlas daemon") {
+		t.Errorf("Init did not report starting the daemon:\n%s", out.String())
+	}
+}
+
+func TestUninstallStopsDaemon(t *testing.T) {
+	dir := t.TempDir()
+	settings := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(settings, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stopped := false
+	prev := stopDaemon
+	stopDaemon = func(string) (bool, error) { stopped = true; return true, nil }
+	t.Cleanup(func() { stopDaemon = prev })
+
+	if err := Uninstall(Options{Home: filepath.Join(dir, "h"), SettingsPath: settings}, new(bytes.Buffer)); err != nil {
+		t.Fatal(err)
+	}
+	if !stopped {
+		t.Error("Uninstall did not stop the daemon")
+	}
+}
+
+func TestStatusReportsDownAndUnwired(t *testing.T) {
+	dir := t.TempDir()
+	settings := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(settings, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	ok := Status(Options{Home: filepath.Join(dir, "h"), SettingsPath: settings}, &out)
+	if ok {
+		t.Error("Status reported healthy for a down, un-wired install")
+	}
+	if !strings.Contains(out.String(), "daemon") || !strings.Contains(out.String(), "hooks") {
+		t.Errorf("Status output missing daemon/hooks lines:\n%s", out.String())
+	}
+}
 
 func TestInitWritesHooksAndBacksUp(t *testing.T) {
 	dir := t.TempDir()

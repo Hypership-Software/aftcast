@@ -9,6 +9,15 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/Hypership-Software/atlas/internal/svc"
+)
+
+// Daemon lifecycle seams, injectable in tests so init/uninstall are exercised
+// without spawning a real detached process.
+var (
+	ensureDaemon = svc.Ensure
+	stopDaemon   = svc.Stop
 )
 
 const (
@@ -46,6 +55,21 @@ func Init(opts Options, w io.Writer) error {
 	cfg, err := hookConfig(opts)
 	if err != nil {
 		return err
+	}
+
+	// Start (or detect) the daemon first so the hooks point at the port it
+	// actually bound — self-healing the baked-in port — and the next session is
+	// observed immediately. Best-effort: if it can't start, still write the hooks
+	// and report the gap; they reach the daemon once it is up.
+	if info, started, eerr := ensureDaemon(svc.EnsureOptions{Home: resolveHome(opts.Home), Bin: opts.BinaryPath}); eerr != nil {
+		fmt.Fprintf(w, "note: could not start the Atlas daemon (%v)\n", eerr)
+	} else {
+		cfg.HTTPURL = info.HTTPURL
+		if started {
+			fmt.Fprintf(w, "started the Atlas daemon in the background (port %d); stop it with `gated stop`\n", info.HTTPPort)
+		} else {
+			fmt.Fprintf(w, "Atlas daemon already running (port %d)\n", info.HTTPPort)
+		}
 	}
 
 	orig, err := readSettings(settingsPath)
@@ -87,6 +111,11 @@ func Uninstall(opts Options, w io.Writer) error {
 	settingsPath, err := resolveSettingsPath(opts.SettingsPath)
 	if err != nil {
 		return err
+	}
+	if stopped, serr := stopDaemon(resolveHome(opts.Home)); serr != nil {
+		fmt.Fprintf(w, "note: could not stop the Atlas daemon (%v)\n", serr)
+	} else if stopped {
+		fmt.Fprintln(w, "stopped the Atlas daemon")
 	}
 	orig, err := readSettings(settingsPath)
 	if err != nil {
@@ -144,6 +173,33 @@ func Doctor(opts Options, w io.Writer) bool {
 		pass("settings port matches daemon", match, " ("+info.HTTPURL+")")
 	}
 	return ok
+}
+
+// Status prints a one-glance summary — is the daemon up, are the hooks wired —
+// and returns whether both hold. The quick check; `doctor` is the detailed
+// per-check breakdown.
+func Status(opts Options, w io.Writer) bool {
+	info, up := svc.Running(resolveHome(opts.Home))
+
+	wired := false
+	if settingsPath, err := resolveSettingsPath(opts.SettingsPath); err == nil {
+		if orig, rerr := readSettings(settingsPath); rerr == nil {
+			http, session := hooksPresent(orig)
+			wired = http && session
+		}
+	}
+
+	if up {
+		fmt.Fprintf(w, "daemon:  running (port %d)\n", info.HTTPPort)
+	} else {
+		fmt.Fprintln(w, "daemon:  not running — start it with `gated init` or `gated daemon run`")
+	}
+	if wired {
+		fmt.Fprintln(w, "hooks:   wired into Claude Code settings")
+	} else {
+		fmt.Fprintln(w, "hooks:   not wired — run `gated init`")
+	}
+	return up && wired
 }
 
 // --- helpers ---

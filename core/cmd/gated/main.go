@@ -13,7 +13,7 @@ import (
 	"github.com/Hypership-Software/atlas/internal/svc"
 )
 
-const usage = "usage: gated <daemon|hook|init|uninstall|doctor|version>"
+const usage = "usage: gated <daemon|hook|init|uninstall|status|stop|doctor|version>"
 
 func main() { os.Exit(run(os.Args[1:])) }
 
@@ -44,6 +44,23 @@ func run(args []string) int {
 		if err := install.Uninstall(install.Options{}, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "gated uninstall: %v\n", err)
 			return 1
+		}
+		return 0
+	case "status":
+		if install.Status(install.Options{}, os.Stdout) {
+			return 0
+		}
+		return 1
+	case "stop":
+		stopped, err := svc.Stop("")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "gated stop: %v\n", err)
+			return 1
+		}
+		if stopped {
+			fmt.Fprintln(os.Stdout, "stopped the Atlas daemon")
+		} else {
+			fmt.Fprintln(os.Stdout, "no Atlas daemon was running")
 		}
 		return 0
 	case "doctor":
