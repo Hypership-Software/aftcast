@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Hypership-Software/atlas/internal/svc"
+	"github.com/Hypership-Software/atlas/internal/ui"
 )
 
 // Daemon lifecycle seams, injectable in tests so init/uninstall are exercised
@@ -97,10 +98,10 @@ func Init(opts Options, w io.Writer) error {
 	fmt.Fprintf(w, "hook endpoint: %s\n", cfg.HTTPURL)
 
 	if err := selfVerify(cfg.HTTPURL); err != nil {
-		fmt.Fprintf(w, "note: could not verify a running daemon (%v)\n", err)
-		fmt.Fprintf(w, "      start it with `gated daemon run`, then `gated doctor`.\n")
+		fmt.Fprintf(w, "%s could not verify a running daemon (%v)\n", ui.Warn("note:"), err)
+		fmt.Fprint(w, ui.Hint("      start it with `gated daemon run`, then `gated doctor`.\n"))
 	} else {
-		fmt.Fprintln(w, "verified: the daemon answered a probe over the hook endpoint.")
+		fmt.Fprintf(w, "%s the daemon answered a probe over the hook endpoint.\n", ui.OK("verified:"))
 	}
 	return nil
 }
@@ -138,13 +139,13 @@ func Uninstall(opts Options, w io.Writer) error {
 func Doctor(opts Options, w io.Writer) bool {
 	ok := true
 	pass := func(label string, good bool, detail string) {
-		mark := "FAIL"
+		mark, color := "FAIL", ui.Bad
 		if good {
-			mark = "ok"
+			mark, color = "ok", ui.OK
 		} else {
 			ok = false
 		}
-		fmt.Fprintf(w, "[%-4s] %s%s\n", mark, label, detail)
+		fmt.Fprintf(w, "%s %s%s\n", color(fmt.Sprintf("[%-4s]", mark)), label, ui.Hint(detail))
 	}
 
 	settingsPath, err := resolveSettingsPath(opts.SettingsPath)
@@ -194,17 +195,17 @@ func Status(opts Options, w io.Writer) bool {
 	}
 
 	if up {
-		fmt.Fprintf(w, "daemon:  running (port %d)\n", info.HTTPPort)
+		fmt.Fprintf(w, "daemon:  %s\n", ui.OK(fmt.Sprintf("running (port %d)", info.HTTPPort)))
 	} else {
-		fmt.Fprintln(w, "daemon:  not running — start it with `gated init` or `gated daemon run`")
+		fmt.Fprintf(w, "daemon:  %s%s\n", ui.Bad("not running"), ui.Hint(" — start it with `gated init` or `gated daemon run`"))
 	}
 	if wired {
-		fmt.Fprintln(w, "hooks:   wired into Claude Code settings")
+		fmt.Fprintf(w, "hooks:   %s\n", ui.OK("wired into Claude Code settings"))
 	} else {
-		fmt.Fprintln(w, "hooks:   not wired — run `gated init`")
+		fmt.Fprintf(w, "hooks:   %s%s\n", ui.Bad("not wired"), ui.Hint(" — run `gated init`"))
 	}
 	if !portMatch {
-		fmt.Fprintf(w, "port:    settings point at a different port than the daemon bound (%d) — re-run `gated init`\n", info.HTTPPort)
+		fmt.Fprintf(w, "port:    %s\n", ui.Warn(fmt.Sprintf("settings point at a different port than the daemon bound (%d) — re-run `gated init`", info.HTTPPort)))
 	}
 	return up && wired && portMatch
 }

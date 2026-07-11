@@ -12,6 +12,13 @@ import (
 	"github.com/Hypership-Software/atlas/internal/svc"
 )
 
+// Force plain output so assertions match regardless of whether the test runner's
+// stdout is a terminal.
+func TestMain(m *testing.M) {
+	os.Setenv("NO_COLOR", "1")
+	os.Exit(m.Run())
+}
+
 func TestDoctorReportsStaleDaemonAsDown(t *testing.T) {
 	dir := t.TempDir()
 	home := filepath.Join(dir, "h")
