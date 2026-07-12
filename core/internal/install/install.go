@@ -53,6 +53,20 @@ func Init(opts Options, w io.Writer) error {
 	if err != nil {
 		return err
 	}
+
+	// Install the (possibly rebuilt) binary into <home>/bin so the daemon and the
+	// SessionStart shim launch from a stable path — and point settings at it, not at
+	// the transient location init was invoked from. Best-effort: on failure, fall
+	// back to the source path and report the gap, still wiring the hooks.
+	if installed, replaced, ierr := installBinary(resolveHome(opts.Home), sourceBinary(opts.BinaryPath)); ierr != nil {
+		fmt.Fprintf(w, "note: could not install the Atlas binary (%v)\n", ierr)
+	} else {
+		opts.BinaryPath = installed
+		if replaced {
+			fmt.Fprintf(w, "installed the Atlas binary to %s\n", installed)
+		}
+	}
+
 	cfg, err := hookConfig(opts)
 	if err != nil {
 		return err
