@@ -1,0 +1,12 @@
+{
+  "session_id": "synthetic-skill-0001",
+  "cwd": "/home/dev/project",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Skill",
+  "tool_input": {
+    "skill": "superpowers:brainstorming",
+    "args": "let's design the thing"
+  },
+  "tool_use_id": "toolu_skill0001"
+}

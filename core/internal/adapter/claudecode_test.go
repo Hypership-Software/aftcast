@@ -107,6 +107,16 @@ func TestNormalizeMCPSplit(t *testing.T) {
 	}
 }
 
+func TestNormalizeSkillName(t *testing.T) {
+	d, e := normalize(t, "pretooluse-skill.json")
+	if d.ToolClass != schema.ClassSkill {
+		t.Errorf("class = %v, want skill", d.ToolClass)
+	}
+	if e.Skill != "superpowers:brainstorming" {
+		t.Errorf("skill = %q, want superpowers:brainstorming", e.Skill)
+	}
+}
+
 func TestNormalizeUserPrompt(t *testing.T) {
 	_, e := normalize(t, "userpromptsubmit.json")
 	if e.EventType != schema.EventUserPrompt {

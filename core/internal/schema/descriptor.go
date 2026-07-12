@@ -20,6 +20,7 @@ type Descriptor struct {
 	ProjectRoot string    `json:"project_root,omitempty"`
 	MCPServer   string    `json:"mcp_server,omitempty"`
 	MCPTool     string    `json:"mcp_tool,omitempty"`
+	Skill       string    `json:"skill,omitempty"`
 	Tainted     bool      `json:"taint"`
 }
 

@@ -60,7 +60,7 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 		desc.ToolClass = class
 		ev.ToolClass = class
 		extract(&desc, class, h)
-		ev.Files, ev.Verbs, ev.Domain = desc.Files, desc.Verbs, desc.Domain
+		ev.Files, ev.Verbs, ev.Domain, ev.Skill = desc.Files, desc.Verbs, desc.Domain, desc.Skill
 	}
 
 	// tool_ok is only meaningful for post-execution events; a PostToolUseFailure
@@ -155,6 +155,12 @@ func extract(d *schema.Descriptor, class schema.ToolClass, h ccHook) {
 		}
 	case schema.ClassMCP:
 		d.MCPServer, d.MCPTool = splitMCP(h.ToolName)
+	case schema.ClassSkill:
+		var in struct {
+			Skill string `json:"skill"`
+		}
+		_ = json.Unmarshal(h.ToolInput, &in)
+		d.Skill = in.Skill
 	}
 }
 
