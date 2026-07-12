@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Hypership-Software/atlas/internal/analytics"
 	"github.com/Hypership-Software/atlas/internal/audit"
 	"github.com/Hypership-Software/atlas/internal/schema"
 )
@@ -14,11 +15,8 @@ import (
 // Project folds the audit log into the read-model, upserting session summaries
 // and mirroring events. Idempotent (sessions keyed by session_id, events by seq)
 // and rebuildable. A last-projected-seq watermark short-circuits when nothing is
-// new.
-//
-// Only structural columns are written here; this fold leaves the analytical
-// columns (outcome, one_shot, correction_turns, task_type) at their defaults on
-// insert and never clobbers them on update.
+// new. Both the structural columns and the analytical columns (outcome, one_shot,
+// correction_turns, task_type — computed by the analytics package) are written.
 func (s *Store) Project(log *audit.Log) error {
 	evs, err := log.Events()
 	if err != nil {
@@ -57,13 +55,15 @@ func (s *Store) Project(log *audit.Log) error {
 		(session_id, user, org, harness, started, ended, exit_reason,
 		 turn_count, tool_calls, danger_detected, taint, skills_used, duration_ms,
 		 outcome, one_shot, correction_turns, task_type)
-		VALUES (?,?,?,?,?,?,?, ?,?,?,?,?,?, '',0,0,'')
+		VALUES (?,?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?,?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			user=excluded.user, org=excluded.org, harness=excluded.harness,
 			started=excluded.started, ended=excluded.ended, exit_reason=excluded.exit_reason,
 			turn_count=excluded.turn_count, tool_calls=excluded.tool_calls,
 			danger_detected=excluded.danger_detected, taint=excluded.taint,
-			skills_used=excluded.skills_used, duration_ms=excluded.duration_ms`)
+			skills_used=excluded.skills_used, duration_ms=excluded.duration_ms,
+			outcome=excluded.outcome, one_shot=excluded.one_shot,
+			correction_turns=excluded.correction_turns, task_type=excluded.task_type`)
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,8 @@ func (s *Store) Project(log *audit.Log) error {
 	for _, sess := range foldSessions(evs) {
 		if _, err := upsert.Exec(sess.SessionID, sess.User, sess.Org, sess.Harness,
 			sess.Started, sess.Ended, sess.ExitReason,
-			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint), sess.SkillsUsed, sess.DurationMS); err != nil {
+			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint), sess.SkillsUsed, sess.DurationMS,
+			sess.Outcome, b2i(sess.OneShot), sess.CorrectionTurns, sess.TaskType); err != nil {
 			return err
 		}
 	}
@@ -90,6 +91,7 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 	type acc struct {
 		sess   *Session
 		skills map[string]struct{}
+		events []schema.TelemetryEvent
 	}
 	byID := make(map[string]*acc)
 	var order []string
@@ -101,6 +103,7 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 			byID[e.SessionID] = a
 			order = append(order, e.SessionID)
 		}
+		a.events = append(a.events, e)
 		s := a.sess
 		if s.User == "" {
 			s.User = e.User
@@ -138,6 +141,12 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		a := byID[id]
 		a.sess.SkillsUsed = joinSorted(a.skills)
 		a.sess.DurationMS = durationMS(a.sess.Started, a.sess.Ended)
+		oneShot, corrections := analytics.OneShot(a.events)
+		taskType, _ := analytics.Taxonomy(a.events)
+		a.sess.Outcome = string(analytics.Outcome(a.events))
+		a.sess.OneShot = oneShot
+		a.sess.CorrectionTurns = corrections
+		a.sess.TaskType = taskType
 		out = append(out, *a.sess)
 	}
 	return out

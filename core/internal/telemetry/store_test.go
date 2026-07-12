@@ -176,6 +176,43 @@ func TestProjectAggregatesTaintAndSkills(t *testing.T) {
 	}
 }
 
+func TestProjectComputesAnalyticalColumns(t *testing.T) {
+	mk := func(et schema.EventType, class schema.ToolClass, verbs, files []string, ok schema.ToolOutcome, sec int) schema.TelemetryEvent {
+		return schema.TelemetryEvent{SessionID: "s3", User: "kyle", Harness: "claudecode",
+			EventType: et, ToolClass: class, Verbs: verbs, Files: files, ToolOK: ok, TS: ts(sec)}
+	}
+	// One-turn testing session: writes a _test.go file, runs go, ends clean.
+	evs := []schema.TelemetryEvent{
+		{SessionID: "s3", User: "kyle", Harness: "claudecode", EventType: schema.EventSessionStart, TS: ts(0)},
+		{SessionID: "s3", User: "kyle", Harness: "claudecode", EventType: schema.EventUserPrompt, TS: ts(1)},
+		mk(schema.EventPreTool, schema.ClassFileWrite, nil, []string{"internal/foo/foo_test.go"}, "", 2),
+		mk(schema.EventPostTool, schema.ClassFileWrite, nil, []string{"internal/foo/foo_test.go"}, schema.OutcomeOK, 3),
+		mk(schema.EventPreTool, schema.ClassExec, []string{"go"}, nil, "", 4),
+		mk(schema.EventPostTool, schema.ClassExec, []string{"go"}, nil, schema.OutcomeOK, 5),
+		{SessionID: "s3", User: "kyle", Harness: "claudecode", EventType: schema.EventStop, TS: ts(6)},
+	}
+	log := buildLog(t, evs)
+	defer log.Close()
+	s := openStore(t)
+	if err := s.Project(log); err != nil {
+		t.Fatal(err)
+	}
+
+	got := sessionsByID(t, s)["s3"]
+	if got.Outcome != "success" {
+		t.Errorf("outcome = %q, want success", got.Outcome)
+	}
+	if !got.OneShot {
+		t.Error("one_shot = false, want true")
+	}
+	if got.CorrectionTurns != 0 {
+		t.Errorf("correction_turns = %d, want 0", got.CorrectionTurns)
+	}
+	if got.TaskType != "testing" {
+		t.Errorf("task_type = %q, want testing", got.TaskType)
+	}
+}
+
 func TestProjectEmptyLog(t *testing.T) {
 	log := buildLog(t, nil)
 	defer log.Close()
