@@ -6,10 +6,13 @@ package insights
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Hypership-Software/atlas/internal/analytics"
 	"github.com/Hypership-Software/atlas/internal/telemetry"
 )
+
+const recentWindow = 7 * 24 * time.Hour
 
 type taskCount struct {
 	task string
@@ -17,20 +20,49 @@ type taskCount struct {
 }
 
 type aggregates struct {
-	profile analytics.Profile
-	skills  analytics.SkillReport
-	danger  int
-	taskMix []taskCount
+	profile        analytics.Profile
+	skills         analytics.SkillReport
+	danger         int
+	tainted        int
+	taskMix        []taskCount
+	needsAttention []string
+	user           string
 }
 
-func aggregate(sessions []telemetry.Session) aggregates {
+// recentSessions keeps sessions within the last 7 days of Started. A session
+// whose Started is empty or fails to parse is kept rather than hidden: an
+// observability tool must not silently drop data it can't time-place.
+func recentSessions(sessions []telemetry.Session, now time.Time) []telemetry.Session {
+	var out []telemetry.Session
+	for _, s := range sessions {
+		t, err := time.Parse(time.RFC3339Nano, s.Started)
+		if err != nil {
+			out = append(out, s)
+			continue
+		}
+		if now.Sub(t) <= recentWindow {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func aggregate(sessions []telemetry.Session, now time.Time) aggregates {
 	stats := make([]analytics.SessionStat, len(sessions))
 	counts := map[string]int{}
 	var order []string
 	danger := 0
+	tainted := 0
+	user := ""
 	for i, s := range sessions {
 		stats[i] = toStat(s)
 		danger += s.DangerDetected
+		if s.Taint {
+			tainted++
+		}
+		if user == "" && s.User != "" {
+			user = s.User
+		}
 		tt := s.TaskType
 		if tt == "" {
 			tt = "unknown"
@@ -45,12 +77,17 @@ func aggregate(sessions []telemetry.Session) aggregates {
 	for i, tt := range order {
 		mix[i] = taskCount{task: tt, n: counts[tt]}
 	}
-	return aggregates{
+
+	agg := aggregates{
 		profile: analytics.Productivity(stats),
 		skills:  analytics.SkillInsights(stats),
 		danger:  danger,
+		tainted: tainted,
 		taskMix: mix,
+		user:    user,
 	}
+	agg.needsAttention = renderNeedsAttention(sessions, agg, now)
+	return agg
 }
 
 func toStat(s telemetry.Session) analytics.SessionStat {

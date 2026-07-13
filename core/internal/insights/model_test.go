@@ -3,6 +3,7 @@ package insights
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Hypership-Software/atlas/internal/schema"
 	"github.com/Hypership-Software/atlas/internal/telemetry"
@@ -18,7 +19,7 @@ func sampleModel() model {
 	provider := func(id string) ([]schema.TelemetryEvent, error) {
 		return []schema.TelemetryEvent{{SessionID: id, ToolRaw: "WebFetch", Subagent: "researcher"}}, nil
 	}
-	return build(sessions, aggregate(sessions), provider)
+	return build(sessions, aggregate(sessions, time.Now()), provider)
 }
 
 func TestListViewRendersSessions(t *testing.T) {
@@ -68,7 +69,7 @@ func TestQuitKey(t *testing.T) {
 
 func TestEmptyState(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	m := build(nil, aggregate(nil), func(string) ([]schema.TelemetryEvent, error) { return nil, nil })
+	m := build(nil, aggregate(nil, time.Now()), func(string) ([]schema.TelemetryEvent, error) { return nil, nil })
 	if !strings.Contains(m.View(), "No sessions") {
 		t.Fatalf("empty model should show empty state: %q", m.View())
 	}
