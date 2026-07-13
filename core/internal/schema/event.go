@@ -34,10 +34,16 @@ type TelemetryEvent struct {
 	Domain       string   `json:"domain,omitempty"`
 	Taint        bool     `json:"taint"`
 	Skill        string   `json:"skill,omitempty"`
-	Subagent     string   `json:"subagent,omitempty"`
-	PolicyHash   string   `json:"policy_hash,omitempty"`
-	PrevHash     string   `json:"prev_hash,omitempty"`
-	Hash         string   `json:"hash,omitempty"`
+	// Subagent is the agent_type of the subagent that made this call (empty for
+	// the main agent); AgentID is that subagent's instance id; PromptID ties the
+	// event — parent or subagent — to the human prompt that initiated it. Added
+	// later per the append-only rule (omitempty leaves old events' hashes intact).
+	Subagent   string `json:"subagent,omitempty"`
+	AgentID    string `json:"agent_id,omitempty"`
+	PromptID   string `json:"prompt_id,omitempty"`
+	PolicyHash string `json:"policy_hash,omitempty"`
+	PrevHash   string `json:"prev_hash,omitempty"`
+	Hash       string `json:"hash,omitempty"`
 }
 
 // Canonical returns deterministic sorted-key JSON with the Hash field excluded —

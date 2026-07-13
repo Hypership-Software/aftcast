@@ -124,6 +124,32 @@ func TestNormalizeUserPrompt(t *testing.T) {
 	}
 }
 
+func TestNormalizeSubagentIdentity(t *testing.T) {
+	_, e := normalize(t, "pretooluse-subagent.json")
+	if e.Subagent != "Explore" {
+		t.Errorf("Subagent = %q, want Explore", e.Subagent)
+	}
+	if e.AgentID != "spike-agent-0001" {
+		t.Errorf("AgentID = %q, want spike-agent-0001", e.AgentID)
+	}
+	if e.PromptID != "spike-prompt-aaaa-bbbb" {
+		t.Errorf("PromptID = %q, want spike-prompt-aaaa-bbbb", e.PromptID)
+	}
+}
+
+func TestNormalizeMainAgentHasPromptNoSubagent(t *testing.T) {
+	_, e := normalize(t, "pretooluse-bash.json")
+	if e.PromptID != "spike-prompt-aaaa-bbbb" {
+		t.Errorf("PromptID = %q, want spike-prompt-aaaa-bbbb", e.PromptID)
+	}
+	if e.Subagent != "" {
+		t.Errorf("main-agent Subagent = %q, want empty", e.Subagent)
+	}
+	if e.AgentID != "" {
+		t.Errorf("main-agent AgentID = %q, want empty", e.AgentID)
+	}
+}
+
 func TestGetUnknownHarness(t *testing.T) {
 	if _, ok := Get("nope"); ok {
 		t.Error("Get returned an adapter for an unknown harness")

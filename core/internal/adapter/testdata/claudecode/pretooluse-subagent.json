@@ -1,0 +1,19 @@
+{
+  "session_id": "spike-sess-1111-2222-3333",
+  "transcript_path": "C:\\Users\\dev\\.claude\\projects\\C--Users-dev-project\\spike-transcript-0001.jsonl",
+  "cwd": "C:\\Users\\dev\\project",
+  "prompt_id": "spike-prompt-aaaa-bbbb",
+  "permission_mode": "bypassPermissions",
+  "agent_id": "spike-agent-0001",
+  "agent_type": "Explore",
+  "effort": {
+    "level": "xhigh"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "ls -la \"C:/Users/dev/project\"",
+    "description": "List files in project directory"
+  },
+  "tool_use_id": "toolu_SAMPLE1013"
+}

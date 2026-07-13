@@ -28,6 +28,12 @@ type ccHook struct {
 	ToolInput     json.RawMessage `json:"tool_input"`
 	ToolUseID     string          `json:"tool_use_id"`
 	Error         string          `json:"error"`
+	// PromptID is present on every hook (parent and subagent); AgentID/AgentType
+	// are present only when a subagent made the call, so AgentType distinguishes
+	// subagent work from the main agent's.
+	PromptID  string `json:"prompt_id"`
+	AgentID   string `json:"agent_id"`
+	AgentType string `json:"agent_type"`
 }
 
 var exitCodeRe = regexp.MustCompile(`^Exit code (\d+)`)
@@ -53,6 +59,9 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 		Harness:   "claudecode",
 		EventType: eventType(event),
 		ToolRaw:   h.ToolName,
+		PromptID:  h.PromptID,
+		AgentID:   h.AgentID,
+		Subagent:  h.AgentType,
 	}
 
 	if h.ToolName != "" {
