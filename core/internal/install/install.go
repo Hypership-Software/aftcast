@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Hypership-Software/atlas/internal/schema"
 	"github.com/Hypership-Software/atlas/internal/svc"
 	"github.com/Hypership-Software/atlas/internal/ui"
 )
@@ -257,9 +258,10 @@ func hookConfig(opts Options) (HookConfig, error) {
 // selfVerify posts a benign PreToolUse probe to the hook endpoint and confirms
 // the daemon answers 200, proving the settings URL reaches a live daemon. Atlas
 // observes, so the response carries no decision — a clean 200 is the signal. The
-// probe also records one event (a visible marker that init ran).
+// probe records one event as an audit marker that init ran; its reserved
+// session_id keeps it out of the analytics read-model (schema.IsInternalSession).
 func selfVerify(hookURL string) error {
-	payload := `{"hook_event_name":"PreToolUse","session_id":"gated-init-selfcheck","tool_name":"Read","tool_input":{"file_path":"/tmp/gated-selfcheck"}}`
+	payload := fmt.Sprintf(`{"hook_event_name":"PreToolUse","session_id":%q,"tool_name":"Read","tool_input":{"file_path":"/tmp/gated-selfcheck"}}`, schema.SelfCheckSessionID)
 	client := &http.Client{Timeout: probeTimeout}
 	resp, err := client.Post(hookURL, "application/json", strings.NewReader(payload))
 	if err != nil {

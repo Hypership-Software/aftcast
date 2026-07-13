@@ -30,6 +30,15 @@ func (s *Store) Project(log *audit.Log) error {
 		return nil // already projected through here
 	}
 
+	// Watermark tracks the full log (so a filtered marker as the last event still
+	// advances it); the read-model itself holds only real agent sessions.
+	visible := make([]schema.TelemetryEvent, 0, len(evs))
+	for _, e := range evs {
+		if !schema.IsInternalSession(e.SessionID) {
+			visible = append(visible, e)
+		}
+	}
+
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -41,7 +50,7 @@ func (s *Store) Project(log *audit.Log) error {
 		return err
 	}
 	defer insEvent.Close()
-	for _, e := range evs {
+	for _, e := range visible {
 		raw, err := json.Marshal(e)
 		if err != nil {
 			return err
@@ -68,7 +77,7 @@ func (s *Store) Project(log *audit.Log) error {
 		return err
 	}
 	defer upsert.Close()
-	for _, sess := range foldSessions(evs) {
+	for _, sess := range foldSessions(visible) {
 		if _, err := upsert.Exec(sess.SessionID, sess.User, sess.Org, sess.Harness,
 			sess.Started, sess.Ended, sess.ExitReason,
 			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint), sess.SkillsUsed, sess.DurationMS,

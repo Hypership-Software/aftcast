@@ -55,3 +55,15 @@ const (
 	EventStop         EventType = "stop"
 	EventIntegrity    EventType = "integrity"
 )
+
+// SelfCheckSessionID is the session_id `gated init` stamps on the probe it posts
+// to prove the hook path is live. It is an operational marker recorded in the
+// audit log, not an agent session, so the read-model excludes it from analytics.
+const SelfCheckSessionID = "gated-init-selfcheck"
+
+// IsInternalSession reports whether a session_id is an Atlas-generated marker
+// rather than a real agent session — such events belong in the audit log but not
+// in the analytics read-model.
+func IsInternalSession(id string) bool {
+	return id == SelfCheckSessionID
+}
