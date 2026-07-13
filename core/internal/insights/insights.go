@@ -2,6 +2,7 @@ package insights
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Hypership-Software/atlas/internal/telemetry"
 
@@ -15,7 +16,9 @@ func Run(store *telemetry.Store) error {
 	if err != nil {
 		return fmt.Errorf("insights: load sessions: %w", err)
 	}
-	m := build(sessions, aggregate(sessions), store.EventsForSession)
+	now := time.Now()
+	sessions = recentSessions(sessions, now)
+	m := build(sessions, aggregate(sessions, now), store.EventsForSession)
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 		return fmt.Errorf("insights: run tui: %w", err)
 	}
