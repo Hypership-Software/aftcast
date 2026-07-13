@@ -1,0 +1,9 @@
+{
+  "session_id": "synthetic-expand-0002",
+  "cwd": "/home/dev/project",
+  "hook_event_name": "UserPromptExpansion",
+  "expansion_type": "mcp_prompt",
+  "command_name": "granola:query_granola_meetings",
+  "command_args": "find the meeting about the acquisition",
+  "prompt": "find the meeting about the acquisition"
+}

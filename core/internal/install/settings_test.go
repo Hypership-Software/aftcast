@@ -40,7 +40,7 @@ func TestMergeHooksWiresHTTPAndSessionStartCommand(t *testing.T) {
 	hooks := parseHooks(t, out)
 
 	// Every managed HTTP event is an http hook pointed at the daemon.
-	for _, ev := range []string{"PreToolUse", "PostToolUse", "PostToolUseFailure", "UserPromptSubmit", "Stop"} {
+	for _, ev := range []string{"PreToolUse", "PostToolUse", "PostToolUseFailure", "UserPromptSubmit", "UserPromptExpansion", "Stop"} {
 		groups := hooks[ev]
 		if len(groups) == 0 {
 			t.Fatalf("%s: no hook group written", ev)
@@ -68,6 +68,10 @@ func TestMergeHooksWiresHTTPAndSessionStartCommand(t *testing.T) {
 	ups := hooks["UserPromptSubmit"][0]
 	if ups.Matcher != nil {
 		t.Errorf("UserPromptSubmit matcher = %q, want omitted", *ups.Matcher)
+	}
+	upe := hooks["UserPromptExpansion"][0]
+	if upe.Matcher != nil {
+		t.Errorf("UserPromptExpansion matcher = %q, want omitted", *upe.Matcher)
 	}
 
 	// SessionStart is a COMMAND hook (HTTP doesn't fire it in 2.1.205).

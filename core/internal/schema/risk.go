@@ -48,12 +48,13 @@ const (
 type EventType string
 
 const (
-	EventSessionStart EventType = "session_start"
-	EventUserPrompt   EventType = "user_prompt"
-	EventPreTool      EventType = "pre_tool"
-	EventPostTool     EventType = "post_tool"
-	EventStop         EventType = "stop"
-	EventIntegrity    EventType = "integrity"
+	EventSessionStart    EventType = "session_start"
+	EventUserPrompt      EventType = "user_prompt"
+	EventPromptExpansion EventType = "prompt_expansion"
+	EventPreTool         EventType = "pre_tool"
+	EventPostTool        EventType = "post_tool"
+	EventStop            EventType = "stop"
+	EventIntegrity       EventType = "integrity"
 )
 
 // SelfCheckSessionID is the session_id `gated init` stamps on the probe it posts

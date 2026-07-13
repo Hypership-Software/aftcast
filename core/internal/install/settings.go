@@ -26,7 +26,7 @@ type HookConfig struct {
 // carries the exit code that the outcome analytics depend on.
 var managedHTTPEvents = []string{
 	"PreToolUse", "PostToolUse", "PostToolUseFailure",
-	"UserPromptSubmit", "Stop", "SessionEnd",
+	"UserPromptSubmit", "UserPromptExpansion", "Stop", "SessionEnd",
 }
 
 // managedCommandEvents must be command hooks (they do not fire over HTTP).

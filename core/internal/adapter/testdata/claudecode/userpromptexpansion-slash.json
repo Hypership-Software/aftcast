@@ -1,0 +1,10 @@
+{
+  "session_id": "synthetic-expand-0001",
+  "cwd": "/home/dev/project",
+  "hook_event_name": "UserPromptExpansion",
+  "expansion_type": "slash_command",
+  "command_name": "plan",
+  "command_args": "ship the thing using the prod api key",
+  "command_source": "user",
+  "prompt": "You are planning. ship the thing using the prod api key"
+}

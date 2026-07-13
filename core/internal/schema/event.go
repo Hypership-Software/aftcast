@@ -38,6 +38,12 @@ type TelemetryEvent struct {
 	Domain       string   `json:"domain,omitempty"`
 	Taint        bool     `json:"taint"`
 	Skill        string   `json:"skill,omitempty"`
+	// Command is the slash-command or MCP-prompt name from a UserPromptExpansion
+	// hook; ExpansionType is "slash_command" or "mcp_prompt". Metadata only — the
+	// command's args and expanded prompt are content and are never captured
+	// (ADR-011). Added later per the append-only rule.
+	Command       string `json:"command,omitempty"`
+	ExpansionType string `json:"expansion_type,omitempty"`
 	// Subagent is the agent_type of the subagent that made this call (empty for
 	// the main agent); AgentID is that subagent's instance id; PromptID ties the
 	// event — parent or subagent — to the human prompt that initiated it. Added

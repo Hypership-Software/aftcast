@@ -35,6 +35,11 @@ type ccHook struct {
 	PromptID  string `json:"prompt_id"`
 	AgentID   string `json:"agent_id"`
 	AgentType string `json:"agent_type"`
+	// ExpansionType/CommandName come from a UserPromptExpansion hook. The sibling
+	// command_args and prompt fields are content and are deliberately not decoded,
+	// so they cannot leak into the log (ADR-011 metadata-only).
+	ExpansionType string `json:"expansion_type"`
+	CommandName   string `json:"command_name"`
 }
 
 var exitCodeRe = regexp.MustCompile(`^Exit code (\d+)`)
@@ -75,6 +80,11 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 		ev.Files, ev.Verbs, ev.Domain, ev.Skill = desc.Files, desc.Verbs, desc.Domain, desc.Skill
 	}
 
+	if ev.EventType == schema.EventPromptExpansion {
+		ev.Command = h.CommandName
+		ev.ExpansionType = h.ExpansionType
+	}
+
 	// tool_ok is only meaningful for post-execution events; a PostToolUseFailure
 	// carries the exit code in its error field.
 	if ev.EventType == schema.EventPostTool {
@@ -97,6 +107,8 @@ func eventType(event string) schema.EventType {
 		return schema.EventPostTool
 	case "UserPromptSubmit":
 		return schema.EventUserPrompt
+	case "UserPromptExpansion":
+		return schema.EventPromptExpansion
 	case "Stop", "SubagentStop", "SessionEnd":
 		return schema.EventStop
 	case "SessionStart":

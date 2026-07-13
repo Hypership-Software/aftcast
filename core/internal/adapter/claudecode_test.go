@@ -174,6 +174,36 @@ func TestNormalizeUserPrompt(t *testing.T) {
 	}
 }
 
+// A user-typed slash command fires UserPromptExpansion, carrying the command
+// name and expansion type — the only metadata-safe slash-command signal. The
+// command's args and expanded prompt are content and must never be captured.
+func TestNormalizeUserPromptExpansionSlash(t *testing.T) {
+	_, e := normalize(t, "userpromptexpansion-slash.json")
+	if e.EventType != schema.EventPromptExpansion {
+		t.Errorf("event type = %v, want prompt_expansion", e.EventType)
+	}
+	if e.Command != "plan" {
+		t.Errorf("command = %q, want plan", e.Command)
+	}
+	if e.ExpansionType != "slash_command" {
+		t.Errorf("expansion_type = %q, want slash_command", e.ExpansionType)
+	}
+	// ADR-011: never the command args or the expanded prompt text.
+	if blob, _ := json.Marshal(e); strings.Contains(string(blob), "prod api key") {
+		t.Errorf("event leaked command args/prompt content: %s", blob)
+	}
+}
+
+func TestNormalizeUserPromptExpansionMCP(t *testing.T) {
+	_, e := normalize(t, "userpromptexpansion-mcp.json")
+	if e.ExpansionType != "mcp_prompt" {
+		t.Errorf("expansion_type = %q, want mcp_prompt", e.ExpansionType)
+	}
+	if e.Command != "granola:query_granola_meetings" {
+		t.Errorf("command = %q, want granola:query_granola_meetings", e.Command)
+	}
+}
+
 func TestNormalizeSubagentIdentity(t *testing.T) {
 	_, e := normalize(t, "pretooluse-subagent.json")
 	if e.Subagent != "Explore" {
