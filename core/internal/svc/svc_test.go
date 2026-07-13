@@ -157,7 +157,9 @@ func TestRunObservesOverHTTP(t *testing.T) {
 // log (ADR-011 metadata-only).
 func TestRunObservesUserPromptExpansionOverHTTP(t *testing.T) {
 	home := t.TempDir()
-	info, cancel, errc := startDaemon(t, "svc-expand", svc.Options{Home: home})
+	// Distinct preferred port: sharing the default 47100 with TestRunObservesOverHTTP
+	// races on macOS (rebinding the just-freed port hits a TIME_WAIT 4-tuple → RST).
+	info, cancel, errc := startDaemon(t, "svc-expand", svc.Options{Home: home, HTTPPort: 47155})
 
 	payload := `{"hook_event_name":"UserPromptExpansion","session_id":"s-expand","expansion_type":"slash_command","command_name":"plan","command_args":"ship with the prod api key","prompt":"planning... ship with the prod api key"}`
 	resp, err := http.Post(info.HTTPURL, "application/json", strings.NewReader(payload))
