@@ -62,15 +62,15 @@ func (s *Store) Project(log *audit.Log) error {
 
 	upsert, err := tx.Prepare(`INSERT INTO sessions
 		(session_id, user, org, harness, started, ended, exit_reason,
-		 turn_count, tool_calls, danger_detected, taint, skills_used, duration_ms,
+		 turn_count, tool_calls, danger_detected, taint, skills_used, duration_ms, files_touched,
 		 outcome, clean_delivery, correction_turns, task_type)
-		VALUES (?,?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?,?)
+		VALUES (?,?,?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			user=excluded.user, org=excluded.org, harness=excluded.harness,
 			started=excluded.started, ended=excluded.ended, exit_reason=excluded.exit_reason,
 			turn_count=excluded.turn_count, tool_calls=excluded.tool_calls,
 			danger_detected=excluded.danger_detected, taint=excluded.taint,
-			skills_used=excluded.skills_used, duration_ms=excluded.duration_ms,
+			skills_used=excluded.skills_used, duration_ms=excluded.duration_ms, files_touched=excluded.files_touched,
 			outcome=excluded.outcome, clean_delivery=excluded.clean_delivery,
 			correction_turns=excluded.correction_turns, task_type=excluded.task_type`)
 	if err != nil {
@@ -80,7 +80,7 @@ func (s *Store) Project(log *audit.Log) error {
 	for _, sess := range foldSessions(visible) {
 		if _, err := upsert.Exec(sess.SessionID, sess.User, sess.Org, sess.Harness,
 			sess.Started, sess.Ended, sess.ExitReason,
-			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint), sess.SkillsUsed, sess.DurationMS,
+			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint), sess.SkillsUsed, sess.DurationMS, sess.FilesTouched,
 			sess.Outcome, b2i(sess.CleanDelivery), sess.CorrectionTurns, sess.TaskType); err != nil {
 			return err
 		}
@@ -100,6 +100,7 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 	type acc struct {
 		sess   *Session
 		skills map[string]struct{}
+		files  map[string]struct{}
 		events []schema.TelemetryEvent
 	}
 	byID := make(map[string]*acc)
@@ -108,7 +109,7 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 	for _, e := range evs {
 		a := byID[e.SessionID]
 		if a == nil {
-			a = &acc{sess: &Session{SessionID: e.SessionID, Started: e.TS}, skills: map[string]struct{}{}}
+			a = &acc{sess: &Session{SessionID: e.SessionID, Started: e.TS}, skills: map[string]struct{}{}, files: map[string]struct{}{}}
 			byID[e.SessionID] = a
 			order = append(order, e.SessionID)
 		}
@@ -143,6 +144,11 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		if e.Skill != "" {
 			a.skills[e.Skill] = struct{}{}
 		}
+		if e.ToolClass == schema.ClassFileRead || e.ToolClass == schema.ClassFileWrite {
+			for _, f := range e.Files {
+				a.files[f] = struct{}{}
+			}
+		}
 	}
 
 	out := make([]Session, 0, len(order))
@@ -150,6 +156,7 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		a := byID[id]
 		a.sess.SkillsUsed = joinSorted(a.skills)
 		a.sess.DurationMS = durationMS(a.sess.Started, a.sess.Ended)
+		a.sess.FilesTouched = len(a.files)
 		clean, corrections := analytics.CleanDelivery(a.events)
 		taskType, _ := analytics.Taxonomy(a.events)
 		a.sess.Outcome = string(analytics.Outcome(a.events))

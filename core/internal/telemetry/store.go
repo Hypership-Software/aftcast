@@ -37,6 +37,7 @@ type Session struct {
 	TaskType        string
 	SkillsUsed      string
 	DurationMS      int64
+	FilesTouched    int
 }
 
 type Store struct {
@@ -61,7 +62,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 	correction_turns INTEGER,
 	task_type        TEXT,
 	skills_used      TEXT,
-	duration_ms      INTEGER
+	duration_ms      INTEGER,
+	files_touched    INTEGER
 );
 CREATE TABLE IF NOT EXISTS events (
 	seq         INTEGER PRIMARY KEY,
@@ -99,7 +101,7 @@ func (s *Store) Close() error { return s.db.Close() }
 func (s *Store) Sessions() ([]Session, error) {
 	rows, err := s.db.Query(`SELECT session_id, user, org, harness, started, ended, exit_reason,
 		turn_count, tool_calls, danger_detected, taint,
-		outcome, clean_delivery, correction_turns, task_type, skills_used, duration_ms
+		outcome, clean_delivery, correction_turns, task_type, skills_used, duration_ms, files_touched
 		FROM sessions ORDER BY session_id`)
 	if err != nil {
 		return nil, err
@@ -112,7 +114,7 @@ func (s *Store) Sessions() ([]Session, error) {
 		var taint, clean int
 		if err := rows.Scan(&s.SessionID, &s.User, &s.Org, &s.Harness, &s.Started, &s.Ended, &s.ExitReason,
 			&s.TurnCount, &s.ToolCalls, &s.DangerDetected, &taint,
-			&s.Outcome, &clean, &s.CorrectionTurns, &s.TaskType, &s.SkillsUsed, &s.DurationMS); err != nil {
+			&s.Outcome, &clean, &s.CorrectionTurns, &s.TaskType, &s.SkillsUsed, &s.DurationMS, &s.FilesTouched); err != nil {
 			return nil, err
 		}
 		s.Taint = taint != 0

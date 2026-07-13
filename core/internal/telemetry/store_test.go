@@ -239,6 +239,34 @@ func TestProjectComputesAnalyticalColumns(t *testing.T) {
 	}
 }
 
+func TestProjectCountsDistinctFilesTouched(t *testing.T) {
+	mk := func(et schema.EventType, class schema.ToolClass, file string, sec int) schema.TelemetryEvent {
+		e := schema.TelemetryEvent{SessionID: "fx", User: "kyle", Harness: "claudecode",
+			EventType: et, ToolClass: class, TS: ts(sec)}
+		if file != "" {
+			e.Files = []string{file}
+		}
+		return e
+	}
+	evs := []schema.TelemetryEvent{
+		{SessionID: "fx", User: "kyle", Harness: "claudecode", EventType: schema.EventUserPrompt, TS: ts(0)},
+		mk(schema.EventPreTool, schema.ClassFileWrite, "a.go", 1),
+		mk(schema.EventPostTool, schema.ClassFileWrite, "a.go", 2),
+		mk(schema.EventPreTool, schema.ClassFileRead, "a.go", 3), // same file, not double-counted
+		mk(schema.EventPreTool, schema.ClassFileWrite, "b.go", 4),
+		mk(schema.EventPreTool, schema.ClassExec, "", 5), // exec, no file
+	}
+	log := buildLog(t, evs)
+	defer log.Close()
+	s := openStore(t)
+	if err := s.Project(log); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionsByID(t, s)["fx"].FilesTouched; got != 2 {
+		t.Errorf("files_touched = %d, want 2 (a.go, b.go)", got)
+	}
+}
+
 func TestProjectEmptyLog(t *testing.T) {
 	log := buildLog(t, nil)
 	defer log.Close()
