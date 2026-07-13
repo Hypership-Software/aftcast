@@ -57,7 +57,7 @@ func toStat(s telemetry.Session) analytics.SessionStat {
 	return analytics.SessionStat{
 		Started:         s.Started,
 		Outcome:         analytics.OutcomeClass(s.Outcome),
-		OneShot:         s.OneShot,
+		CleanDelivery:   s.CleanDelivery,
 		CorrectionTurns: s.CorrectionTurns,
 		TurnCount:       s.TurnCount,
 		ToolCalls:       s.ToolCalls,

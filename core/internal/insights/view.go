@@ -26,9 +26,9 @@ func renderHeader(agg aggregates) string {
 	if agg.danger > 0 {
 		danger = ui.Bad(danger)
 	}
-	return fmt.Sprintf("%s   sessions %d   %s   trend %+.0f%%",
-		ui.Bold(fmt.Sprintf("one-shot %.0f%%", p.OneShotRate*100)),
-		p.Sessions, danger, p.Trend*100)
+	return fmt.Sprintf("%s   corr/deliv %.1f   sessions %d   %s   trend %+.0f%%",
+		ui.Bold(fmt.Sprintf("clean %.0f%%", p.CleanDeliveryRate*100)),
+		p.CorrectionLoad, p.Sessions, danger, p.Trend*100)
 }
 
 func renderTaskMix(mix []taskCount) string {

@@ -54,25 +54,39 @@ func TestOutcomeUnknownNoCompletionSignal(t *testing.T) {
 	}
 }
 
-// --- OneShot / corrections ---
+// --- CleanDelivery / corrections ---
 
-func TestOneShotSingleTurnSuccess(t *testing.T) {
+func TestCleanDeliverySingleTurnSuccess(t *testing.T) {
 	evts := []schema.TelemetryEvent{prompt(), wrote("pkg/foo.go"), run("go", true), stop()}
-	oneShot, corrections := OneShot(evts)
-	if !oneShot || corrections != 0 {
-		t.Errorf("OneShot = (%v,%d), want (true,0)", oneShot, corrections)
+	clean, corrections := CleanDelivery(evts)
+	if !clean || corrections != 0 {
+		t.Errorf("CleanDelivery = (%v,%d), want (true,0)", clean, corrections)
 	}
 }
 
-func TestOneShotAssistedAfterFailure(t *testing.T) {
-	// turn 1 fails; turn 2 (after a new prompt) fixes it -> not one-shot, 1 correction.
+func TestCleanDeliveryMultiPromptNoCorrections(t *testing.T) {
+	// Heavy planning (three prompts, reads/discussion) then a clean successful
+	// execution with no failures. Prompt count must NOT disqualify it — the fix.
+	evts := []schema.TelemetryEvent{
+		prompt(), readf("a.go"),
+		prompt(), readf("b.go"),
+		prompt(), wrote("pkg/foo.go"), run("go", true), stop(),
+	}
+	clean, corrections := CleanDelivery(evts)
+	if !clean || corrections != 0 {
+		t.Errorf("CleanDelivery = (%v,%d), want (true,0) — planning prompts must not disqualify a clean delivery", clean, corrections)
+	}
+}
+
+func TestCleanDeliveryAssistedAfterFailure(t *testing.T) {
+	// turn 1 fails; turn 2 (after a new human prompt) fixes it -> not clean, 1 correction.
 	evts := []schema.TelemetryEvent{
 		prompt(), wrote("pkg/foo.go"), run("go", false),
 		prompt(), wrote("pkg/foo.go"), run("go", true), stop(),
 	}
-	oneShot, corrections := OneShot(evts)
-	if oneShot || corrections != 1 {
-		t.Errorf("OneShot = (%v,%d), want (false,1)", oneShot, corrections)
+	clean, corrections := CleanDelivery(evts)
+	if clean || corrections != 1 {
+		t.Errorf("CleanDelivery = (%v,%d), want (false,1)", clean, corrections)
 	}
 }
 
@@ -145,21 +159,21 @@ func TestDangerAggregatesByRule(t *testing.T) {
 
 func TestProductivityAggregates(t *testing.T) {
 	sessions := []SessionStat{
-		{Outcome: Success, OneShot: true, TurnCount: 1, ToolCalls: 4, Started: "2026-07-10T09:00:00Z"},
-		{Outcome: Success, OneShot: false, TurnCount: 3, CorrectionTurns: 1, ToolCalls: 8, Started: "2026-07-10T15:00:00Z"},
-		{Outcome: Unknown, OneShot: false, TurnCount: 2, ToolCalls: 2, Started: "2026-07-11T09:00:00Z"},
+		{Outcome: Success, CleanDelivery: true, TurnCount: 1, ToolCalls: 4, Started: "2026-07-10T09:00:00Z"},
+		{Outcome: Success, CleanDelivery: false, TurnCount: 3, CorrectionTurns: 1, ToolCalls: 8, Started: "2026-07-10T15:00:00Z"},
+		{Outcome: Unknown, CleanDelivery: false, TurnCount: 2, ToolCalls: 2, Started: "2026-07-11T09:00:00Z"},
 	}
 	p := Productivity(sessions)
 	if p.Sessions != 3 {
 		t.Errorf("Sessions = %d, want 3", p.Sessions)
 	}
-	// one-shot rate over determinate (Success/Failure) sessions: 1 of 2.
-	if p.OneShotRate != 0.5 {
-		t.Errorf("OneShotRate = %v, want 0.5", p.OneShotRate)
+	// clean-delivery rate over determinate (Success/Failure) sessions: 1 of 2.
+	if p.CleanDeliveryRate != 0.5 {
+		t.Errorf("CleanDeliveryRate = %v, want 0.5", p.CleanDeliveryRate)
 	}
-	// corrections 1 / turns 6.
-	if p.CorrectionRatio < 0.16 || p.CorrectionRatio > 0.17 {
-		t.Errorf("CorrectionRatio = %v, want ~0.1667", p.CorrectionRatio)
+	// correction load = corrections (1) over determinate sessions (2).
+	if p.CorrectionLoad != 0.5 {
+		t.Errorf("CorrectionLoad = %v, want 0.5", p.CorrectionLoad)
 	}
 }
 

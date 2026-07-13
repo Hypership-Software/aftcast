@@ -4,10 +4,10 @@ import "sort"
 
 // SkillStat is per-skill usage and how sessions using it fared.
 type SkillStat struct {
-	Skill       string
-	Sessions    int
-	OneShots    int
-	Corrections int
+	Skill           string
+	Sessions        int
+	CleanDeliveries int
+	Corrections     int
 }
 
 // SkillReport is the skill view: usage stats, task types that look like skill
@@ -37,8 +37,8 @@ func SkillInsights(sessions []SessionStat) SkillReport {
 				order = append(order, sk)
 			}
 			a.Sessions++
-			if s.OneShot {
-				a.OneShots++
+			if s.CleanDelivery {
+				a.CleanDeliveries++
 			}
 			a.Corrections += s.CorrectionTurns
 			if s.TaskType != "" {

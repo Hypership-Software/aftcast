@@ -35,7 +35,7 @@ const (
 type SessionStat struct {
 	Started         string
 	Outcome         OutcomeClass
-	OneShot         bool
+	CleanDelivery   bool
 	CorrectionTurns int
 	TurnCount       int
 	ToolCalls       int

@@ -15,7 +15,7 @@ import (
 // Project folds the audit log into the read-model, upserting session summaries
 // and mirroring events. Idempotent (sessions keyed by session_id, events by seq)
 // and rebuildable. A last-projected-seq watermark short-circuits when nothing is
-// new. Both the structural columns and the analytical columns (outcome, one_shot,
+// new. Both the structural columns and the analytical columns (outcome, clean_delivery,
 // correction_turns, task_type — computed by the analytics package) are written.
 func (s *Store) Project(log *audit.Log) error {
 	evs, err := log.Events()
@@ -63,7 +63,7 @@ func (s *Store) Project(log *audit.Log) error {
 	upsert, err := tx.Prepare(`INSERT INTO sessions
 		(session_id, user, org, harness, started, ended, exit_reason,
 		 turn_count, tool_calls, danger_detected, taint, skills_used, duration_ms,
-		 outcome, one_shot, correction_turns, task_type)
+		 outcome, clean_delivery, correction_turns, task_type)
 		VALUES (?,?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?,?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			user=excluded.user, org=excluded.org, harness=excluded.harness,
@@ -71,7 +71,7 @@ func (s *Store) Project(log *audit.Log) error {
 			turn_count=excluded.turn_count, tool_calls=excluded.tool_calls,
 			danger_detected=excluded.danger_detected, taint=excluded.taint,
 			skills_used=excluded.skills_used, duration_ms=excluded.duration_ms,
-			outcome=excluded.outcome, one_shot=excluded.one_shot,
+			outcome=excluded.outcome, clean_delivery=excluded.clean_delivery,
 			correction_turns=excluded.correction_turns, task_type=excluded.task_type`)
 	if err != nil {
 		return err
@@ -81,7 +81,7 @@ func (s *Store) Project(log *audit.Log) error {
 		if _, err := upsert.Exec(sess.SessionID, sess.User, sess.Org, sess.Harness,
 			sess.Started, sess.Ended, sess.ExitReason,
 			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint), sess.SkillsUsed, sess.DurationMS,
-			sess.Outcome, b2i(sess.OneShot), sess.CorrectionTurns, sess.TaskType); err != nil {
+			sess.Outcome, b2i(sess.CleanDelivery), sess.CorrectionTurns, sess.TaskType); err != nil {
 			return err
 		}
 	}
@@ -150,10 +150,10 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		a := byID[id]
 		a.sess.SkillsUsed = joinSorted(a.skills)
 		a.sess.DurationMS = durationMS(a.sess.Started, a.sess.Ended)
-		oneShot, corrections := analytics.OneShot(a.events)
+		clean, corrections := analytics.CleanDelivery(a.events)
 		taskType, _ := analytics.Taxonomy(a.events)
 		a.sess.Outcome = string(analytics.Outcome(a.events))
-		a.sess.OneShot = oneShot
+		a.sess.CleanDelivery = clean
 		a.sess.CorrectionTurns = corrections
 		a.sess.TaskType = taskType
 		out = append(out, *a.sess)

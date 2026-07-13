@@ -12,7 +12,7 @@ import (
 
 func sampleModel() model {
 	sessions := []telemetry.Session{
-		{SessionID: "aaaa1111", Harness: "claudecode", TaskType: "feature", Outcome: "success", OneShot: true, TurnCount: 3, ToolCalls: 4},
+		{SessionID: "aaaa1111", Harness: "claudecode", TaskType: "feature", Outcome: "success", CleanDelivery: true, TurnCount: 3, ToolCalls: 4},
 		{SessionID: "bbbb2222", Harness: "claudecode", TaskType: "bugfix", Outcome: "failure", CorrectionTurns: 2, TurnCount: 6, ToolCalls: 11},
 	}
 	provider := func(id string) ([]schema.TelemetryEvent, error) {
@@ -27,7 +27,7 @@ func TestListViewRendersSessions(t *testing.T) {
 	if !strings.Contains(v, "aaaa1111") || !strings.Contains(v, "feature") {
 		t.Fatalf("list view missing session row: %q", v)
 	}
-	if !strings.Contains(v, "one-shot") {
+	if !strings.Contains(v, "clean") {
 		t.Fatalf("list view missing header: %q", v)
 	}
 }

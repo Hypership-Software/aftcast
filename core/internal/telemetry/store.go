@@ -17,8 +17,8 @@ import (
 
 // Session is one folded summary row of the sessions table. Structural columns
 // (identity, counts, timing, taint, skills) are computed by Project; the
-// analytical columns (Outcome, OneShot, CorrectionTurns, TaskType) are populated
-// separately.
+// analytical columns (Outcome, CleanDelivery, CorrectionTurns, TaskType) are
+// populated separately.
 type Session struct {
 	SessionID       string
 	User            string
@@ -32,7 +32,7 @@ type Session struct {
 	DangerDetected  int
 	Taint           bool
 	Outcome         string
-	OneShot         bool
+	CleanDelivery   bool
 	CorrectionTurns int
 	TaskType        string
 	SkillsUsed      string
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 	danger_detected  INTEGER,
 	taint            INTEGER,
 	outcome          TEXT,
-	one_shot         INTEGER,
+	clean_delivery   INTEGER,
 	correction_turns INTEGER,
 	task_type        TEXT,
 	skills_used      TEXT,
@@ -99,7 +99,7 @@ func (s *Store) Close() error { return s.db.Close() }
 func (s *Store) Sessions() ([]Session, error) {
 	rows, err := s.db.Query(`SELECT session_id, user, org, harness, started, ended, exit_reason,
 		turn_count, tool_calls, danger_detected, taint,
-		outcome, one_shot, correction_turns, task_type, skills_used, duration_ms
+		outcome, clean_delivery, correction_turns, task_type, skills_used, duration_ms
 		FROM sessions ORDER BY session_id`)
 	if err != nil {
 		return nil, err
@@ -109,14 +109,14 @@ func (s *Store) Sessions() ([]Session, error) {
 	var out []Session
 	for rows.Next() {
 		var s Session
-		var taint, oneShot int
+		var taint, clean int
 		if err := rows.Scan(&s.SessionID, &s.User, &s.Org, &s.Harness, &s.Started, &s.Ended, &s.ExitReason,
 			&s.TurnCount, &s.ToolCalls, &s.DangerDetected, &taint,
-			&s.Outcome, &oneShot, &s.CorrectionTurns, &s.TaskType, &s.SkillsUsed, &s.DurationMS); err != nil {
+			&s.Outcome, &clean, &s.CorrectionTurns, &s.TaskType, &s.SkillsUsed, &s.DurationMS); err != nil {
 			return nil, err
 		}
 		s.Taint = taint != 0
-		s.OneShot = oneShot != 0
+		s.CleanDelivery = clean != 0
 		out = append(out, s)
 	}
 	return out, rows.Err()

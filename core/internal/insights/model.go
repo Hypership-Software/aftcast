@@ -41,7 +41,7 @@ func build(sessions []telemetry.Session, agg aggregates, events eventProvider) m
 		{Title: "id", Width: 10},
 		{Title: "task", Width: 11},
 		{Title: "outcome", Width: 8},
-		{Title: "1shot/corr", Width: 11},
+		{Title: "clean/corr", Width: 11},
 		{Title: "turns", Width: 6},
 		{Title: "tools", Width: 6},
 		{Title: "taint", Width: 5},
@@ -50,7 +50,7 @@ func build(sessions []telemetry.Session, agg aggregates, events eventProvider) m
 	rows := make([]table.Row, len(sessions))
 	for i, s := range sessions {
 		rows[i] = table.Row{
-			shortID(s.SessionID), s.TaskType, s.Outcome, oneShotCell(s),
+			shortID(s.SessionID), s.TaskType, s.Outcome, deliveryCell(s),
 			strconv.Itoa(s.TurnCount), strconv.Itoa(s.ToolCalls), taintCell(s.Taint), s.Started,
 		}
 	}
@@ -69,9 +69,9 @@ func build(sessions []telemetry.Session, agg aggregates, events eventProvider) m
 	}
 }
 
-func oneShotCell(s telemetry.Session) string {
+func deliveryCell(s telemetry.Session) string {
 	switch {
-	case s.OneShot:
+	case s.CleanDelivery:
 		return "✓"
 	case s.CorrectionTurns > 0:
 		return fmt.Sprintf("%d corr", s.CorrectionTurns)

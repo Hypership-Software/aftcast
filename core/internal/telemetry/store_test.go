@@ -202,8 +202,8 @@ func TestProjectComputesAnalyticalColumns(t *testing.T) {
 	if got.Outcome != "success" {
 		t.Errorf("outcome = %q, want success", got.Outcome)
 	}
-	if !got.OneShot {
-		t.Error("one_shot = false, want true")
+	if !got.CleanDelivery {
+		t.Error("clean_delivery = false, want true")
 	}
 	if got.CorrectionTurns != 0 {
 		t.Errorf("correction_turns = %d, want 0", got.CorrectionTurns)
