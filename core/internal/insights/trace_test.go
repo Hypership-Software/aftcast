@@ -53,6 +53,43 @@ func TestBuildTraceSegmentsTurnsAtUserPrompt(t *testing.T) {
 	}
 }
 
+func TestBuildTraceCollapseKeepsDangerAndFailed(t *testing.T) {
+	read := func() schema.TelemetryEvent {
+		e := ev(schema.EventPreTool, schema.ClassFileRead)
+		e.Files = []string{"clean.go"}
+		return e
+	}
+	danger := read()
+	danger.Risk = schema.RiskDanger
+	danger.Files = []string{".env"}
+	failPre := read()
+	failPre.ToolUseID = "fail1"
+	failPre.Files = []string{"secrets.go"}
+	failPost := ev(schema.EventPostTool, schema.ClassFileRead)
+	failPost.ToolUseID = "fail1"
+	failPost.ToolOK = schema.OutcomeFailed
+
+	evs := []schema.TelemetryEvent{
+		read(), read(), read(),
+		danger,
+		read(), read(), read(),
+		failPre, failPost,
+	}
+	rows := buildTrace(evs)[0].Rows
+	if len(rows) != 4 {
+		t.Fatalf("want 4 rows (×3, danger, ×3, failed), got %d: %+v", len(rows), rows)
+	}
+	if rows[0].CollapsedN != 3 || rows[2].CollapsedN != 3 {
+		t.Errorf("collapsed runs missing: rows[0]=%+v rows[2]=%+v", rows[0], rows[2])
+	}
+	if !rows[1].Danger || rows[1].CollapsedN != 0 || rows[1].Detail != ".env" {
+		t.Errorf("danger read must survive as its own row, got %+v", rows[1])
+	}
+	if !rows[3].Failed || rows[3].Outcome != schema.OutcomeFailed || rows[3].CollapsedN != 0 {
+		t.Errorf("failed read must survive as its own row, got %+v", rows[3])
+	}
+}
+
 func TestBuildTraceMarksFirstUntrustedAndSkill(t *testing.T) {
 	skill := ev(schema.EventPreTool, schema.ClassSkill)
 	skill.Skill = "superpowers:brainstorming"

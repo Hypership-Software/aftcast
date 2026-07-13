@@ -172,7 +172,13 @@ func isUntrustedClass(c schema.ToolClass) bool {
 	return c == schema.ClassNetFetch || c == schema.ClassNetSearch || c == schema.ClassMCP
 }
 
+// isLowSignal decides collapse eligibility. A danger/failed/untrusted row is
+// never low-signal: collapsing it would erase the ⚑/✗/⚠ signal Atlas exists to
+// surface, so it stays its own expanded row and breaks any surrounding run.
 func isLowSignal(r traceRow) bool {
+	if r.Danger || r.Failed || r.Untrusted {
+		return false
+	}
 	if r.Verb == "read" {
 		return true
 	}
@@ -183,12 +189,17 @@ func collapseRuns(rows []traceRow) []traceRow {
 	var out []traceRow
 	i := 0
 	for i < len(rows) {
+		if !isLowSignal(rows[i]) {
+			out = append(out, rows[i])
+			i++
+			continue
+		}
 		j := i + 1
 		for j < len(rows) && rows[j].Verb == rows[i].Verb && isLowSignal(rows[j]) {
 			j++
 		}
 		runLen := j - i
-		if isLowSignal(rows[i]) && runLen >= 3 {
+		if runLen >= 3 {
 			var dur int64
 			for _, r := range rows[i:j] {
 				dur += r.DurMS
