@@ -59,6 +59,7 @@ type noTaint struct{}
 
 func (noTaint) Apply(*schema.Descriptor)                 {}
 func (noTaint) MarkFromResult(string, schema.Descriptor) {}
+func (noTaint) IsTainted(string) bool                    { return false }
 
 type capRecorder struct {
 	mu     sync.Mutex

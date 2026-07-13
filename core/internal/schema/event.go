@@ -10,18 +10,22 @@ import "encoding/json"
 // explicit frozen list, so eval-only Descriptor context (argv, cwd, mcp split)
 // can never leak into the log.
 type TelemetryEvent struct {
-	V         int         `json:"v"`
-	TS        string      `json:"ts"`
-	Seq       uint64      `json:"seq"`
-	SessionID string      `json:"session_id"`
-	OrgID     string      `json:"org_id,omitempty"`
-	User      string      `json:"user"`
-	Host      string      `json:"host"`
-	Harness   string      `json:"harness"`
-	EventType EventType   `json:"event_type"`
-	TurnIndex int         `json:"turn_index"`
-	ToolClass ToolClass   `json:"tool_class,omitempty"`
-	ToolRaw   string      `json:"tool_raw,omitempty"`
+	V         int       `json:"v"`
+	TS        string    `json:"ts"`
+	Seq       uint64    `json:"seq"`
+	SessionID string    `json:"session_id"`
+	OrgID     string    `json:"org_id,omitempty"`
+	User      string    `json:"user"`
+	Host      string    `json:"host"`
+	Harness   string    `json:"harness"`
+	EventType EventType `json:"event_type"`
+	TurnIndex int       `json:"turn_index"`
+	ToolClass ToolClass `json:"tool_class,omitempty"`
+	ToolRaw   string    `json:"tool_raw,omitempty"`
+	// ToolUseID pairs a pre_tool with its post_tool (Claude Code sends the same id
+	// on both), so latency and outcome attribute to the right call. Added later per
+	// the append-only rule.
+	ToolUseID string      `json:"tool_use_id,omitempty"`
 	Risk      Risk        `json:"risk,omitempty"`
 	RuleID    string      `json:"rule_id,omitempty"`
 	ToolOK    ToolOutcome `json:"tool_ok,omitempty"`

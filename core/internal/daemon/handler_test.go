@@ -21,10 +21,14 @@ func (f *fakeEval) Eval(schema.Descriptor) (schema.Risk, string) {
 	return f.v, f.id
 }
 
-type fakeTaint struct{ applyCalls, markCalls int }
+type fakeTaint struct {
+	applyCalls, markCalls int
+	tainted               bool
+}
 
 func (f *fakeTaint) Apply(*schema.Descriptor)                 { f.applyCalls++ }
 func (f *fakeTaint) MarkFromResult(string, schema.Descriptor) { f.markCalls++ }
+func (f *fakeTaint) IsTainted(string) bool                    { return f.tainted }
 
 type fakeRecorder struct{ events []schema.TelemetryEvent }
 
@@ -41,6 +45,28 @@ func preToolReq() Request {
 	return Request{
 		Event:      schema.TelemetryEvent{EventType: schema.EventPreTool, SessionID: "s", ToolClass: schema.ClassExec},
 		Descriptor: schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"rm"}},
+	}
+}
+
+// A tainted session stamps Taint onto the recorded event, so taint is durable in
+// the log (not just in-memory). Both the pre_tool and non-pre paths must stamp it.
+func TestHandleStampsSessionTaint(t *testing.T) {
+	rec := &fakeRecorder{}
+	h := handlerWith(&fakeEval{v: schema.RiskUnknown}, &fakeTaint{tainted: true}, rec)
+	if _, err := h.Handle(preToolReq()); err != nil {
+		t.Fatal(err)
+	}
+	stop := Request{Event: schema.TelemetryEvent{EventType: schema.EventStop, SessionID: "s"}}
+	if _, err := h.Handle(stop); err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.events) != 2 {
+		t.Fatalf("recorded %d events, want 2", len(rec.events))
+	}
+	for i, e := range rec.events {
+		if !e.Taint {
+			t.Errorf("event %d (%s) Taint = false, want true", i, e.EventType)
+		}
 	}
 }
 

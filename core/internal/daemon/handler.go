@@ -28,6 +28,7 @@ type (
 	Tainter interface {
 		Apply(d *schema.Descriptor)
 		MarkFromResult(sessionID string, d schema.Descriptor)
+		IsTainted(sessionID string) bool
 	}
 	Recorder interface {
 		Record(e schema.TelemetryEvent) error
@@ -47,10 +48,13 @@ type Handler struct{ deps Deps }
 func NewHandler(d Deps) *Handler { return &Handler{deps: d} }
 
 // Handle records every event; only pre_tool consults the classifier and taint
-// ledger.
+// ledger. Session taint is stamped onto every recorded event so it is durable in
+// the log, not just in the in-memory ledger.
 func (h *Handler) Handle(req Request) (Response, error) {
 	if req.Event.EventType != schema.EventPreTool {
-		if err := h.deps.Record.Record(req.Event); err != nil {
+		ev := req.Event
+		ev.Taint = h.deps.Taint.IsTainted(ev.SessionID)
+		if err := h.deps.Record.Record(ev); err != nil {
 			return Response{}, err
 		}
 		return Response{}, nil
@@ -68,6 +72,7 @@ func (h *Handler) Handle(req Request) (Response, error) {
 	ev := req.Event
 	ev.Risk = risk
 	ev.RuleID = ruleID
+	ev.Taint = h.deps.Taint.IsTainted(d.SessionID)
 	if err := h.deps.Record.Record(ev); err != nil {
 		return Response{}, err
 	}

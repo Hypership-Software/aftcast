@@ -27,6 +27,7 @@ type ccHook struct {
 	ToolName      string          `json:"tool_name"`
 	ToolInput     json.RawMessage `json:"tool_input"`
 	ToolUseID     string          `json:"tool_use_id"`
+	DurationMS    int64           `json:"duration_ms"`
 	Error         string          `json:"error"`
 	// PromptID is present on every hook (parent and subagent); AgentID/AgentType
 	// are present only when a subagent made the call, so AgentType distinguishes
@@ -59,6 +60,8 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 		Harness:   "claudecode",
 		EventType: eventType(event),
 		ToolRaw:   h.ToolName,
+		ToolUseID: h.ToolUseID,
+		LatencyMS: h.DurationMS,
 		PromptID:  h.PromptID,
 		AgentID:   h.AgentID,
 		Subagent:  h.AgentType,

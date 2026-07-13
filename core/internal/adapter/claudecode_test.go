@@ -150,6 +150,16 @@ func TestNormalizeMainAgentHasPromptNoSubagent(t *testing.T) {
 	}
 }
 
+func TestNormalizeCapturesToolUseIDAndLatency(t *testing.T) {
+	_, e := normalize(t, "posttooluse-bash-success.json")
+	if e.ToolUseID != "toolu_SAMPLEsuccess0001" {
+		t.Errorf("ToolUseID = %q, want toolu_SAMPLEsuccess0001", e.ToolUseID)
+	}
+	if e.LatencyMS != 9950 {
+		t.Errorf("LatencyMS = %d, want 9950", e.LatencyMS)
+	}
+}
+
 func TestGetUnknownHarness(t *testing.T) {
 	if _, ok := Get("nope"); ok {
 		t.Error("Get returned an adapter for an unknown harness")
