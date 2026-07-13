@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/Hypership-Software/atlas/internal/hookcmd"
+	"github.com/Hypership-Software/atlas/internal/insights"
 	"github.com/Hypership-Software/atlas/internal/install"
 	"github.com/Hypership-Software/atlas/internal/meta"
 	"github.com/Hypership-Software/atlas/internal/svc"
@@ -23,6 +24,7 @@ commands:
   init         wire Claude Code hooks and start the observer daemon
   status       daemon + hook health at a glance
   doctor       detailed wiring checks
+  insights     browse captured sessions and analytics
   stop         stop the background daemon
   uninstall    remove hooks and stop the daemon
   daemon run   run the daemon in the foreground
@@ -82,6 +84,16 @@ func run(args []string) int {
 			return 0
 		}
 		return 1
+	case "insights":
+		store, err := svc.OpenReadModel("")
+		if err != nil {
+			return fail("insights", err)
+		}
+		defer store.Close()
+		if err := insights.Run(store); err != nil {
+			return fail("insights", err)
+		}
+		return 0
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s\n", args[0], helpText())
 		return 2
