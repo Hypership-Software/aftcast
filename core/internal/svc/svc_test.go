@@ -151,6 +151,58 @@ func TestRunObservesOverHTTP(t *testing.T) {
 	}
 }
 
+// TestRunObservesUserPromptExpansionOverHTTP: a real slash-command hook payload
+// POSTed to the deployed HTTP path is normalized and recorded with the command
+// name + expansion type — and the sibling args/prompt content never reaches the
+// log (ADR-011 metadata-only).
+func TestRunObservesUserPromptExpansionOverHTTP(t *testing.T) {
+	home := t.TempDir()
+	info, cancel, errc := startDaemon(t, "svc-expand", svc.Options{Home: home})
+
+	payload := `{"hook_event_name":"UserPromptExpansion","session_id":"s-expand","expansion_type":"slash_command","command_name":"plan","command_args":"ship with the prod api key","prompt":"planning... ship with the prod api key"}`
+	resp, err := http.Post(info.HTTPURL, "application/json", strings.NewReader(payload))
+	if err != nil {
+		t.Fatalf("POST hook: %v", err)
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+
+	cancel()
+	if err := <-errc; err != nil {
+		t.Fatalf("Run returned error on shutdown: %v", err)
+	}
+
+	key, _ := os.ReadFile(filepath.Join(home, "audit.key"))
+	l, err := audit.NewLog(filepath.Join(home, "log"), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	var buf bytes.Buffer
+	if err := l.Export(&buf, time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "prod api key") {
+		t.Fatalf("command args/prompt content leaked into the log: %s", buf.String())
+	}
+	evs, err := l.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got schema.TelemetryEvent
+	for _, e := range evs {
+		if e.SessionID == "s-expand" && e.EventType == schema.EventPromptExpansion {
+			got = e
+		}
+	}
+	if got.Command != "plan" || got.ExpansionType != "slash_command" {
+		t.Errorf("recorded expansion = {command:%q type:%q}, want {plan slash_command}", got.Command, got.ExpansionType)
+	}
+}
+
 // TestRunDrainsSpoolOnStartup: telemetry spooled while the daemon was down is
 // folded into the log at startup and the spool file is cleared.
 func TestRunDrainsSpoolOnStartup(t *testing.T) {
