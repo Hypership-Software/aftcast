@@ -176,6 +176,32 @@ func TestProjectAggregatesTaintAndSkills(t *testing.T) {
 	}
 }
 
+// A skill stays attributed to its session even if a post_tool event arrives
+// without the name (an older-CLI artifact): the pre event supplies it, and the
+// two events are the same invocation by tool_use_id. Guards the projection
+// against regressing to depend on the post carrying the name.
+func TestProjectSkillAttributedWhenPostLacksName(t *testing.T) {
+	mk := func(et schema.EventType, skill string, sec int) schema.TelemetryEvent {
+		return schema.TelemetryEvent{SessionID: "sk", User: "kyle", Harness: "claudecode",
+			EventType: et, ToolClass: schema.ClassSkill, Skill: skill, ToolUseID: "toolu_pair1", TS: ts(sec)}
+	}
+	evs := []schema.TelemetryEvent{
+		{SessionID: "sk", User: "kyle", Harness: "claudecode", EventType: schema.EventUserPrompt, TS: ts(0)},
+		mk(schema.EventPreTool, "superpowers:writing-plans", 1),
+		mk(schema.EventPostTool, "", 2),
+		{SessionID: "sk", User: "kyle", Harness: "claudecode", EventType: schema.EventStop, TS: ts(3)},
+	}
+	log := buildLog(t, evs)
+	defer log.Close()
+	s := openStore(t)
+	if err := s.Project(log); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionsByID(t, s)["sk"].SkillsUsed; got != "superpowers:writing-plans" {
+		t.Errorf("skills = %q, want superpowers:writing-plans", got)
+	}
+}
+
 func TestProjectComputesAnalyticalColumns(t *testing.T) {
 	mk := func(et schema.EventType, class schema.ToolClass, verbs, files []string, ok schema.ToolOutcome, sec int) schema.TelemetryEvent {
 		return schema.TelemetryEvent{SessionID: "s3", User: "kyle", Harness: "claudecode",

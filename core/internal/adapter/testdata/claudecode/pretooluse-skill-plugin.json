@@ -1,0 +1,12 @@
+{
+  "session_id": "synthetic-skill-plugin-0001",
+  "cwd": "/home/dev/project",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Skill",
+  "tool_input": {
+    "skill": "marketing-skills:cold-email",
+    "args": "draft outreach"
+  },
+  "tool_use_id": "toolu_pluginskill0001"
+}

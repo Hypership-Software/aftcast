@@ -1,9 +1,11 @@
 package adapter
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Hypership-Software/atlas/internal/schema"
@@ -114,6 +116,54 @@ func TestNormalizeSkillName(t *testing.T) {
 	}
 	if e.Skill != "superpowers:brainstorming" {
 		t.Errorf("skill = %q, want superpowers:brainstorming", e.Skill)
+	}
+}
+
+// A PostToolUse Skill payload echoes tool_input (Claude Code's documented post
+// schema carries tool_input + tool_response), so the skill name, latency, and
+// outcome all attribute to the post event — no pre→post name-recovery needed.
+func TestNormalizeSkillNameOnPostTool(t *testing.T) {
+	_, e := normalize(t, "posttooluse-skill.json")
+	if e.EventType != schema.EventPostTool {
+		t.Errorf("event type = %v, want post_tool", e.EventType)
+	}
+	if e.Skill != "superpowers:brainstorming" {
+		t.Errorf("skill = %q, want superpowers:brainstorming", e.Skill)
+	}
+	if e.ToolOK != schema.OutcomeOK {
+		t.Errorf("tool_ok = %v, want ok", e.ToolOK)
+	}
+	if e.LatencyMS != 4 {
+		t.Errorf("latency_ms = %d, want 4", e.LatencyMS)
+	}
+	// ADR-011: capture the skill name only, never the args content.
+	if blob, _ := json.Marshal(e); strings.Contains(string(blob), "design the thing") {
+		t.Errorf("event leaked skill args content: %s", blob)
+	}
+}
+
+// A skill invocation's pre and post events share a tool_use_id and both carry the
+// name, so an invocation is a single pairable unit for latency/outcome.
+func TestNormalizeSkillPrePostPairByToolUseID(t *testing.T) {
+	_, pre := normalize(t, "pretooluse-skill.json")
+	_, post := normalize(t, "posttooluse-skill.json")
+	if pre.ToolUseID == "" || pre.ToolUseID != post.ToolUseID {
+		t.Fatalf("tool_use_id pre=%q post=%q, want equal and non-empty", pre.ToolUseID, post.ToolUseID)
+	}
+	if pre.Skill != post.Skill || pre.Skill == "" {
+		t.Errorf("skill pre=%q post=%q, want equal and non-empty", pre.Skill, post.Skill)
+	}
+}
+
+// Plugin skills are namespaced values in the same tool_input.skill key, so the
+// value-agnostic extractor captures them unchanged.
+func TestNormalizePluginSkillName(t *testing.T) {
+	d, e := normalize(t, "pretooluse-skill-plugin.json")
+	if d.ToolClass != schema.ClassSkill {
+		t.Errorf("class = %v, want skill", d.ToolClass)
+	}
+	if e.Skill != "marketing-skills:cold-email" {
+		t.Errorf("skill = %q, want marketing-skills:cold-email", e.Skill)
 	}
 }
 
