@@ -44,6 +44,10 @@ type ccHook struct {
 
 var exitCodeRe = regexp.MustCompile(`^Exit code (\d+)`)
 
+// envAssignRe matches a leading shell environment assignment (NAME=value) so its
+// value is never mistaken for the command verb.
+var envAssignRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
+
 func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema.TelemetryEvent, error) {
 	var h ccHook
 	if err := json.Unmarshal(raw, &h); err != nil {
@@ -158,8 +162,8 @@ func extract(d *schema.Descriptor, class schema.ToolClass, h ccHook) {
 			toks = strings.Fields(in.Command)
 		}
 		d.Argv = toks
-		if len(toks) > 0 {
-			d.Verbs = []string{commandVerb(toks[0])}
+		if v := commandVerb(toks); v != "" {
+			d.Verbs = []string{v}
 		}
 	case schema.ClassFileRead, schema.ClassFileWrite:
 		var in struct {
@@ -188,11 +192,20 @@ func extract(d *schema.Descriptor, class schema.ToolClass, h ccHook) {
 	}
 }
 
-// commandVerb strips any directory and a trailing .exe, so "/usr/bin/git" and
-// "git.exe" both become "git".
-func commandVerb(tok string) string {
-	base := path.Base(filepath.ToSlash(tok))
-	return strings.TrimSuffix(base, ".exe")
+// commandVerb returns the invoked program's name. It skips leading NAME=value
+// environment assignments (a `API_KEY=… cmd` prefix — the assignment value is
+// untrusted content that must never reach the logged verb) and strips any
+// directory and a trailing .exe, so "/usr/bin/git" and "git.exe" both become
+// "git". Returns "" when the command is only assignments.
+func commandVerb(toks []string) string {
+	for _, tok := range toks {
+		if envAssignRe.MatchString(tok) {
+			continue
+		}
+		base := path.Base(filepath.ToSlash(tok))
+		return strings.TrimSuffix(base, ".exe")
+	}
+	return ""
 }
 
 func splitMCP(tool string) (server, name string) {

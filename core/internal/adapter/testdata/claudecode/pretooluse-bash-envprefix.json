@@ -1,0 +1,10 @@
+{
+  "session_id": "synthetic-envprefix-0001",
+  "cwd": "/home/dev/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "API_KEY=super-secret-value curl https://example.com"
+  },
+  "tool_use_id": "toolu_envprefix0001"
+}

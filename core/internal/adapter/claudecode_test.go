@@ -56,6 +56,19 @@ func TestNormalizeBashPreTool(t *testing.T) {
 	}
 }
 
+// A leading NAME=value env assignment is not the command, and its value is
+// untrusted content: the verb must be the real program, and the value must never
+// reach the logged event (verbs is persisted; ADR-011 metadata-only).
+func TestNormalizeBashEnvPrefixVerbNoLeak(t *testing.T) {
+	d, e := normalize(t, "pretooluse-bash-envprefix.json")
+	if !reflect.DeepEqual(d.Verbs, []string{"curl"}) {
+		t.Errorf("verbs = %v, want [curl]", d.Verbs)
+	}
+	if blob, _ := json.Marshal(e); strings.Contains(string(blob), "super-secret-value") {
+		t.Errorf("env-assignment value leaked into recorded event: %s", blob)
+	}
+}
+
 func TestNormalizePostToolUseFailureCarriesExitCode(t *testing.T) {
 	_, e := normalize(t, "posttoolusefailure-bash.json")
 	if e.EventType != schema.EventPostTool {
