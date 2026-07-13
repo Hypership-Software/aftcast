@@ -7,6 +7,10 @@ package telemetry
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
+
+	"github.com/Hypership-Software/atlas/internal/schema"
 
 	_ "modernc.org/sqlite"
 )
@@ -114,6 +118,30 @@ func (s *Store) Sessions() ([]Session, error) {
 		s.Taint = taint != 0
 		s.OneShot = oneShot != 0
 		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// EventsForSession returns a session's events in seq order, decoded from the
+// events table's raw column (the marshaled TelemetryEvent Project stored).
+func (s *Store) EventsForSession(id string) ([]schema.TelemetryEvent, error) {
+	rows, err := s.db.Query(`SELECT raw FROM events WHERE session_id = ? ORDER BY seq`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []schema.TelemetryEvent
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		var e schema.TelemetryEvent
+		if err := json.Unmarshal([]byte(raw), &e); err != nil {
+			return nil, fmt.Errorf("telemetry: decode event: %w", err)
+		}
+		out = append(out, e)
 	}
 	return out, rows.Err()
 }
