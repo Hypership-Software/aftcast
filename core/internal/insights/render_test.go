@@ -98,11 +98,41 @@ func TestAggregateMatchesProductivity(t *testing.T) {
 func TestRenderHeaderAndEmpty(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	h := renderHeader(aggregate([]telemetry.Session{{Outcome: "success", CleanDelivery: true}}, time.Now()))
-	if !strings.Contains(h, "clean") {
-		t.Fatalf("header missing clean-delivery rate: %q", h)
+	for _, want := range []string{"last 7 days", "Landed clean", "no rework needed", "fixes / session", "flagged actions"} {
+		if !strings.Contains(h, want) {
+			t.Fatalf("header missing %q:\n%s", want, h)
+		}
 	}
 	if !strings.Contains(renderEmpty(), "No sessions") {
 		t.Fatalf("empty state missing copy")
+	}
+}
+
+func TestRenderNeedsAttentionCapAndOrder(t *testing.T) {
+	now := time.Date(2026, 7, 13, 15, 0, 0, 0, time.UTC)
+	mk := func(id string, hoursAgo int) telemetry.Session {
+		return telemetry.Session{SessionID: id, ToolCalls: 5, Taint: true,
+			Started: now.Add(time.Duration(-hoursAgo) * time.Hour).Format(time.RFC3339Nano)}
+	}
+	sessions := []telemetry.Session{mk("old", 5), mk("newest", 1), mk("mid2", 3), mk("mid1", 2)}
+	lines := renderNeedsAttention(sessions, aggregates{}, now)
+	if len(lines) != 3 {
+		t.Fatalf("want 3 lines (capped at 3), got %d: %v", len(lines), lines)
+	}
+	if !strings.Contains(lines[0], "1h ago") {
+		t.Errorf("most-recent-first: line[0] = %q, want the 1h-ago session", lines[0])
+	}
+	for _, l := range lines {
+		if strings.Contains(l, "5h ago") {
+			t.Errorf("oldest flagged session should be dropped by the cap, but appears: %q", l)
+		}
+	}
+}
+
+func TestAttentionBlockFallbackWhenEmpty(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	if got := renderAttentionBlock(nil); !strings.Contains(got, "nothing needs attention") {
+		t.Fatalf("empty attention block should show fallback, got %q", got)
 	}
 }
 

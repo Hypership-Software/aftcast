@@ -12,6 +12,35 @@ func ev(et schema.EventType, class schema.ToolClass) schema.TelemetryEvent {
 	return schema.TelemetryEvent{EventType: et, ToolClass: class}
 }
 
+func TestIsLowSignalExcludesAnnotatedRows(t *testing.T) {
+	if !isLowSignal(traceRow{Verb: "read"}) {
+		t.Fatal("a plain read row should be low-signal (collapsible)")
+	}
+	for name, r := range map[string]traceRow{
+		"danger":    {Verb: "read", Danger: true},
+		"failed":    {Verb: "read", Failed: true},
+		"untrusted": {Verb: "read", Untrusted: true},
+	} {
+		if isLowSignal(r) {
+			t.Errorf("%s row must not be low-signal — collapsing it would erase its ⚑/✗/⚠ annotation", name)
+		}
+	}
+}
+
+func TestRenderTraceKeepsFailedOrphanRow(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	// Outcome "" → verdict header shows "—", so any ✗ in the output comes from the
+	// orphaned post row, proving the drop-empty-row rule doesn't discard a signal.
+	sess := telemetry.Session{SessionID: "s", TaskType: "testing"}
+	orphan := ev(schema.EventPostTool, schema.ClassExec)
+	orphan.ToolUseID = "orphan"
+	orphan.ToolOK = schema.OutcomeFailed
+	out := renderTrace(sess, []schema.TelemetryEvent{orphan})
+	if !strings.Contains(out, "✗") {
+		t.Fatalf("a failed orphan post must still render (its ✗ is the signal), not be dropped:\n%s", out)
+	}
+}
+
 func TestBuildTracePairsPrePostByToolUseID(t *testing.T) {
 	pre := ev(schema.EventPreTool, schema.ClassExec)
 	pre.ToolUseID = "t1"

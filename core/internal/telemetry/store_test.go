@@ -101,6 +101,25 @@ func sessionsByID(t *testing.T, s *Store) map[string]Session {
 	return m
 }
 
+func TestProjectCountsMultipleFilesPerEvent(t *testing.T) {
+	multi := schema.TelemetryEvent{SessionID: "fx", User: "kyle", Harness: "claudecode",
+		EventType: schema.EventPreTool, ToolClass: schema.ClassFileRead, TS: ts(1),
+		Files: []string{"a.go", "b.go", "a.go"}}
+	evs := []schema.TelemetryEvent{
+		{SessionID: "fx", User: "kyle", Harness: "claudecode", EventType: schema.EventUserPrompt, TS: ts(0)},
+		multi,
+	}
+	log := buildLog(t, evs)
+	defer log.Close()
+	s := openStore(t)
+	if err := s.Project(log); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionsByID(t, s)["fx"].FilesTouched; got != 2 {
+		t.Errorf("files_touched = %d, want 2 (a.go, b.go across one event) — foldSessions must range every entry of e.Files, not just index 0", got)
+	}
+}
+
 func TestProjectFoldsTwoSessions(t *testing.T) {
 	log := buildLog(t, twoSessions())
 	defer log.Close()
