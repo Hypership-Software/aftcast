@@ -13,16 +13,24 @@ func TestDigestHighlightsShippedWithoutCommandContent(t *testing.T) {
 	session := telemetry.Session{SessionID: "ship1", TaskType: "feature", Shipped: true, ToolCalls: 1}
 	pre := ev(schema.EventPreTool, schema.ClassExec)
 	pre.ToolUseID = "push1"
-	pre.Verbs = []string{"git"}
+	pre.Verbs = []string{"git", "push", "origin", "feature/coach"}
+	pre.ToolRaw = "git push origin feature/coach"
+	pre.Command = "git push origin feature/coach"
 	post := ev(schema.EventPostTool, schema.ClassExec)
 	post.ToolUseID = "push1"
 	post.ToolOK = schema.OutcomeOK
 	post.DeliverySignal = schema.DeliveryGitPush
+	post.Command = "git push origin feature/coach"
 	out := renderTrace(session, []schema.TelemetryEvent{pre, post})
-	for _, want := range []string{"shipped", "successful git push"} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("digest missing %q:\n%s", want, out)
+	wantHighlight := highlightLine("↑", "shipped", "successful git push")
+	foundHighlight := false
+	for _, line := range strings.Split(out, "\n") {
+		if line == wantHighlight {
+			foundHighlight = true
 		}
+	}
+	if !foundHighlight {
+		t.Fatalf("digest did not render fixed generic highlight %q:\n%s", wantHighlight, out)
 	}
 	for _, banned := range []string{"origin", "feature/coach", "git push origin"} {
 		if strings.Contains(out, banned) {

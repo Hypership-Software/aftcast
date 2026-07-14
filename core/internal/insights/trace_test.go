@@ -26,6 +26,17 @@ func TestBuildTraceCarriesShippedFromPairedPost(t *testing.T) {
 	}
 }
 
+func TestBuildTraceCarriesShippedFromOrphanPost(t *testing.T) {
+	post := ev(schema.EventPostTool, schema.ClassExec)
+	post.ToolUseID = "orphan-push"
+	post.ToolOK = schema.OutcomeOK
+	post.DeliverySignal = schema.DeliveryGitPush
+	rows := buildTrace([]schema.TelemetryEvent{post})[0].Rows
+	if len(rows) != 1 || !rows[0].Shipped {
+		t.Fatalf("orphan push rows = %+v", rows)
+	}
+}
+
 func TestIsLowSignalExcludesAnnotatedRows(t *testing.T) {
 	if !isLowSignal(traceRow{Verb: "read"}) {
 		t.Fatal("a plain read row should be low-signal (collapsible)")

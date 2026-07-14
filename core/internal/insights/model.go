@@ -64,9 +64,10 @@ type model struct {
 	sortMode    sortMode
 	hiddenCount int
 
-	cursor int // selected row into m.sessions
-	width  int // last known terminal width; 0 until the first WindowSizeMsg
-	height int
+	cursor      int // selected row into m.sessions
+	width       int // last known terminal width; 0 until the first WindowSizeMsg
+	height      int
+	heightKnown bool
 
 	mode       mode
 	preHelp    mode // where ? was pressed from, so esc/? returns there
@@ -270,6 +271,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.heightKnown = true
 		m.detail.Width = msg.Width
 		if h := msg.Height - 4; h > 0 {
 			m.detail.Height = h
@@ -384,48 +386,92 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
+	var view string
 	if m.mode == modeHelp {
-		return renderHelp()
+		view = renderHelp()
+	} else if m.mode == modeDetail {
+		view = renderDetail(m.detail.View())
+	} else if len(m.all) == 0 {
+		view = renderEmptyList(m.coach, renderScopedEmpty(m.scopeGlobal, len(m.history) > 0))
+	} else {
+		view = m.renderListView()
 	}
-	if len(m.all) == 0 {
-		return renderScopedEmpty(m.scopeGlobal, len(m.global) > 0)
+	if !m.heightKnown {
+		return view
 	}
-	if m.mode == modeDetail {
-		return renderDetail(m.detail.View())
-	}
-	tableView := renderSessionTable(m.buildColumns(), m.cursor, m.width, m.tableRowLimit())
-	if note := hiddenNote(m.hiddenCount); note != "" {
-		tableView += "\n" + note
-	}
-	return renderList(m.agg, m.coach, tableView)
+	return fitViewHeight(view, m.height)
 }
 
-func (m model) tableRowLimit() int {
-	if m.height <= 0 {
-		return maxTableRows
+func (m model) renderListView() string {
+	cols := m.buildColumns()
+	fullTable := renderSessionTable(cols, m.cursor, m.width, maxTableRows)
+	if note := hiddenNote(m.hiddenCount); note != "" {
+		fullTable += "\n" + note
 	}
-	fixed := strings.Count(renderList(m.agg, m.coach, ""), "\n") + 1
-	if m.hiddenCount > 0 {
-		fixed++
+	full := renderList(m.agg, m.coach, fullTable)
+	if !m.heightKnown || renderedLines(full) <= m.height {
+		return full
 	}
-	budget := m.height - fixed
-	if budget < 1 {
-		return 1
+	maxRows := len(m.sessions)
+	if maxRows > maxTableRows {
+		maxRows = maxTableRows
 	}
-	limit := budget
-	if limit > maxTableRows {
-		limit = maxTableRows
-	}
-	for limit > 1 {
-		start, end := windowBounds(m.cursor, len(m.sessions), limit)
-		lines := end - start
-		if start > 0 || end < len(m.sessions) {
-			lines++
+	var smallest string
+	for rows := maxRows; rows >= 0; rows-- {
+		tableView := renderCompactSessionTable(cols, m.cursor, m.width, rows, m.hiddenCount)
+		candidate := compactView(renderList(m.agg, m.coach, tableView))
+		smallest = candidate
+		if renderedLines(candidate) <= m.height {
+			return candidate
 		}
-		if lines <= budget {
-			return limit
-		}
-		limit--
 	}
-	return 1
+	if status := renderCompactSessionStatus(cols, m.cursor, m.width, m.hiddenCount); status != "" {
+		candidate := compactView(renderList(m.agg, m.coach, status))
+		smallest = candidate
+		if renderedLines(candidate) <= m.height {
+			return candidate
+		}
+	}
+	candidate := compactView(renderList(m.agg, m.coach, ""))
+	smallest = candidate
+	if renderedLines(candidate) <= m.height {
+		return candidate
+	}
+	return smallest
+}
+
+func renderedLines(view string) int {
+	if view == "" {
+		return 0
+	}
+	return strings.Count(view, "\n") + 1
+}
+
+func compactView(view string) string {
+	lines := strings.Split(view, "\n")
+	compact := lines[:0]
+	for _, line := range lines {
+		if line != "" {
+			compact = append(compact, line)
+		}
+	}
+	return strings.Join(compact, "\n")
+}
+
+func fitViewHeight(view string, height int) string {
+	if height <= 0 {
+		return ""
+	}
+	if renderedLines(view) <= height {
+		return view
+	}
+	view = compactView(view)
+	lines := strings.Split(view, "\n")
+	if len(lines) <= height {
+		return view
+	}
+	if height == 1 {
+		return lines[0]
+	}
+	return strings.Join(append(lines[:height-1], lines[len(lines)-1]), "\n")
 }

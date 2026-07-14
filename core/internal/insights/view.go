@@ -175,13 +175,21 @@ func renderAttentionBlock(lines []string) string {
 	return strings.Join(lines, "\n")
 }
 
-func renderScopedEmpty(global, globalHasData bool) string {
-	if !global && globalHasData {
+func renderScopedEmpty(global, hasHistory bool) string {
+	if !global && hasHistory {
 		return "No Atlas activity for this project yet.\n" +
 			ui.Hint("Press g to view all projects · q to quit")
 	}
+	if global && hasHistory {
+		return "No Atlas activity in the last 7 days.\n" +
+			ui.Hint("? help · q quit")
+	}
 	return "Nothing captured yet — start a Claude Code session in a wired project.\n" +
 		ui.Hint("Check `gated status` if you expected data.")
+}
+
+func renderEmptyList(coach analytics.PlanAssociation, empty string) string {
+	return renderCoach(coach) + "\n\n" + empty
 }
 
 func renderCoach(a analytics.PlanAssociation) string {
@@ -257,11 +265,15 @@ func hiddenNote(n int) string {
 	if n <= 0 {
 		return ""
 	}
+	return ui.Hint("… " + hiddenSummary(n) + " (press h to show)")
+}
+
+func hiddenSummary(n int) string {
 	word := "sessions"
 	if n == 1 {
 		word = "session"
 	}
-	return ui.Hint(fmt.Sprintf("… %d empty %s hidden (press h to show)", n, word))
+	return fmt.Sprintf("%d empty %s hidden", n, word)
 }
 
 func verdictOutcome(sess telemetry.Session) string {
