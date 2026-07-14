@@ -52,8 +52,12 @@ type TelemetryEvent struct {
 	AgentID    string `json:"agent_id,omitempty"`
 	PromptID   string `json:"prompt_id,omitempty"`
 	PolicyHash string `json:"policy_hash,omitempty"`
-	PrevHash   string `json:"prev_hash,omitempty"`
-	Hash       string `json:"hash,omitempty"`
+	// Project is an opaque 12-hex hash of the project's identity (normalized git
+	// remote or canonical path) — never the path or URL itself. Added later per the
+	// append-only rule; omitempty keeps pre-field events' hashes intact.
+	Project  string `json:"project_id,omitempty"`
+	PrevHash string `json:"prev_hash,omitempty"`
+	Hash     string `json:"hash,omitempty"`
 }
 
 // Canonical returns deterministic sorted-key JSON with the Hash field excluded —
