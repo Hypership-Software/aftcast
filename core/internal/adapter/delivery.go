@@ -9,7 +9,10 @@ import (
 	"github.com/google/shlex"
 )
 
-func deliverySignal(command string) schema.DeliverySignal {
+func successfulDeliverySignal(tool, command string) schema.DeliverySignal {
+	if !isPOSIXShell(tool) {
+		return ""
+	}
 	segments, operators, ok := parseShellCommand(command)
 	if !ok {
 		return ""
@@ -40,6 +43,15 @@ func deliverySignal(command string) schema.DeliverySignal {
 		return schema.DeliveryGitPush
 	}
 	return ""
+}
+
+func isPOSIXShell(tool string) bool {
+	switch programName(tool) {
+	case "bash", "sh", "dash", "zsh", "ksh":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseShellCommand(command string) ([][]string, []string, bool) {
@@ -205,12 +217,27 @@ subcommand:
 	if i >= len(segment) || segment[i] != "push" {
 		return false
 	}
+	options := true
 	for _, arg := range segment[i+1:] {
-		if arg == "-n" || arg == "-d" || strings.HasPrefix(arg, "--dry-run") || strings.HasPrefix(arg, "--delete") || strings.HasPrefix(arg, ":") || strings.HasPrefix(arg, "+:") {
+		if options && arg == "--" {
+			options = false
+			continue
+		}
+		if options && unsafePushOption(arg) {
+			return false
+		}
+		if strings.HasPrefix(arg, ":") || strings.HasPrefix(arg, "+:") {
 			return false
 		}
 	}
 	return true
+}
+
+func unsafePushOption(arg string) bool {
+	if strings.HasPrefix(arg, "--dry-run") || strings.HasPrefix(arg, "--delete") {
+		return true
+	}
+	return len(arg) > 1 && arg[0] == '-' && arg[1] != '-' && strings.ContainsAny(arg[1:], "nd")
 }
 
 func programName(tok string) string {
