@@ -201,14 +201,10 @@ func collapseRuns(rows []traceRow) []traceRow {
 		}
 		runLen := j - i
 		if runLen >= 3 {
-			var dur int64
-			for _, r := range rows[i:j] {
-				dur += r.DurMS
-			}
 			out = append(out, traceRow{
 				Verb:       rows[i].Verb,
 				Detail:     fmt.Sprintf("×%d files", runLen),
-				DurMS:      dur,
+				DurMS:      sumDur(rows[i:j]),
 				CollapsedN: runLen,
 			})
 		} else {
