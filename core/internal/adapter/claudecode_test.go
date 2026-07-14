@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/Hypership-Software/atlas/internal/project"
 	"github.com/Hypership-Software/atlas/internal/schema"
 )
 
@@ -256,5 +258,22 @@ func TestNormalizeCapturesToolUseIDAndLatency(t *testing.T) {
 func TestGetUnknownHarness(t *testing.T) {
 	if _, ok := Get("nope"); ok {
 		t.Error("Get returned an adapter for an unknown harness")
+	}
+}
+
+func TestNormalize_StampsProjectFromCwd(t *testing.T) {
+	dir := t.TempDir()
+	raw := []byte(`{"session_id":"s1","cwd":` + strconv.Quote(dir) +
+		`,"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"a.txt"}}`)
+	desc, ev, err := cc(t).Normalize("", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRoot, wantID := project.Identify(dir)
+	if wantID == "" || ev.Project != wantID {
+		t.Errorf("ev.Project = %q, want %q", ev.Project, wantID)
+	}
+	if desc.ProjectRoot != wantRoot {
+		t.Errorf("desc.ProjectRoot = %q, want %q", desc.ProjectRoot, wantRoot)
 	}
 }
