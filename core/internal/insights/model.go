@@ -68,7 +68,11 @@ func flagsColumnWidth(sessions []telemetry.Session) int {
 }
 
 type model struct {
-	// all is the full (7-day-filtered) session set passed to build; it never
+	global      []telemetry.Session // full 7-day set (all projects)
+	scope       Scope
+	scopeGlobal bool
+
+	// all is the active scope's (7-day-filtered) session set; it never
 	// reorders or drops rows on its own — hide/sort only ever read from it.
 	all         []telemetry.Session
 	sessions    []telemetry.Session // visible+sorted, in lockstep with table rows: m.sessions[i] is table row i.
@@ -88,10 +92,10 @@ type model struct {
 	showRaw    bool
 }
 
-func build(sessions []telemetry.Session, agg aggregates, events eventProvider, now time.Time) model {
+func build(sessions []telemetry.Session, scope Scope, events eventProvider, now time.Time) model {
 	m := model{
-		all:    sessions,
-		agg:    agg,
+		global: sessions,
+		scope:  scope,
 		events: events,
 		now:    now,
 		mode:   modeList,
@@ -101,7 +105,37 @@ func build(sessions []telemetry.Session, agg aggregates, events eventProvider, n
 		),
 		detail: viewport.New(80, 20),
 	}
+	m.scopeGlobal = scope.StartGlobal || scope.ProjectID == ""
+	return m.applyScope()
+}
+
+// applyScope recomputes the active session set and its aggregates for the current
+// scope, then rebuilds the table rows.
+func (m model) applyScope() model {
+	m.all = scopeSessions(m.global, m.scope.ProjectID, m.scopeGlobal)
+	m.agg = aggregate(m.all, m.now)
+	m.agg.scopeLabel = scopeLabel(m.scope, m.scopeGlobal)
 	return m.rebuildRows()
+}
+
+func scopeSessions(all []telemetry.Session, projectID string, global bool) []telemetry.Session {
+	if global || projectID == "" {
+		return all
+	}
+	out := make([]telemetry.Session, 0, len(all))
+	for _, s := range all {
+		if s.ProjectID == projectID {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func scopeLabel(scope Scope, global bool) string {
+	if global || scope.Name == "" {
+		return "all projects"
+	}
+	return scope.Name
 }
 
 // rebuildRows recomputes the visible+sorted session slice from m.all and pushes
@@ -115,15 +149,23 @@ func (m model) rebuildRows() model {
 
 	rows := make([]table.Row, len(visible))
 	for i, s := range visible {
-		rows[i] = sessionRow(s, m.now)
+		r := sessionRow(s, m.now)
+		if m.scopeGlobal {
+			r = append(table.Row{m.projectCell(s)}, r...)
+		}
+		rows[i] = r
 	}
 
-	cols := make([]table.Column, len(sessionColumns))
-	copy(cols, sessionColumns)
-	cols[len(cols)-1].Width = flagsColumnWidth(m.all)
+	cols := m.columns()
 
 	m.sessions = visible
 	m.hiddenCount = len(m.all) - len(visible)
+	// bubbles/table's SetColumns/SetRows each re-render the viewport immediately
+	// against whatever the OTHER field currently holds. Since the Project column
+	// makes the row width vary by scope, a stale wider/narrower pairing during
+	// this swap indexes out of range — clear rows first so neither setter ever
+	// renders mismatched cols/rows.
+	m.table.SetRows(nil)
 	m.table.SetColumns(cols)
 	m.table.SetRows(rows)
 	// SetHeight reserves one line for the header internally, so +1 here is what
@@ -131,6 +173,32 @@ func (m model) rebuildRows() model {
 	m.table.SetHeight(clampHeight(len(rows)) + 1)
 	m.table.SetCursor(0)
 	return m
+}
+
+// columns returns the table columns for the active scope: the global view gets a
+// leading Project column; the last column (Flags) is auto-widened either way.
+func (m model) columns() []table.Column {
+	cols := make([]table.Column, 0, len(sessionColumns)+1)
+	if m.scopeGlobal {
+		cols = append(cols, table.Column{Title: "Project", Width: 14})
+	}
+	cols = append(cols, sessionColumns...)
+	cols[len(cols)-1].Width = flagsColumnWidth(m.all)
+	return cols
+}
+
+// projectCell labels a session's project in the global view: the current project
+// shows its real (live-derived) name, other projects their short id, and
+// pre-field sessions "unknown". Never a path — only the opaque id or the live name.
+func (m model) projectCell(s telemetry.Session) string {
+	switch {
+	case s.ProjectID == "":
+		return "unknown"
+	case s.ProjectID == m.scope.ProjectID && m.scope.Name != "":
+		return m.scope.Name
+	default:
+		return shortID(s.ProjectID)
+	}
 }
 
 // visibleSessions filters out 0-call sessions unless showEmpty is set. It
@@ -280,6 +348,18 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "s":
 		m.sortMode = m.sortMode.next()
 		return m.rebuildRows(), nil
+	case "g":
+		if !m.scopeGlobal {
+			m.scopeGlobal = true
+			return m.applyScope(), nil
+		}
+		return m, nil
+	case "p":
+		if m.scopeGlobal && m.scope.ProjectID != "" {
+			m.scopeGlobal = false
+			return m.applyScope(), nil
+		}
+		return m, nil
 	case "enter":
 		if len(m.sessions) == 0 {
 			return m, nil
@@ -332,7 +412,7 @@ func (m model) View() string {
 		return renderHelp()
 	}
 	if len(m.all) == 0 {
-		return renderEmpty()
+		return renderScopedEmpty(m.scopeGlobal, len(m.global) > 0)
 	}
 	if m.mode == modeDetail {
 		return renderDetail(m.detail.View())

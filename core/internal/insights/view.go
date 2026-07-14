@@ -47,7 +47,11 @@ func renderHeader(agg aggregates) string {
 }
 
 func headerContext(agg aggregates) string {
-	line := fmt.Sprintf("Atlas — last 7 days · %d sessions", agg.profile.Sessions)
+	label := agg.scopeLabel
+	if label == "" {
+		label = "all projects"
+	}
+	line := fmt.Sprintf("Atlas — %s · last 7 days · %d sessions", label, agg.profile.Sessions)
 	if agg.user != "" {
 		line += " · " + agg.user
 	}
@@ -206,9 +210,13 @@ func renderAttentionBlock(lines []string) string {
 	return strings.Join(lines, "\n")
 }
 
-func renderEmpty() string {
-	return "No sessions captured yet — run a Claude Code session with the gate active.\n" +
-		ui.Hint("If you expected data, check `gated status` for a capture gap.")
+func renderScopedEmpty(global, globalHasData bool) string {
+	if !global && globalHasData {
+		return "No Atlas activity for this project yet.\n" +
+			ui.Hint("Press g to view all projects · q to quit")
+	}
+	return "Nothing captured yet — start a Claude Code session in a wired project.\n" +
+		ui.Hint("Check `gated status` if you expected data.")
 }
 
 func renderList(agg aggregates, tableView string) string {
@@ -222,7 +230,7 @@ func renderList(agg aggregates, tableView string) string {
 		renderAttentionBlock(agg.needsAttention),
 		"",
 		tableView,
-		ui.Hint("↑↓ (k/j) move · ↵ open · s sort · h show/hide empty · ? help · q quit"),
+		ui.Hint("↑↓ (k/j) move · ↵ open · s sort · h show/hide empty · g/p scope · ? help · q quit"),
 	}, "\n")
 }
 
@@ -233,7 +241,7 @@ func renderHelp() string {
 	return strings.Join([]string{
 		ui.Bold("Keybindings — help"),
 		"",
-		"↑↓ (k/j) move · ↵ open · esc back · s sort · h show/hide empty · r raw (detail) · ? help · q quit",
+		"↑↓ (k/j) move · ↵ open · esc back · s sort · h show/hide empty · g/p scope · r raw (detail) · ? help · q quit",
 		"",
 		"⚠ untrusted input · ⚑ flagged actions · ★ skills",
 		"",
