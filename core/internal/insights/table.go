@@ -141,6 +141,31 @@ func renderSessionTable(cols []tableColumn, cursor, width, maxRows int) string {
 	return b.String()
 }
 
+func renderCompactSessionTable(cols []tableColumn, cursor, width, maxRows, hidden int) string {
+	view := renderSessionTable(cols, cursor, width, maxRows)
+	if hidden <= 0 {
+		return view
+	}
+	lines := strings.Split(view, "\n")
+	for i, line := range lines {
+		if strings.Contains(ansi.Strip(line), "more sessions") {
+			lines[i] += ui.Hint(" · " + hiddenSummary(hidden) + " · h to show")
+			return strings.Join(lines, "\n")
+		}
+	}
+	return view + "\n" + hiddenNote(hidden)
+}
+
+func renderCompactSessionStatus(cols []tableColumn, cursor, width, hidden int) string {
+	for _, line := range strings.Split(renderCompactSessionTable(cols, cursor, width, 0, hidden), "\n") {
+		plain := ansi.Strip(line)
+		if strings.Contains(plain, "more sessions") || strings.Contains(plain, "empty session") {
+			return line
+		}
+	}
+	return ""
+}
+
 // joinCells renders one line: each column's cell padded to its width, joined by
 // the column gap. row == -1 renders the header titles.
 func joinCells(cols []tableColumn, widths []int, row int) string {

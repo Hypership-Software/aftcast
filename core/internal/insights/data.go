@@ -58,7 +58,7 @@ func coachWindow(sessions []telemetry.Session) []analytics.SessionStat {
 	out := make([]analytics.SessionStat, 0, coachWindowSize)
 	for _, session := range ordered {
 		stat := toStat(session)
-		if !analytics.DeliveryEligible(stat) || stat.PlanStyle == analytics.PlanUnknown {
+		if !analytics.DeliveryEligible(stat) || (stat.PlanStyle != analytics.PlanFirst && stat.PlanStyle != analytics.PlanDirect) {
 			continue
 		}
 		out = append(out, stat)

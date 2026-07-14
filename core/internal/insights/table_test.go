@@ -128,3 +128,23 @@ func TestRenderSessionTableHonoursExplicitRowLimit(t *testing.T) {
 		t.Fatalf("limited table missing scroll notes:\n%s", out)
 	}
 }
+
+func TestRenderSessionTableHonoursZeroAndOneRowLimits(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	cells := []string{"row1", "row2", "row3"}
+	for _, tt := range []struct {
+		limit int
+		want  int
+	}{{0, 0}, {1, 1}} {
+		out := renderSessionTable([]tableColumn{{title: "When", cells: cells}}, 1, 120, tt.limit)
+		visible := 0
+		for _, cell := range cells {
+			if strings.Contains(out, cell) {
+				visible++
+			}
+		}
+		if visible != tt.want {
+			t.Fatalf("limit %d rendered %d rows, want %d:\n%s", tt.limit, visible, tt.want, out)
+		}
+	}
+}

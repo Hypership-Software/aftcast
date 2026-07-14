@@ -52,6 +52,146 @@ func TestListFitsTwentyFourLineTerminalWithScrollNotes(t *testing.T) {
 	}
 }
 
+func complexHeightModel() model {
+	tasks := []string{"feature", "bugfix", "docs"}
+	sessions := make([]telemetry.Session, 10)
+	for i := range sessions {
+		session := telemetry.Session{
+			SessionID:    fmt.Sprintf("complex-%d", i),
+			ProjectID:    "project-two",
+			TaskType:     tasks[i%len(tasks)],
+			ToolCalls:    2,
+			FilesTouched: 1,
+			Started:      sampleNow.Add(-time.Duration(i) * time.Hour).Format(time.RFC3339Nano),
+		}
+		if i < 3 {
+			session.Taint = true
+			session.DangerDetected = 1
+		}
+		sessions[i] = session
+	}
+	sessions[len(sessions)-1].ToolCalls = 0
+	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m.coach = analytics.PlanAssociation{Status: analytics.CoachRecommend, Window: 24, TaskType: "feature", Total: 24,
+		Planned: 10, Direct: 14, PlannedRate: .8, DirectRate: .55}
+	m.cursor = 4
+	return m
+}
+
+func renderedLineCount(view string) int {
+	if view == "" {
+		return 0
+	}
+	return strings.Count(view, "\n") + 1
+}
+
+func TestComplexRecommendationListFitsTwentyFourLines(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	m := complexHeightModel()
+	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 24}))
+	view := m.View()
+	if lines := renderedLineCount(view); lines > m.height {
+		t.Fatalf("complex list rendered %d lines into height %d:\n%s", lines, m.height, view)
+	}
+	for _, want := range []string{
+		"What the AI worked on", "feature", "bugfix", "docs", "Needs attention", "flagged command",
+		"What's moving your needle", "Try next", "Project", "more sessions above", "more sessions below",
+		"empty session hidden", "q quit",
+	} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("complex height-constrained list missing %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestKnownTinyHeightsNeverOverflow(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	for _, height := range []int{0, 1, 2, 3, 8, 16, 23} {
+		t.Run(fmt.Sprintf("height_%d", height), func(t *testing.T) {
+			m := complexHeightModel()
+			m = must(m.Update(tea.WindowSizeMsg{Width: 80, Height: height}))
+			if lines := renderedLineCount(m.View()); lines > height {
+				t.Fatalf("rendered %d lines into height %d:\n%s", lines, height, m.View())
+			}
+		})
+	}
+}
+
+func TestSingleLineTableBudgetKeepsCombinedStatus(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	m := complexHeightModel()
+	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 19}))
+	view := m.View()
+	if lines := renderedLineCount(view); lines > m.height {
+		t.Fatalf("single-line table budget rendered %d lines into height %d:\n%s", lines, m.height, view)
+	}
+	for _, want := range []string{"more sessions above", "more sessions below", "empty session hidden", "q quit"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("single-line table budget omitted %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestUnknownHeightRetainsNormalList(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	view := complexHeightModel().View()
+	for _, want := range []string{"What the AI worked on", "Try next", "4h ago", "q quit"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("unknown-height list missing %q:\n%s", want, view)
+		}
+	}
+}
+
+func historicalCoachSessions(now time.Time) []telemetry.Session {
+	var sessions []telemetry.Session
+	for i := 0; i < 20; i++ {
+		style := "direct_to_edit"
+		shipped := false
+		if i < 10 {
+			style = "plan_first"
+			shipped = true
+		}
+		sessions = append(sessions, telemetry.Session{
+			SessionID: fmt.Sprintf("history-%d", i), ProjectID: "project-one", TaskType: "feature",
+			CaptureVersion: 2, FilesChanged: 1, ToolCalls: 2, PlanStyle: style, Shipped: shipped,
+			Started: now.Add(-8*24*time.Hour - time.Duration(i)*time.Hour).Format(time.RFC3339Nano),
+		})
+	}
+	return sessions
+}
+
+func TestHistoricalCoachRendersWhenGlobalOperationalScopeIsEmpty(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	m := build(historicalCoachSessions(sampleNow), Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	view := m.View()
+	if !strings.Contains(view, renderCoach(m.coach)) {
+		t.Fatalf("empty operational view omitted full-history coach:\n%s", view)
+	}
+	if !strings.Contains(view, "No Atlas activity in the last 7 days") || strings.Contains(view, "Nothing captured") {
+		t.Fatalf("historical empty view used dishonest onboarding copy:\n%s", view)
+	}
+}
+
+func TestCoachRemainsVisibleAcrossPopulatedAndEmptyScopeToggles(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	sessions := historicalCoachSessions(sampleNow)
+	sessions = append(sessions, telemetry.Session{SessionID: "recent-other", ProjectID: "project-two", TaskType: "docs",
+		ToolCalls: 2, Started: sampleNow.Add(-time.Hour).Format(time.RFC3339Nano)})
+	m := build(sessions, Scope{ProjectID: "project-one", Name: "project-one"}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	wantCoach := renderCoach(m.coach)
+	if !strings.Contains(m.View(), wantCoach) {
+		t.Fatalf("empty project view omitted coach:\n%s", m.View())
+	}
+	m = must(m.Update(key("g")))
+	if !strings.Contains(m.View(), wantCoach) || !strings.Contains(m.View(), "docs") {
+		t.Fatalf("populated global view changed or omitted coach:\n%s", m.View())
+	}
+	m = must(m.Update(key("p")))
+	if !strings.Contains(m.View(), wantCoach) || !strings.Contains(m.View(), "No Atlas activity for this project") {
+		t.Fatalf("empty project view after p changed or omitted coach:\n%s", m.View())
+	}
+}
+
 var sampleNow = time.Date(2026, 7, 13, 15, 0, 0, 0, time.UTC)
 
 func sampleModel() model {

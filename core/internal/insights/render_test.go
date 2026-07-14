@@ -78,14 +78,16 @@ func TestRenderCoachStates(t *testing.T) {
 		name   string
 		input  analytics.PlanAssociation
 		want   []string
-		banned string
+		banned []string
 	}{
+		{"zero", analytics.PlanAssociation{Status: analytics.CoachLearning},
+			[]string{"What's moving your needle", "Atlas is learning", "no comparable delivery sessions yet"}, []string{"Try next"}},
 		{"learning", analytics.PlanAssociation{Status: analytics.CoachLearning, Window: 12, TaskType: "feature", Total: 12, Planned: 4, Direct: 8},
-			[]string{"latest 12 comparable sessions", "Atlas is learning", "12 comparable", "plan-first 4", "direct-to-edit 8"}, "Try next"},
+			[]string{"latest 12 comparable sessions", "Atlas is learning", "12 comparable", "plan-first 4", "direct-to-edit 8"}, []string{"Try next"}},
 		{"no pattern", analytics.PlanAssociation{Status: analytics.CoachNoPattern, Window: 20, TaskType: "feature", Total: 20, Planned: 10, Direct: 10, PlannedRate: .6, DirectRate: .5},
-			[]string{"No reliable plan-first pattern yet", "60%", "50%"}, "Try next"},
+			[]string{"No reliable plan-first pattern yet", "60%", "50%"}, []string{"Try next"}},
 		{"recommend", analytics.PlanAssociation{Status: analytics.CoachRecommend, Window: 24, TaskType: "feature", Total: 24, Planned: 10, Direct: 14, PlannedRate: .8, DirectRate: .55},
-			[]string{"latest 24 comparable sessions", "associated with more shipped sessions", "80%", "55%", "Try next", "Plan before editing"}, "caused"},
+			[]string{"latest 24 comparable sessions", "associated with more shipped sessions", "80%", "55%", "Try next", "Plan before editing"}, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -95,10 +97,37 @@ func TestRenderCoachStates(t *testing.T) {
 					t.Fatalf("missing %q:\n%s", want, got)
 				}
 			}
-			if tt.banned != "" && strings.Contains(got, tt.banned) {
-				t.Fatalf("render contained %q:\n%s", tt.banned, got)
+			for _, banned := range append(tt.banned, "cause", "led to", "resulted in", "results in") {
+				if strings.Contains(strings.ToLower(got), banned) {
+					t.Fatalf("render contained %q:\n%s", banned, got)
+				}
 			}
 		})
+	}
+}
+
+func TestHelpIncludesExactCoachDefinitions(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	lines := map[string]bool{}
+	for _, line := range strings.Split(renderHelp(), "\n") {
+		lines[line] = true
+	}
+	for _, want := range []string{
+		"Shipped = a successful git push in a delivery session",
+		"Delivery session = changed files or successfully pushed, captured with v2 telemetry",
+		"Observed plan-first = explicit planning, or a completed preparatory prompt before editing",
+	} {
+		if !lines[want] {
+			t.Fatalf("help missing exact definition line %q:\n%s", want, renderHelp())
+		}
+	}
+}
+
+func TestVerdictOutcomePrefersShippedOverContradictoryOutcome(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	got := verdictOutcome(telemetry.Session{Shipped: true, Outcome: "failure", CorrectionTurns: 3})
+	if got != "↑ shipped" {
+		t.Fatalf("verdictOutcome = %q, want shipped precedence", got)
 	}
 }
 
@@ -167,6 +196,9 @@ func TestRenderScopedEmpty(t *testing.T) {
 	}
 	if got := renderScopedEmpty(true, false); !strings.Contains(got, "Nothing captured") {
 		t.Errorf("onboarding state missing copy:\n%s", got)
+	}
+	if got := renderScopedEmpty(true, true); !strings.Contains(got, "No Atlas activity in the last 7 days") {
+		t.Errorf("historical empty state missing honest time-window copy:\n%s", got)
 	}
 }
 
