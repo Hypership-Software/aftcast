@@ -1,9 +1,11 @@
 package insights
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/atlas/internal/telemetry"
 )
 
 func ev(et schema.EventType, class schema.ToolClass) schema.TelemetryEvent {
@@ -87,6 +89,28 @@ func TestBuildTraceCollapseKeepsDangerAndFailed(t *testing.T) {
 	}
 	if !rows[3].Failed || rows[3].Outcome != schema.OutcomeFailed || rows[3].CollapsedN != 0 {
 		t.Errorf("failed read must survive as its own row, got %+v", rows[3])
+	}
+}
+
+func TestBuildTraceCollapsesGrepRunsCaseInsensitive(t *testing.T) {
+	var evs []schema.TelemetryEvent
+	for i := 0; i < 3; i++ {
+		e := ev(schema.EventPreTool, schema.ClassOther)
+		e.ToolRaw = "Grep"
+		evs = append(evs, e)
+	}
+	rows := buildTrace(evs)[0].Rows
+	if len(rows) != 1 || rows[0].CollapsedN < 3 || rows[0].Verb != "Grep" {
+		t.Fatalf("want 1 collapsed Grep row (CollapsedN>=3, Verb=Grep), got %+v", rows)
+	}
+
+	t.Setenv("NO_COLOR", "1")
+	out := renderTrace(telemetry.Session{SessionID: "s"}, evs)
+	if !strings.Contains(out, "Grep  ×3 files") {
+		t.Errorf("collapsed Grep run must render under its own verb:\n%s", out)
+	}
+	if strings.Contains(out, "read  ×3 files") {
+		t.Errorf("collapsed Grep run mislabeled as read:\n%s", out)
 	}
 }
 

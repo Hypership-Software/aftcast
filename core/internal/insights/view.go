@@ -324,11 +324,7 @@ func maxRowDur(rows []traceRow) int64 {
 }
 
 func renderTraceRow(r traceRow, maxDur int64) string {
-	verb := r.Verb
-	if r.CollapsedN > 0 {
-		verb = "read"
-	}
-	head := strings.TrimRight(rowGlyph(r)+" "+verb, " ")
+	head := strings.TrimRight(rowGlyph(r)+" "+r.Verb, " ")
 	if head == "" && r.Detail == "" {
 		return ""
 	}
