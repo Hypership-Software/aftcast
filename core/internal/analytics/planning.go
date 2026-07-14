@@ -85,20 +85,16 @@ func preparatoryClass(class schema.ToolClass) bool {
 }
 
 func explicitPlanningMarker(e schema.TelemetryEvent) bool {
-	return strings.EqualFold(e.ToolRaw, "EnterPlanMode") || planningSkill(e.Skill) || planningCommand(e.Command)
+	return strings.EqualFold(e.ToolRaw, "EnterPlanMode") || planningName(e.Skill) || planningName(e.Command)
 }
 
-func planningSkill(name string) bool {
+func planningName(name string) bool {
 	switch explicitName(name) {
-	case "brainstorming", "writing-plans":
+	case "plan", "brainstorming", "writing-plans":
 		return true
 	default:
 		return false
 	}
-}
-
-func planningCommand(name string) bool {
-	return explicitName(name) == "plan"
 }
 
 func explicitName(name string) string {
