@@ -234,10 +234,21 @@ subcommand:
 }
 
 func unsafePushOption(arg string) bool {
-	if strings.HasPrefix(arg, "--dry-run") || strings.HasPrefix(arg, "--delete") {
+	if strings.HasPrefix(arg, "--d") {
 		return true
 	}
-	return len(arg) > 1 && arg[0] == '-' && arg[1] != '-' && strings.ContainsAny(arg[1:], "nd")
+	if len(arg) < 2 || arg[0] != '-' || arg[1] == '-' {
+		return false
+	}
+	for i := 1; i < len(arg); i++ {
+		switch arg[i] {
+		case 'n', 'd':
+			return true
+		case 'o':
+			return false
+		}
+	}
+	return false
 }
 
 func programName(tok string) string {
