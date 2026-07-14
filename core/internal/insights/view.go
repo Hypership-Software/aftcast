@@ -3,7 +3,6 @@ package insights
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 	"time"
@@ -14,11 +13,7 @@ import (
 	"github.com/Hypership-Software/atlas/internal/ui"
 )
 
-const (
-	maxBar      = 40
-	cleanBarLen = 20
-	trendEps    = 0.0001
-)
+const maxBar = 40
 
 func shortID(id string) string {
 	if len(id) > 8 {
@@ -40,8 +35,8 @@ func renderHeader(agg aggregates) string {
 	return strings.Join([]string{
 		headerContext(agg),
 		"",
-		renderLandedClean(agg.profile),
-		renderRework(agg.profile),
+		renderShipped(agg.shipping),
+		renderIntervention(agg.profile),
 		renderRisk(agg),
 	}, "\n")
 }
@@ -58,45 +53,15 @@ func headerContext(agg aggregates) string {
 	return line
 }
 
-func renderLandedClean(p analytics.Profile) string {
-	rate := p.CleanDeliveryRate
-	filled := int(math.Round(rate * cleanBarLen))
-	if filled > cleanBarLen {
-		filled = cleanBarLen
+func renderShipped(p analytics.ShippedProfile) string {
+	if p.Eligible == 0 {
+		return fmt.Sprintf("%s no observable delivery sessions yet", metricLabel("Shipped"))
 	}
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", cleanBarLen-filled)
-	return fmt.Sprintf("%s %s  %.0f%%%s    %d of %d sessions, no rework needed",
-		metricLabel("Landed clean"), bar, rate*100, trendClause(p), p.CleanCount, p.Sessions)
+	return fmt.Sprintf("%s %d of %d delivery sessions  %.0f%%", metricLabel("Shipped"), p.Shipped, p.Eligible, p.Rate*100)
 }
 
-func renderRework(p analytics.Profile) string {
-	return fmt.Sprintf("%s %.1f fixes / session", metricLabel("Rework"), p.CorrectionLoad)
-}
-
-// trendClause reads Profile.Trend, the clean-delivery-rate change (later half
-// minus earlier half). analytics.trend returns 0 both for "flat" and for
-// "too few sessions to compute"; we can't tell them apart, so a 0 trend omits
-// the clause rather than fabricate a "→ flat" that might be a non-computation.
-func trendClause(p analytics.Profile) string {
-	prev := clampPercent(int(math.Round((p.CleanDeliveryRate - p.Trend) * 100)))
-	switch {
-	case p.Trend > trendEps:
-		return fmt.Sprintf("  ↑ up from %d%%", prev)
-	case p.Trend < -trendEps:
-		return fmt.Sprintf("  ↓ down from %d%%", prev)
-	default:
-		return ""
-	}
-}
-
-func clampPercent(n int) int {
-	if n < 0 {
-		return 0
-	}
-	if n > 100 {
-		return 100
-	}
-	return n
+func renderIntervention(p analytics.Profile) string {
+	return fmt.Sprintf("%s %.1f human fixes / completed session", metricLabel("Intervention"), p.CorrectionLoad)
 }
 
 func renderRisk(agg aggregates) string {

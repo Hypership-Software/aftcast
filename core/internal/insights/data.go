@@ -21,6 +21,7 @@ type taskCount struct {
 
 type aggregates struct {
 	profile        analytics.Profile
+	shipping       analytics.ShippedProfile
 	skills         analytics.SkillReport
 	danger         int
 	tainted        int
@@ -80,12 +81,13 @@ func aggregate(sessions []telemetry.Session, now time.Time) aggregates {
 	}
 
 	agg := aggregates{
-		profile: analytics.Productivity(stats),
-		skills:  analytics.SkillInsights(stats),
-		danger:  danger,
-		tainted: tainted,
-		taskMix: mix,
-		user:    user,
+		profile:  analytics.Productivity(stats),
+		shipping: analytics.ShippingProfile(stats),
+		skills:   analytics.SkillInsights(stats),
+		danger:   danger,
+		tainted:  tainted,
+		taskMix:  mix,
+		user:     user,
 	}
 	agg.needsAttention = renderNeedsAttention(sessions, agg, now)
 	return agg
@@ -96,6 +98,10 @@ func toStat(s telemetry.Session) analytics.SessionStat {
 		Started:         s.Started,
 		Outcome:         analytics.OutcomeClass(s.Outcome),
 		CleanDelivery:   s.CleanDelivery,
+		CaptureVersion:  s.CaptureVersion,
+		PlanStyle:       analytics.PlanStyle(s.PlanStyle),
+		FilesChanged:    s.FilesChanged,
+		Shipped:         s.Shipped,
 		CorrectionTurns: s.CorrectionTurns,
 		TurnCount:       s.TurnCount,
 		ToolCalls:       s.ToolCalls,

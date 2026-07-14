@@ -47,6 +47,7 @@ const (
 )
 
 type model struct {
+	history     []telemetry.Session
 	global      []telemetry.Session // full 7-day set (all projects)
 	scope       Scope
 	scopeGlobal bool
@@ -75,12 +76,13 @@ type model struct {
 
 func build(sessions []telemetry.Session, scope Scope, events eventProvider, now time.Time) model {
 	m := model{
-		global: sessions,
-		scope:  scope,
-		events: events,
-		now:    now,
-		mode:   modeList,
-		detail: viewport.New(80, 20),
+		history: sessions,
+		global:  recentSessions(sessions, now),
+		scope:   scope,
+		events:  events,
+		now:     now,
+		mode:    modeList,
+		detail:  viewport.New(80, 20),
 	}
 	m.scopeGlobal = scope.StartGlobal || scope.ProjectID == ""
 	return m.applyScope()
@@ -227,8 +229,10 @@ func taskCell(t string) string {
 func outcomeCell(s telemetry.Session) string {
 	class := analytics.OutcomeClass(s.Outcome)
 	switch {
+	case s.Shipped:
+		return ui.OK("↑ shipped")
 	case s.CleanDelivery:
-		return ui.OK("✓ clean")
+		return ui.OK("✓ no intervention")
 	case class == analytics.Success && s.CorrectionTurns > 0:
 		return ui.Warn(fmt.Sprintf("✓ %d fix", s.CorrectionTurns))
 	case class == analytics.Failure:
