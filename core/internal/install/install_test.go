@@ -233,6 +233,13 @@ func TestResolveSettingsPathHonorsEnv(t *testing.T) {
 	}
 }
 
+func TestHooksWired_AbsentSettings(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nope.json")
+	if HooksWired(Options{SettingsPath: missing}) {
+		t.Fatal("no settings file → not wired")
+	}
+}
+
 func TestDoctorReportsWiringGaps(t *testing.T) {
 	dir := t.TempDir()
 	settings := filepath.Join(dir, "settings.json")

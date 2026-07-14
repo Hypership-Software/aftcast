@@ -227,6 +227,22 @@ func Status(opts Options, w io.Writer) bool {
 	return up && wired && portMatch
 }
 
+// HooksWired reports whether Atlas's hooks are present in Claude Code settings,
+// without printing. The bare `gated` command uses it to show a "run gated init"
+// hint instead of an empty dashboard when Atlas was never set up.
+func HooksWired(opts Options) bool {
+	settingsPath, err := resolveSettingsPath(opts.SettingsPath)
+	if err != nil {
+		return false
+	}
+	orig, err := readSettings(settingsPath)
+	if err != nil {
+		return false
+	}
+	http, session := hooksPresent(orig)
+	return http && session
+}
+
 // --- helpers ---
 
 func hookConfig(opts Options) (HookConfig, error) {

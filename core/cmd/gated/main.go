@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/Hypership-Software/atlas/internal/hookcmd"
 	"github.com/Hypership-Software/atlas/internal/insights"
 	"github.com/Hypership-Software/atlas/internal/install"
 	"github.com/Hypership-Software/atlas/internal/meta"
+	"github.com/Hypership-Software/atlas/internal/project"
 	"github.com/Hypership-Software/atlas/internal/svc"
 	"github.com/Hypership-Software/atlas/internal/ui"
 )
@@ -35,8 +37,7 @@ func main() { os.Exit(run(os.Args[1:])) }
 
 func run(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, helpText())
-		return 2
+		return insightsCmd(nil)
 	}
 	switch args[0] {
 	case "help", "-h", "--help":
@@ -85,19 +86,42 @@ func run(args []string) int {
 		}
 		return 1
 	case "insights":
-		store, err := svc.OpenReadModel("")
-		if err != nil {
-			return fail("insights", err)
-		}
-		defer store.Close()
-		if err := insights.Run(store, insights.Scope{}); err != nil {
-			return fail("insights", err)
-		}
-		return 0
+		return insightsCmd(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s\n", args[0], helpText())
 		return 2
 	}
+}
+
+// insightsCmd opens the project-scoped insights TUI, falling back to the global
+// view with --all. It guards on HooksWired so a never-set-up Atlas shows a hint
+// instead of an empty dashboard — this is also what bare `gated` dispatches to.
+func insightsCmd(args []string) int {
+	global := false
+	for _, a := range args {
+		if a == "--all" {
+			global = true
+		}
+	}
+	if !install.HooksWired(install.Options{}) {
+		fmt.Fprintln(os.Stdout, ui.Hint("Atlas isn't set up yet — run `gated init`."))
+		return 0
+	}
+	wd, _ := os.Getwd()
+	root, id := project.Identify(wd)
+	name := ""
+	if root != "" {
+		name = filepath.Base(root)
+	}
+	store, err := svc.OpenReadModel("")
+	if err != nil {
+		return fail("insights", err)
+	}
+	defer store.Close()
+	if err := insights.Run(store, insights.Scope{ProjectID: id, Name: name, StartGlobal: global}); err != nil {
+		return fail("insights", err)
+	}
+	return 0
 }
 
 // fail prints a styled error line to stderr and returns exit code 1.
