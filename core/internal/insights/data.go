@@ -12,7 +12,10 @@ import (
 	"github.com/Hypership-Software/atlas/internal/telemetry"
 )
 
-const recentWindow = 7 * 24 * time.Hour
+const (
+	recentWindow    = 7 * 24 * time.Hour
+	coachWindowSize = 60
+)
 
 type taskCount struct {
 	task string
@@ -44,6 +47,23 @@ func recentSessions(sessions []telemetry.Session, now time.Time) []telemetry.Ses
 		}
 		if now.Sub(t) <= recentWindow {
 			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func coachWindow(sessions []telemetry.Session) []analytics.SessionStat {
+	ordered := append([]telemetry.Session(nil), sessions...)
+	sort.SliceStable(ordered, func(i, j int) bool { return startedUnixNano(ordered[i]) > startedUnixNano(ordered[j]) })
+	out := make([]analytics.SessionStat, 0, coachWindowSize)
+	for _, session := range ordered {
+		stat := toStat(session)
+		if !analytics.DeliveryEligible(stat) || stat.PlanStyle == analytics.PlanUnknown {
+			continue
+		}
+		out = append(out, stat)
+		if len(out) == coachWindowSize {
+			break
 		}
 	}
 	return out

@@ -17,6 +17,7 @@ type traceRow struct {
 	Failed     bool
 	Danger     bool
 	Untrusted  bool
+	Shipped    bool
 	CollapsedN int
 	Subagent   string
 }
@@ -96,6 +97,7 @@ func buildRows(seg []schema.TelemetryEvent, untrustedSeen *bool) ([]traceRow, in
 				row.DurMS = post.LatencyMS
 				row.Outcome = post.ToolOK
 				row.Failed = post.ToolOK == schema.OutcomeFailed
+				row.Shipped = post.DeliverySignal == schema.DeliveryGitPush
 				consumed[e.ToolUseID] = true
 			}
 			rows = append(rows, row)
@@ -107,6 +109,7 @@ func buildRows(seg []schema.TelemetryEvent, untrustedSeen *bool) ([]traceRow, in
 				Outcome: e.ToolOK,
 				Failed:  e.ToolOK == schema.OutcomeFailed,
 				Danger:  e.Risk == schema.RiskDanger,
+				Shipped: e.DeliverySignal == schema.DeliveryGitPush,
 			})
 		}
 	}

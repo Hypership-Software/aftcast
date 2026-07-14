@@ -57,6 +57,7 @@ type model struct {
 	all         []telemetry.Session
 	sessions    []telemetry.Session // visible+sorted; m.sessions[i] is table row i.
 	agg         aggregates
+	coach       analytics.PlanAssociation
 	events      eventProvider
 	now         time.Time
 	showEmpty   bool
@@ -65,6 +66,7 @@ type model struct {
 
 	cursor int // selected row into m.sessions
 	width  int // last known terminal width; 0 until the first WindowSizeMsg
+	height int
 
 	mode       mode
 	preHelp    mode // where ? was pressed from, so esc/? returns there
@@ -84,6 +86,7 @@ func build(sessions []telemetry.Session, scope Scope, events eventProvider, now 
 		mode:    modeList,
 		detail:  viewport.New(80, 20),
 	}
+	m.coach = analytics.PlanFirstAssociation(coachWindow(m.history))
 	m.scopeGlobal = scope.StartGlobal || scope.ProjectID == ""
 	return m.applyScope()
 }
@@ -266,6 +269,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
 		m.detail.Width = msg.Width
 		if h := msg.Height - 4; h > 0 {
 			m.detail.Height = h
@@ -389,9 +393,39 @@ func (m model) View() string {
 	if m.mode == modeDetail {
 		return renderDetail(m.detail.View())
 	}
-	tableView := renderSessionTable(m.buildColumns(), m.cursor, m.width)
+	tableView := renderSessionTable(m.buildColumns(), m.cursor, m.width, m.tableRowLimit())
 	if note := hiddenNote(m.hiddenCount); note != "" {
 		tableView += "\n" + note
 	}
-	return renderList(m.agg, tableView)
+	return renderList(m.agg, m.coach, tableView)
+}
+
+func (m model) tableRowLimit() int {
+	if m.height <= 0 {
+		return maxTableRows
+	}
+	fixed := strings.Count(renderList(m.agg, m.coach, ""), "\n") + 1
+	if m.hiddenCount > 0 {
+		fixed++
+	}
+	budget := m.height - fixed
+	if budget < 1 {
+		return 1
+	}
+	limit := budget
+	if limit > maxTableRows {
+		limit = maxTableRows
+	}
+	for limit > 1 {
+		start, end := windowBounds(m.cursor, len(m.sessions), limit)
+		lines := end - start
+		if start > 0 || end < len(m.sessions) {
+			lines++
+		}
+		if lines <= budget {
+			return limit
+		}
+		limit--
+	}
+	return 1
 }

@@ -12,6 +12,20 @@ func ev(et schema.EventType, class schema.ToolClass) schema.TelemetryEvent {
 	return schema.TelemetryEvent{EventType: et, ToolClass: class}
 }
 
+func TestBuildTraceCarriesShippedFromPairedPost(t *testing.T) {
+	pre := ev(schema.EventPreTool, schema.ClassExec)
+	pre.ToolUseID = "push1"
+	pre.Verbs = []string{"git"}
+	post := ev(schema.EventPostTool, schema.ClassExec)
+	post.ToolUseID = "push1"
+	post.ToolOK = schema.OutcomeOK
+	post.DeliverySignal = schema.DeliveryGitPush
+	rows := buildTrace([]schema.TelemetryEvent{pre, post})[0].Rows
+	if len(rows) != 1 || !rows[0].Shipped {
+		t.Fatalf("push rows = %+v", rows)
+	}
+}
+
 func TestIsLowSignalExcludesAnnotatedRows(t *testing.T) {
 	if !isLowSignal(traceRow{Verb: "read"}) {
 		t.Fatal("a plain read row should be low-signal (collapsible)")

@@ -8,6 +8,29 @@ import (
 	"github.com/Hypership-Software/atlas/internal/telemetry"
 )
 
+func TestDigestHighlightsShippedWithoutCommandContent(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	session := telemetry.Session{SessionID: "ship1", TaskType: "feature", Shipped: true, ToolCalls: 1}
+	pre := ev(schema.EventPreTool, schema.ClassExec)
+	pre.ToolUseID = "push1"
+	pre.Verbs = []string{"git"}
+	post := ev(schema.EventPostTool, schema.ClassExec)
+	post.ToolUseID = "push1"
+	post.ToolOK = schema.OutcomeOK
+	post.DeliverySignal = schema.DeliveryGitPush
+	out := renderTrace(session, []schema.TelemetryEvent{pre, post})
+	for _, want := range []string{"shipped", "successful git push"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("digest missing %q:\n%s", want, out)
+		}
+	}
+	for _, banned := range []string{"origin", "feature/coach", "git push origin"} {
+		if strings.Contains(out, banned) {
+			t.Fatalf("digest leaked %q:\n%s", banned, out)
+		}
+	}
+}
+
 // The digest must surface the signal an observer cares about — which skill ran,
 // where untrusted content entered, and which turn a flagged call happened in —
 // without listing every call.

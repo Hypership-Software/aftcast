@@ -59,7 +59,7 @@ func sampleAgg() aggregates {
 
 func TestOverviewIsPlainLanguage(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	out := renderList(sampleAgg(), "TABLE")
+	out := renderList(sampleAgg(), analytics.PlanAssociation{}, "TABLE")
 	for _, banned := range []string{"corr/deliv", "clean_delivery", "taint", "danger ", "unknown", "Landed clean"} {
 		if strings.Contains(out, banned) {
 			t.Errorf("overview leaked code word %q:\n%s", banned, out)
@@ -69,6 +69,36 @@ func TestOverviewIsPlainLanguage(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("overview missing plain-language %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestRenderCoachStates(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	tests := []struct {
+		name   string
+		input  analytics.PlanAssociation
+		want   []string
+		banned string
+	}{
+		{"learning", analytics.PlanAssociation{Status: analytics.CoachLearning, Window: 12, TaskType: "feature", Total: 12, Planned: 4, Direct: 8},
+			[]string{"latest 12 comparable sessions", "Atlas is learning", "12 comparable", "plan-first 4", "direct-to-edit 8"}, "Try next"},
+		{"no pattern", analytics.PlanAssociation{Status: analytics.CoachNoPattern, Window: 20, TaskType: "feature", Total: 20, Planned: 10, Direct: 10, PlannedRate: .6, DirectRate: .5},
+			[]string{"No reliable plan-first pattern yet", "60%", "50%"}, "Try next"},
+		{"recommend", analytics.PlanAssociation{Status: analytics.CoachRecommend, Window: 24, TaskType: "feature", Total: 24, Planned: 10, Direct: 14, PlannedRate: .8, DirectRate: .55},
+			[]string{"latest 24 comparable sessions", "associated with more shipped sessions", "80%", "55%", "Try next", "Plan before editing"}, "caused"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := renderCoach(tt.input)
+			for _, want := range tt.want {
+				if !strings.Contains(got, want) {
+					t.Fatalf("missing %q:\n%s", want, got)
+				}
+			}
+			if tt.banned != "" && strings.Contains(got, tt.banned) {
+				t.Fatalf("render contained %q:\n%s", tt.banned, got)
+			}
+		})
 	}
 }
 

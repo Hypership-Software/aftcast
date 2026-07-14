@@ -184,7 +184,40 @@ func renderScopedEmpty(global, globalHasData bool) string {
 		ui.Hint("Check `gated status` if you expected data.")
 }
 
-func renderList(agg aggregates, tableView string) string {
+func renderCoach(a analytics.PlanAssociation) string {
+	title := "What's moving your needle · across your projects"
+	if a.Window > 0 {
+		title += fmt.Sprintf(" · latest %d comparable sessions", a.Window)
+	}
+	switch a.Status {
+	case analytics.CoachRecommend:
+		return strings.Join([]string{
+			title,
+			fmt.Sprintf("  Plan-first was associated with more shipped sessions · %s work", taskCell(a.TaskType)),
+			fmt.Sprintf("  %.0f%% planned vs %.0f%% direct-to-edit · n=%d", a.PlannedRate*100, a.DirectRate*100, a.Total),
+			"",
+			"Try next",
+			"  → Plan before editing on your next " + taskCell(a.TaskType) + ".",
+		}, "\n")
+	case analytics.CoachNoPattern:
+		return strings.Join([]string{
+			title,
+			"  No reliable plan-first pattern yet.",
+			fmt.Sprintf("  %.0f%% planned vs %.0f%% direct-to-edit · %s work · n=%d", a.PlannedRate*100, a.DirectRate*100, taskCell(a.TaskType), a.Total),
+		}, "\n")
+	default:
+		if a.Total == 0 {
+			return title + "\n  Atlas is learning your workflow · no comparable delivery sessions yet."
+		}
+		return strings.Join([]string{
+			title,
+			fmt.Sprintf("  Atlas is learning your workflow · %d comparable sessions", a.Total),
+			fmt.Sprintf("  plan-first %d · direct-to-edit %d · need 20 total and 5 each way", a.Planned, a.Direct),
+		}, "\n")
+	}
+}
+
+func renderList(agg aggregates, coach analytics.PlanAssociation, tableView string) string {
 	return strings.Join([]string{
 		renderHeader(agg),
 		"",
@@ -193,6 +226,8 @@ func renderList(agg aggregates, tableView string) string {
 		"",
 		"Needs attention",
 		renderAttentionBlock(agg.needsAttention),
+		"",
+		renderCoach(coach),
 		"",
 		tableView,
 		ui.Hint("↑↓ (k/j) move · ↵ open · s sort · h show/hide empty · g/p scope · ? help · q quit"),
@@ -209,6 +244,10 @@ func renderHelp() string {
 		"↑↓ (k/j) move · ↵ open · esc back · s sort · h show/hide empty · g/p scope · r raw (detail) · ? help · q quit",
 		"",
 		"⚠ untrusted input · ⚑ flagged actions · ★ skills",
+		"",
+		"Shipped = a successful git push in a delivery session",
+		"Delivery session = changed files or successfully pushed, captured with v2 telemetry",
+		"Observed plan-first = explicit planning, or a completed preparatory prompt before editing",
 		"",
 		ui.Hint("esc or ? to close"),
 	}, "\n")
@@ -228,6 +267,8 @@ func hiddenNote(n int) string {
 func verdictOutcome(sess telemetry.Session) string {
 	class := analytics.OutcomeClass(sess.Outcome)
 	switch {
+	case sess.Shipped:
+		return ui.OK("↑ shipped")
 	case class == analytics.Success && sess.CorrectionTurns > 0:
 		return ui.Warn(fmt.Sprintf("✓ succeeded (%d fix)", sess.CorrectionTurns))
 	case class == analytics.Success:

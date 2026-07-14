@@ -1,12 +1,32 @@
 package insights
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/Hypership-Software/atlas/internal/analytics"
 	"github.com/Hypership-Software/atlas/internal/schema"
 	"github.com/Hypership-Software/atlas/internal/telemetry"
 )
+
+func TestCoachWindowUsesLatestSixtyComparableSessions(t *testing.T) {
+	var sessions []telemetry.Session
+	for i := 0; i < 65; i++ {
+		sessions = append(sessions, telemetry.Session{SessionID: fmt.Sprintf("s%02d", i), Started: fmt.Sprintf("2026-07-%02dT10:00:00Z", (i%28)+1),
+			CaptureVersion: 2, FilesChanged: 1, TaskType: "feature", PlanStyle: "plan_first"})
+	}
+	sessions = append(sessions, telemetry.Session{SessionID: "unknown-style", CaptureVersion: 2, FilesChanged: 1})
+	got := coachWindow(sessions)
+	if len(got) != 60 {
+		t.Fatalf("coachWindow = %d, want 60", len(got))
+	}
+	for _, s := range got {
+		if s.PlanStyle == analytics.PlanUnknown {
+			t.Fatalf("coach window included unclassifiable session: %+v", s)
+		}
+	}
+}
 
 func TestBuildKeepsFullHistoryButScopesOperationalRowsToSevenDays(t *testing.T) {
 	now := time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
