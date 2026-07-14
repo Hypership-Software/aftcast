@@ -8,6 +8,7 @@ import (
 // Profile is the cross-session productivity summary behind the insight surfaces.
 type Profile struct {
 	Sessions            int
+	CleanCount          int     // clean deliveries (exact tally, not derived from the rate)
 	CleanDeliveryRate   float64 // clean deliveries / determinate-outcome sessions
 	CorrectionLoad      float64 // mean correction turns per determinate-outcome session
 	ToolCallsPerSession float64
@@ -31,6 +32,7 @@ func Productivity(sessions []SessionStat) Profile {
 		}
 		calls += s.ToolCalls
 	}
+	p.CleanCount = clean
 	if determinate > 0 {
 		p.CleanDeliveryRate = float64(clean) / float64(determinate)
 		p.CorrectionLoad = float64(determinateCorrections) / float64(determinate)

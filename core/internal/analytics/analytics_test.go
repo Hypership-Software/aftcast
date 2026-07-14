@@ -175,6 +175,12 @@ func TestProductivityAggregates(t *testing.T) {
 	if p.CorrectionLoad != 0.5 {
 		t.Errorf("CorrectionLoad = %v, want 0.5", p.CorrectionLoad)
 	}
+	// CleanCount is the exact clean-delivery tally, not derived from the rate.
+	// Here round(rate*Sessions) = round(0.5*3) = 2, but only 1 session landed
+	// clean — the indeterminate session must not inflate the count.
+	if p.CleanCount != 1 {
+		t.Errorf("CleanCount = %d, want 1", p.CleanCount)
+	}
 }
 
 // --- SkillInsights ---
