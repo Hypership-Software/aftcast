@@ -11,25 +11,53 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+var sampleNow = time.Date(2026, 7, 13, 15, 0, 0, 0, time.UTC)
+
 func sampleModel() model {
 	sessions := []telemetry.Session{
-		{SessionID: "aaaa1111", Harness: "claudecode", TaskType: "feature", Outcome: "success", CleanDelivery: true, TurnCount: 3, ToolCalls: 4},
-		{SessionID: "bbbb2222", Harness: "claudecode", TaskType: "bugfix", Outcome: "failure", CorrectionTurns: 2, TurnCount: 6, ToolCalls: 11},
+		{SessionID: "aaaa1111", Harness: "claudecode", TaskType: "feature", Outcome: "success", CleanDelivery: true, TurnCount: 3, ToolCalls: 4, FilesTouched: 2, Started: sampleNow.Add(-2 * time.Hour).Format(time.RFC3339Nano)},
+		{SessionID: "bbbb2222", Harness: "claudecode", TaskType: "bugfix", Outcome: "failure", CorrectionTurns: 2, TurnCount: 6, ToolCalls: 11, FilesTouched: 5, Started: sampleNow.Add(-3 * time.Hour).Format(time.RFC3339Nano)},
 	}
 	provider := func(id string) ([]schema.TelemetryEvent, error) {
 		return []schema.TelemetryEvent{{SessionID: id, ToolRaw: "WebFetch", Subagent: "researcher"}}, nil
 	}
-	return build(sessions, aggregate(sessions, time.Now()), provider)
+	return build(sessions, aggregate(sessions, sampleNow), provider, sampleNow)
 }
 
 func TestListViewRendersSessions(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	v := sampleModel().View()
-	if !strings.Contains(v, "aaaa1111") || !strings.Contains(v, "feature") {
+	if !strings.Contains(v, "feature") || !strings.Contains(v, "2h ago") {
 		t.Fatalf("list view missing session row: %q", v)
+	}
+	if !strings.Contains(v, "4 calls") || !strings.Contains(v, "2 files") {
+		t.Fatalf("list view missing work cell: %q", v)
 	}
 	if !strings.Contains(v, "clean") {
 		t.Fatalf("list view missing header: %q", v)
+	}
+}
+
+func TestVisibleSessionsHidesEmptyByDefault(t *testing.T) {
+	ss := []telemetry.Session{{SessionID: "a", ToolCalls: 5}, {SessionID: "b", ToolCalls: 0}}
+	if got := visibleSessions(ss, false); len(got) != 1 || got[0].SessionID != "a" {
+		t.Errorf("hide-empty got %v", got)
+	}
+	if got := visibleSessions(ss, true); len(got) != 2 {
+		t.Errorf("show-empty got %d", len(got))
+	}
+}
+
+func TestSessionRowIsHumanReadable(t *testing.T) {
+	now := time.Date(2026, 7, 13, 15, 0, 0, 0, time.UTC)
+	s := telemetry.Session{SessionID: "32b1a075x", TaskType: "testing", Outcome: "success",
+		CleanDelivery: true, ToolCalls: 165, FilesTouched: 12, Started: "2026-07-13T13:00:00Z"}
+	row := sessionRow(s, now)
+	joined := strings.Join(row, " | ")
+	for _, want := range []string{"2h ago", "testing", "clean", "165 calls", "12 files"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("row %q missing %q", joined, want)
+		}
 	}
 }
 
@@ -69,7 +97,7 @@ func TestQuitKey(t *testing.T) {
 
 func TestEmptyState(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	m := build(nil, aggregate(nil, time.Now()), func(string) ([]schema.TelemetryEvent, error) { return nil, nil })
+	m := build(nil, aggregate(nil, sampleNow), func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
 	if !strings.Contains(m.View(), "No sessions") {
 		t.Fatalf("empty model should show empty state: %q", m.View())
 	}

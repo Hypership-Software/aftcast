@@ -213,8 +213,19 @@ func renderList(agg aggregates, tableView string) string {
 		renderAttentionBlock(agg.needsAttention),
 		"",
 		tableView,
-		ui.Hint("↑↓ nav · ↵ inspect · q quit"),
+		ui.Hint("↑↓ move · ↵ open · s sort · h show/hide empty · q quit"),
 	}, "\n")
+}
+
+func hiddenNote(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	word := "sessions"
+	if n == 1 {
+		word = "session"
+	}
+	return ui.Hint(fmt.Sprintf("… %d empty %s hidden (press h to show)", n, word))
 }
 
 func detailSummary(sess telemetry.Session, events []schema.TelemetryEvent) string {
