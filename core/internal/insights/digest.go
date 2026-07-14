@@ -59,11 +59,11 @@ type rowRef struct {
 	turn int
 }
 
-// highlightLines scans the trace once and emits the 0-5 lines worth calling out.
-// A line only appears when it applies, so a clean, unremarkable session shows no
-// Highlights block at all rather than a section of "nothing to see here".
 func highlightLines(sess telemetry.Session, turns []traceTurn) []string {
 	var lines []string
+	if sess.Shipped {
+		lines = append(lines, highlightLine(ui.OK("↑"), "shipped", "successful git push"))
+	}
 	if skills := splitSkills(sess.SkillsUsed); len(skills) > 0 {
 		lines = append(lines, highlightLine("★", "skills", strings.Join(prettySkills(skills), ", ")))
 	}

@@ -108,7 +108,7 @@ func windowBounds(cursor, rows, max int) (int, int) {
 // renderSessionTable lays out the columns as a width-responsive, ANSI-aware table
 // with a selection pointer. Column widths are computed over every row (stable as
 // the cursor scrolls), but only the visible window is rendered.
-func renderSessionTable(cols []tableColumn, cursor, width int) string {
+func renderSessionTable(cols []tableColumn, cursor, width, maxRows int) string {
 	rows := 0
 	if len(cols) > 0 {
 		rows = len(cols[0].cells)
@@ -119,8 +119,11 @@ func renderSessionTable(cols []tableColumn, cursor, width int) string {
 	b.WriteString(cursorBlank)
 	b.WriteString(ui.Bold(joinCells(cols, widths, -1)))
 
-	start, end := windowBounds(cursor, rows, maxTableRows)
-	if start > 0 {
+	start, end := windowBounds(cursor, rows, maxRows)
+	bothDirections := start > 0 && end < rows
+	if bothDirections {
+		b.WriteString("\n" + cursorBlank + ui.Hint(scrollRangeNote(start, rows-end)))
+	} else if start > 0 {
 		b.WriteString("\n" + cursorBlank + ui.Hint(scrollNote(start, "above")))
 	}
 	for r := start; r < end; r++ {
@@ -132,7 +135,7 @@ func renderSessionTable(cols []tableColumn, cursor, width int) string {
 		}
 		b.WriteString(joinCells(cols, widths, r))
 	}
-	if end < rows {
+	if end < rows && !bothDirections {
 		b.WriteString("\n" + cursorBlank + ui.Hint(scrollNote(rows-end, "below")))
 	}
 	return b.String()
@@ -153,9 +156,9 @@ func joinCells(cols []tableColumn, widths []int, row int) string {
 }
 
 func scrollNote(n int, dir string) string {
-	word := "sessions"
-	if n == 1 {
-		word = "session"
-	}
-	return fmt.Sprintf("… %d more %s %s", n, word, dir)
+	return fmt.Sprintf("… more sessions %s · %d", dir, n)
+}
+
+func scrollRangeNote(above, below int) string {
+	return fmt.Sprintf("… more sessions above · %d / more sessions below · %d", above, below)
 }

@@ -77,7 +77,7 @@ func TestRenderSessionTablePointsAtCursor(t *testing.T) {
 	cols := []tableColumn{
 		{title: "When", cells: []string{"1h ago", "2h ago", "3h ago"}},
 	}
-	out := renderSessionTable(cols, 1, 120)
+	out := renderSessionTable(cols, 1, 120, maxTableRows)
 	lines := strings.Split(out, "\n")
 	// header + 3 rows
 	if len(lines) != 4 {
@@ -98,7 +98,7 @@ func TestRenderSessionTableWindowsLongList(t *testing.T) {
 		cells[i] = "row"
 	}
 	cols := []tableColumn{{title: "When", cells: cells}}
-	out := renderSessionTable(cols, 29, 120) // cursor at the last row
+	out := renderSessionTable(cols, 29, 120, maxTableRows) // cursor at the last row
 	if !strings.Contains(out, "more sessions above") {
 		t.Errorf("windowed list missing scroll-up note:\n%s", out)
 	}
@@ -108,5 +108,23 @@ func TestRenderSessionTableWindowsLongList(t *testing.T) {
 	rowCount := strings.Count(out, "row")
 	if rowCount > maxTableRows {
 		t.Errorf("rendered %d rows, want <= %d", rowCount, maxTableRows)
+	}
+}
+
+func TestRenderSessionTableHonoursExplicitRowLimit(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	cells := []string{"row1", "row2", "row3", "row4", "row5"}
+	out := renderSessionTable([]tableColumn{{title: "When", cells: cells}}, 2, 120, 3)
+	visible := 0
+	for _, cell := range cells {
+		if strings.Contains(out, cell) {
+			visible++
+		}
+	}
+	if visible != 3 {
+		t.Fatalf("rendered %d data rows, want 3:\n%s", visible, out)
+	}
+	if !strings.Contains(out, "more sessions above") || !strings.Contains(out, "more sessions below") {
+		t.Fatalf("limited table missing scroll notes:\n%s", out)
 	}
 }

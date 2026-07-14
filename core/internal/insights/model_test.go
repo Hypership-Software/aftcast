@@ -1,15 +1,56 @@
 package insights
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Hypership-Software/atlas/internal/analytics"
 	"github.com/Hypership-Software/atlas/internal/schema"
 	"github.com/Hypership-Software/atlas/internal/telemetry"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+func TestListFitsTwentyFourLineTerminalWithCoach(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	m := sampleModel()
+	m.coach = analytics.PlanAssociation{Status: analytics.CoachRecommend, TaskType: "feature", Total: 24,
+		Planned: 10, Direct: 14, PlannedRate: .8, DirectRate: .55}
+	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 24}))
+	if lines := strings.Count(m.View(), "\n") + 1; lines > 24 {
+		t.Fatalf("list rendered %d lines into a 24-line terminal:\n%s", lines, m.View())
+	}
+}
+
+func TestListFitsTwentyFourLineTerminalWithScrollNotes(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	sessions := make([]telemetry.Session, 11)
+	for i := range sessions {
+		sessions[i] = telemetry.Session{
+			SessionID: fmt.Sprintf("session-%d", i),
+			TaskType:  "feature",
+			ToolCalls: 1,
+			Started:   sampleNow.Add(-time.Duration(i) * time.Hour).Format(time.RFC3339Nano),
+		}
+	}
+	sessions[len(sessions)-1].ToolCalls = 0
+	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m.coach = analytics.PlanAssociation{Status: analytics.CoachRecommend, TaskType: "feature", Total: 24,
+		Planned: 10, Direct: 14, PlannedRate: .8, DirectRate: .55}
+	m.cursor = 5
+	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 24}))
+	if lines := strings.Count(m.View(), "\n") + 1; lines > 24 {
+		t.Fatalf("list with scroll notes rendered %d lines into a 24-line terminal:\n%s", lines, m.View())
+	}
+	if !strings.Contains(m.View(), "more sessions above") || !strings.Contains(m.View(), "more sessions below") {
+		t.Fatalf("height-limited list omitted a scroll direction:\n%s", m.View())
+	}
+	if !strings.Contains(m.View(), "empty session hidden") {
+		t.Fatalf("height-limited list omitted its hidden-session note:\n%s", m.View())
+	}
+}
 
 var sampleNow = time.Date(2026, 7, 13, 15, 0, 0, 0, time.UTC)
 
