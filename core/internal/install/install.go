@@ -15,11 +15,14 @@ import (
 	"github.com/Hypership-Software/atlas/internal/ui"
 )
 
-// Daemon lifecycle seams, injectable in tests so init/uninstall are exercised
-// without spawning a real detached process.
+// Daemon lifecycle and PATH-editing seams, injectable in tests so init/uninstall
+// are exercised without spawning a real detached process or touching the
+// developer's actual registry/shell profile.
 var (
 	ensureDaemon = svc.Ensure
 	stopDaemon   = svc.Stop
+	ensurePath   = ensurePathEntry
+	removePath   = removePathEntry
 )
 
 const (
@@ -66,6 +69,13 @@ func Init(opts Options, w io.Writer) error {
 		if replaced {
 			fmt.Fprintf(w, "installed the Atlas binary to %s\n", installed)
 		}
+	}
+
+	binDir := filepath.Join(resolveHome(opts.Home), "bin")
+	if added, perr := ensurePath(binDir); perr != nil {
+		fmt.Fprintf(w, "%s could not add %s to PATH (%v) — add it manually\n", ui.Warn("note:"), binDir, perr)
+	} else if added {
+		fmt.Fprintf(w, "added %s to PATH — open a new terminal to use `gated`\n", binDir)
 	}
 
 	cfg, err := hookConfig(opts)
@@ -132,6 +142,10 @@ func Uninstall(opts Options, w io.Writer) error {
 		fmt.Fprintf(w, "note: could not stop the Atlas daemon (%v)\n", serr)
 	} else if stopped {
 		fmt.Fprintln(w, "stopped the Atlas daemon")
+	}
+	binDir := filepath.Join(resolveHome(opts.Home), "bin")
+	if err := removePath(binDir); err != nil {
+		fmt.Fprintf(w, "note: could not remove %s from PATH (%v)\n", binDir, err)
 	}
 	orig, err := readSettings(settingsPath)
 	if err != nil {

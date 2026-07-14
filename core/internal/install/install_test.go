@@ -13,9 +13,14 @@ import (
 )
 
 // Force plain output so assertions match regardless of whether the test runner's
-// stdout is a terminal.
+// stdout is a terminal. ensurePath/removePath default to no-ops here so that any
+// test exercising the real Init/Uninstall never touches the developer's actual
+// registry or shell profile; tests of the PATH-wiring behavior itself stub these
+// per-case and restore via t.Cleanup.
 func TestMain(m *testing.M) {
 	os.Setenv("NO_COLOR", "1")
+	ensurePath = func(string) (bool, error) { return false, nil }
+	removePath = func(string) error { return nil }
 	os.Exit(m.Run())
 }
 
@@ -218,6 +223,68 @@ func TestInitThenUninstallRestores(t *testing.T) {
 	}
 	if strings.Contains(string(got), "/hook") || strings.Contains(string(got), "hook claudecode") {
 		t.Errorf("uninstall left gate hooks behind:\n%s", got)
+	}
+}
+
+func TestInitReportsAddedToPath(t *testing.T) {
+	dir := t.TempDir()
+	settings := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(settings, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	prev := ensurePath
+	ensurePath = func(string) (bool, error) { return true, nil }
+	t.Cleanup(func() { ensurePath = prev })
+
+	var out bytes.Buffer
+	opts := Options{Home: filepath.Join(dir, "h"), SettingsPath: settings, BinaryPath: "C:/opt/gated.exe"}
+	if err := Init(opts, &out); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	if !strings.Contains(out.String(), "added") || !strings.Contains(out.String(), "PATH") {
+		t.Errorf("Init did not report the PATH addition:\n%s", out.String())
+	}
+}
+
+func TestInitReportsPathFailureWithoutAborting(t *testing.T) {
+	dir := t.TempDir()
+	settings := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(settings, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	prev := ensurePath
+	ensurePath = func(string) (bool, error) { return false, fmt.Errorf("access denied") }
+	t.Cleanup(func() { ensurePath = prev })
+
+	var out bytes.Buffer
+	opts := Options{Home: filepath.Join(dir, "h"), SettingsPath: settings, BinaryPath: "C:/opt/gated.exe"}
+	if err := Init(opts, &out); err != nil {
+		t.Fatalf("Init must not abort on a PATH-wiring failure: %v", err)
+	}
+	if !strings.Contains(out.String(), "could not add") {
+		t.Errorf("Init did not report the PATH-wiring gap:\n%s", out.String())
+	}
+}
+
+func TestUninstallReportsPathFailure(t *testing.T) {
+	dir := t.TempDir()
+	settings := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(settings, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	prev := removePath
+	removePath = func(string) error { return fmt.Errorf("profile locked") }
+	t.Cleanup(func() { removePath = prev })
+
+	var out bytes.Buffer
+	if err := Uninstall(Options{Home: filepath.Join(dir, "h"), SettingsPath: settings}, &out); err != nil {
+		t.Fatalf("Uninstall must not abort on a PATH-wiring failure: %v", err)
+	}
+	if !strings.Contains(out.String(), "could not remove") {
+		t.Errorf("Uninstall did not report the PATH-wiring gap:\n%s", out.String())
 	}
 }
 
