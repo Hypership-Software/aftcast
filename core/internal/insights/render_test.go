@@ -96,12 +96,33 @@ func TestRenderHeaderAndEmpty(t *testing.T) {
 func TestDetailBodyRawShowsSubagent(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	sess := telemetry.Session{SessionID: "s1", Harness: "claudecode", TaskType: "feature"}
-	events := []schema.TelemetryEvent{{SessionID: "s1", ToolRaw: "WebFetch", Subagent: "researcher"}}
-	if !strings.Contains(detailBody(sess, events, false), "WebFetch") {
-		t.Fatalf("summary missing tool")
+	pre := schema.TelemetryEvent{SessionID: "s1", EventType: schema.EventPreTool, ToolClass: schema.ClassNetFetch,
+		ToolUseID: "t1", Domain: "example.com", Subagent: "researcher"}
+	post := schema.TelemetryEvent{SessionID: "s1", EventType: schema.EventPostTool, ToolUseID: "t1", ToolOK: schema.OutcomeOK}
+	events := []schema.TelemetryEvent{pre, post}
+	if !strings.Contains(detailBody(sess, events, false), "fetched") {
+		t.Fatalf("trace missing rendered verb")
 	}
 	raw := detailBody(sess, events, true)
 	if !strings.Contains(raw, "researcher") || !strings.Contains(raw, "subagent") {
 		t.Fatalf("raw JSON missing subagent field: %q", raw)
+	}
+}
+
+func TestRenderTraceHasVerdictAndNoEmptyFields(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	sess := telemetry.Session{SessionID: "s", TaskType: "testing", Outcome: "success",
+		DurationMS: 1080000, ToolCalls: 165, FilesTouched: 12, Taint: true}
+	pre := schema.TelemetryEvent{EventType: schema.EventPreTool, ToolClass: schema.ClassExec, ToolUseID: "t1", Verbs: []string{"go"}}
+	post := schema.TelemetryEvent{EventType: schema.EventPostTool, ToolUseID: "t1", LatencyMS: 9109, ToolOK: schema.OutcomeOK}
+	out := renderTrace(sess, []schema.TelemetryEvent{pre, post})
+	if !strings.Contains(out, "untrusted input") { // taint flag in header
+		t.Error("verdict header missing untrusted-input flag")
+	}
+	if strings.Contains(out, "risk=") || strings.Contains(out, "sub=") || strings.Contains(out, "[t0]") {
+		t.Errorf("trace leaked raw debug fields:\n%s", out)
+	}
+	if !strings.Contains(out, "ran") || !strings.Contains(out, "9.1s") {
+		t.Errorf("trace missing paired call / duration:\n%s", out)
 	}
 }

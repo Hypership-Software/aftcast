@@ -19,7 +19,11 @@ func sampleModel() model {
 		{SessionID: "bbbb2222", Harness: "claudecode", TaskType: "bugfix", Outcome: "failure", CorrectionTurns: 2, TurnCount: 6, ToolCalls: 11, FilesTouched: 5, Started: sampleNow.Add(-3 * time.Hour).Format(time.RFC3339Nano)},
 	}
 	provider := func(id string) ([]schema.TelemetryEvent, error) {
-		return []schema.TelemetryEvent{{SessionID: id, ToolRaw: "WebFetch", Subagent: "researcher"}}, nil
+		return []schema.TelemetryEvent{
+			{SessionID: id, EventType: schema.EventPreTool, ToolClass: schema.ClassNetFetch,
+				ToolUseID: "t1", Domain: "example.com", Subagent: "researcher"},
+			{SessionID: id, EventType: schema.EventPostTool, ToolUseID: "t1", ToolOK: schema.OutcomeOK},
+		}, nil
 	}
 	return build(sessions, aggregate(sessions, sampleNow), provider, sampleNow)
 }
@@ -69,7 +73,7 @@ func TestEnterOpensDetailRawTogglesEscReturns(t *testing.T) {
 	if m.mode != modeDetail {
 		t.Fatalf("enter did not switch to detail mode")
 	}
-	if !strings.Contains(m.View(), "WebFetch") {
+	if !strings.Contains(m.View(), "fetched") {
 		t.Fatalf("detail view missing tool: %q", m.View())
 	}
 	m = must(m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}))

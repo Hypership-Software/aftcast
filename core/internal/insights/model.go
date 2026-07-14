@@ -281,7 +281,7 @@ func (m model) View() string {
 		return renderEmpty()
 	}
 	if m.mode == modeDetail {
-		return renderDetail(m.detailSess.SessionID, m.detail.View())
+		return renderDetail(m.detail.View())
 	}
 	tableView := m.table.View()
 	if note := hiddenNote(m.hiddenCount); note != "" {
