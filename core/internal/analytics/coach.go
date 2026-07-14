@@ -1,11 +1,15 @@
 package analytics
 
-import "sort"
+import (
+	"math/big"
+	"sort"
+)
 
 const (
-	coachMinTotal      = 20
-	coachMinPerSide    = 5
-	coachMinDifference = 0.15
+	coachMinTotal                 = 20
+	coachMinPerSide               = 5
+	coachMinDifferenceNumerator   = 3
+	coachMinDifferenceDenominator = 20
 )
 
 type CoachStatus string
@@ -78,6 +82,9 @@ func PlanFirstAssociation(sessions []SessionStat) PlanAssociation {
 			best, set = candidate, true
 		}
 	}
+	if !set {
+		return PlanAssociation{Status: CoachLearning, Window: window}
+	}
 	best.Window = window
 	return best
 }
@@ -96,7 +103,7 @@ func associationFor(task string, c *coachCounts) PlanAssociation {
 	switch {
 	case a.Total < coachMinTotal || a.Planned < coachMinPerSide || a.Direct < coachMinPerSide:
 		a.Status = CoachLearning
-	case a.Difference >= coachMinDifference:
+	case associationDifferenceAtLeast(a, coachMinDifferenceNumerator, coachMinDifferenceDenominator):
 		a.Status = CoachRecommend
 	default:
 		a.Status = CoachNoPattern
@@ -104,17 +111,33 @@ func associationFor(task string, c *coachCounts) PlanAssociation {
 	return a
 }
 
+func associationDifferenceAtLeast(a PlanAssociation, numerator, denominator int64) bool {
+	return associationDifference(a).Cmp(big.NewRat(numerator, denominator)) >= 0
+}
+
+func associationDifference(a PlanAssociation) *big.Rat {
+	planned := new(big.Rat).SetFrac64(int64(a.PlannedShipped), int64(a.Planned))
+	direct := new(big.Rat).SetFrac64(int64(a.DirectShipped), int64(a.Direct))
+	return planned.Sub(planned, direct)
+}
+
 func betterAssociation(a, b PlanAssociation) bool {
 	if coachRank(a.Status) != coachRank(b.Status) {
 		return coachRank(a.Status) > coachRank(b.Status)
 	}
-	if a.Status == CoachRecommend && a.Difference != b.Difference {
-		return a.Difference > b.Difference
+	if a.Status == CoachRecommend {
+		if differenceOrder := compareAssociationDifferences(a, b); differenceOrder != 0 {
+			return differenceOrder > 0
+		}
 	}
 	if a.Total != b.Total {
 		return a.Total > b.Total
 	}
 	return a.TaskType < b.TaskType
+}
+
+func compareAssociationDifferences(a, b PlanAssociation) int {
+	return associationDifference(a).Cmp(associationDifference(b))
 }
 
 func coachRank(status CoachStatus) int {
