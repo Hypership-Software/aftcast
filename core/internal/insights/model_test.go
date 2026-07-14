@@ -172,14 +172,20 @@ func TestHelpOverlayClosesBackToPreviousMode(t *testing.T) {
 }
 
 func TestHelpOverlayQuitKey(t *testing.T) {
-	m := sampleModel()
-	m = must(m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}))
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
-	if cmd == nil {
-		t.Fatalf("q from help produced no command")
+	quitKeys := map[string]tea.KeyMsg{
+		"q":      {Type: tea.KeyRunes, Runes: []rune{'q'}},
+		"ctrl+c": {Type: tea.KeyCtrlC},
 	}
-	if _, ok := cmd().(tea.QuitMsg); !ok {
-		t.Fatalf("q from help did not produce QuitMsg")
+	for name, key := range quitKeys {
+		m := sampleModel()
+		m = must(m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}))
+		_, cmd := m.Update(key)
+		if cmd == nil {
+			t.Fatalf("%s from help produced no command", name)
+		}
+		if _, ok := cmd().(tea.QuitMsg); !ok {
+			t.Fatalf("%s from help did not produce QuitMsg", name)
+		}
 	}
 }
 
