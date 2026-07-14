@@ -228,19 +228,145 @@ func hiddenNote(n int) string {
 	return ui.Hint(fmt.Sprintf("… %d empty %s hidden (press h to show)", n, word))
 }
 
-func detailSummary(sess telemetry.Session, events []schema.TelemetryEvent) string {
+const traceBarWidth = 10
+
+// renderTrace is the session-detail centerpiece: a verdict header (Sentry-style
+// one-liner) followed by a turn-grouped, run-collapsed call timeline. It mostly
+// formats buildTrace's model — pairing, grouping, collapsing, and annotation are
+// already decided there.
+func renderTrace(sess telemetry.Session, evs []schema.TelemetryEvent) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s  %s  %s  outcome=%s  %dms  taint=%v\n\n",
-		sess.SessionID, sess.Harness, sess.TaskType, sess.Outcome, sess.DurationMS, sess.Taint)
-	for _, e := range events {
-		tool := e.ToolRaw
-		if tool == "" {
-			tool = string(e.ToolClass)
+	b.WriteString(renderVerdictHeader(sess))
+	b.WriteString("\n\n")
+	turns := buildTrace(evs)
+	for i, t := range turns {
+		if i > 0 {
+			b.WriteString("\n")
 		}
-		fmt.Fprintf(&b, "[t%d] %-16v %-28s risk=%v ok=%v sub=%s %s\n",
-			e.TurnIndex, e.EventType, tool, e.Risk, e.ToolOK, e.Subagent, e.TS)
+		fmt.Fprintf(&b, "  %s\n", turnHeader(t))
+		maxDur := maxRowDur(t.Rows)
+		for _, r := range t.Rows {
+			b.WriteString(renderTraceRow(r, maxDur) + "\n")
+		}
 	}
-	return b.String()
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func renderVerdictHeader(sess telemetry.Session) string {
+	rest := []string{
+		taskCell(sess.TaskType),
+		verdictOutcome(sess),
+		humanizeDuration(sess.DurationMS),
+		fmt.Sprintf("%d calls", sess.ToolCalls),
+		fmt.Sprintf("%d files", sess.FilesTouched),
+	}
+	if flags := flagsCell(sess); flags != "" {
+		rest = append(rest, flags)
+	}
+	return "Session " + ui.Hint(shortID(sess.SessionID)) + " · " + strings.Join(rest, " · ")
+}
+
+func verdictOutcome(sess telemetry.Session) string {
+	class := analytics.OutcomeClass(sess.Outcome)
+	switch {
+	case class == analytics.Success && sess.CorrectionTurns > 0:
+		return ui.Warn(fmt.Sprintf("✓ succeeded (%d fix)", sess.CorrectionTurns))
+	case class == analytics.Success:
+		return ui.OK("✓ succeeded")
+	case class == analytics.Failure:
+		return ui.Bad("✗ failed")
+	default:
+		return ui.Hint("—")
+	}
+}
+
+func turnHeader(t traceTurn) string {
+	phase := t.Phase
+	if phase != "" {
+		phase += " "
+	}
+	return fmt.Sprintf("turn %d · %s%d calls · %s", t.Index, phase, t.Calls, humanizeDuration(t.DurMS))
+}
+
+func maxRowDur(rows []traceRow) int64 {
+	var max int64
+	for _, r := range rows {
+		if r.DurMS > max {
+			max = r.DurMS
+		}
+	}
+	return max
+}
+
+func renderTraceRow(r traceRow, maxDur int64) string {
+	verb := r.Verb
+	if r.CollapsedN > 0 {
+		verb = "read"
+	}
+	head := strings.TrimRight(rowGlyph(r)+" "+verb, " ")
+	parts := []string{head}
+	if r.Detail != "" {
+		parts = append(parts, r.Detail)
+	}
+	if n := scaleBar(r.DurMS, maxDur, traceBarWidth); n > 0 {
+		parts = append(parts, strings.Repeat("▇", n))
+	}
+	if dur := humanizeDuration(r.DurMS); dur != "" {
+		parts = append(parts, dur)
+	}
+	if og := outcomeGlyph(r.Outcome); og != "" {
+		parts = append(parts, og)
+	}
+	if r.Subagent != "" {
+		parts = append(parts, fmt.Sprintf("(subagent %s)", r.Subagent))
+	}
+	line := "      " + strings.Join(parts, "  ")
+	if r.Untrusted {
+		line += "  ← untrusted content enters here"
+	}
+	return line
+}
+
+func rowGlyph(r traceRow) string {
+	switch {
+	case r.Skill:
+		return "★"
+	case r.Untrusted:
+		return ui.Warn("⚠")
+	case r.Failed:
+		return ui.Bad("✗")
+	case r.Danger:
+		return ui.Bad("⚑")
+	default:
+		return " "
+	}
+}
+
+func outcomeGlyph(o schema.ToolOutcome) string {
+	switch o {
+	case schema.OutcomeOK:
+		return ui.OK("✓")
+	case schema.OutcomeFailed:
+		return ui.Bad("✗")
+	default:
+		return ""
+	}
+}
+
+// scaleBar scales dur against the turn's max row duration into a 1..width block
+// count so the slowest calls in a turn pop visually; sub-100ms calls get none.
+func scaleBar(dur, maxDur int64, width int) int {
+	if dur < 100 || maxDur <= 0 {
+		return 0
+	}
+	n := int(math.Round(float64(dur) / float64(maxDur) * float64(width)))
+	if n < 1 {
+		n = 1
+	}
+	if n > width {
+		n = width
+	}
+	return n
 }
 
 func detailRawJSON(events []schema.TelemetryEvent) (string, error) {
@@ -259,12 +385,11 @@ func detailBody(sess telemetry.Session, events []schema.TelemetryEvent, raw bool
 		}
 		return s
 	}
-	return detailSummary(sess, events)
+	return renderTrace(sess, events)
 }
 
-func renderDetail(sessionID, body string) string {
+func renderDetail(body string) string {
 	return strings.Join([]string{
-		ui.Bold("session " + sessionID),
 		body,
 		ui.Hint("↑↓ scroll · r raw · esc back · q quit"),
 	}, "\n")
