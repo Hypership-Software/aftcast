@@ -94,8 +94,10 @@ func run(args []string) int {
 }
 
 // insightsCmd opens the project-scoped insights TUI, falling back to the global
-// view with --all. It guards on HooksWired so a never-set-up Atlas shows a hint
-// instead of an empty dashboard — this is also what bare `gated` dispatches to.
+// view with --all. The "not set up" hint only shows when hooks are unwired AND
+// there is no captured data, so history stays reachable after `gated uninstall`
+// and a settings-read error can't hide a populated dashboard. This is also what
+// bare `gated` dispatches to.
 func insightsCmd(args []string) int {
 	global := false
 	for _, a := range args {
@@ -103,9 +105,22 @@ func insightsCmd(args []string) int {
 			global = true
 		}
 	}
-	if !install.HooksWired(install.Options{}) {
-		fmt.Fprintln(os.Stdout, ui.Hint("Atlas isn't set up yet — run `gated init`."))
-		return 0
+	wired := install.HooksWired(install.Options{})
+	notSetUp := ui.Hint("Atlas isn't set up yet — run `gated init`.")
+	store, err := svc.OpenReadModel("")
+	if err != nil {
+		if !wired {
+			fmt.Fprintln(os.Stdout, notSetUp)
+			return 0
+		}
+		return fail("insights", err)
+	}
+	defer store.Close()
+	if !wired {
+		if sessions, serr := store.Sessions(); serr == nil && len(sessions) == 0 {
+			fmt.Fprintln(os.Stdout, notSetUp)
+			return 0
+		}
 	}
 	wd, _ := os.Getwd()
 	root, id := project.Identify(wd)
@@ -113,11 +128,6 @@ func insightsCmd(args []string) int {
 	if root != "" {
 		name = filepath.Base(root)
 	}
-	store, err := svc.OpenReadModel("")
-	if err != nil {
-		return fail("insights", err)
-	}
-	defer store.Close()
 	if err := insights.Run(store, insights.Scope{ProjectID: id, Name: name, StartGlobal: global}); err != nil {
 		return fail("insights", err)
 	}

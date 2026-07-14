@@ -208,9 +208,15 @@ func TestProjectScopeToggle(t *testing.T) {
 	if len(gm.(model).all) != 2 {
 		t.Fatalf("global should show all, got %d", len(gm.(model).all))
 	}
+	if gm.(model).agg.scopeLabel != "all projects" {
+		t.Errorf("global agg.scopeLabel = %q, want \"all projects\"", gm.(model).agg.scopeLabel)
+	}
 	pm, _ := gm.(model).updateList(key("p"))
 	if len(pm.(model).all) != 1 {
 		t.Fatalf("back to project should show 1, got %d", len(pm.(model).all))
+	}
+	if pm.(model).agg.scopeLabel != "proj-one" {
+		t.Errorf("project agg.scopeLabel = %q, want \"proj-one\"", pm.(model).agg.scopeLabel)
 	}
 }
 
