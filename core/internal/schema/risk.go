@@ -5,7 +5,14 @@ package schema
 
 // SchemaVersion is stamped into every Descriptor and TelemetryEvent so the log
 // can be read forward across format additions.
-const SchemaVersion = 1
+const (
+	SchemaVersion         = 2
+	DeliverySignalVersion = 2
+)
+
+type DeliverySignal string
+
+const DeliveryGitPush DeliverySignal = "git_push"
 
 // Risk is the three-valued classification Atlas assigns each tool call: danger (a
 // forbid matched), safe (a permit matched), or unknown (no match). It is a label,
