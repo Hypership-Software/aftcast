@@ -1,0 +1,16 @@
+{
+  "session_id": "delivery-success",
+  "cwd": "C:\\Users\\dev\\project",
+  "prompt_id": "prompt-delivery-success",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git commit -m coach && git push origin feature/coach"
+  },
+  "tool_response": {
+    "stdout": "pushed",
+    "stderr": ""
+  },
+  "tool_use_id": "toolu_delivery_success",
+  "duration_ms": 1200
+}
