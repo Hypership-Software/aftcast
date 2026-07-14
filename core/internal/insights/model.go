@@ -13,6 +13,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type mode int
@@ -392,14 +393,26 @@ func (m model) View() string {
 	} else if m.mode == modeDetail {
 		view = renderDetail(m.detail.View())
 	} else if len(m.all) == 0 {
-		view = renderEmptyList(m.coach, renderScopedEmpty(m.scopeGlobal, len(m.history) > 0))
+		view = renderEmptyList(m.coach, renderScopedEmpty(m.scopeGlobal, m.hasScopedHistory()))
 	} else {
 		view = m.renderListView()
 	}
 	if !m.heightKnown {
 		return view
 	}
-	return fitViewHeight(view, m.height)
+	return fitViewHeight(view, m.width, m.height)
+}
+
+func (m model) hasScopedHistory() bool {
+	if m.scopeGlobal {
+		return len(m.history) > 0
+	}
+	for _, session := range m.history {
+		if session.ProjectID == m.scope.ProjectID {
+			return true
+		}
+	}
+	return false
 }
 
 func (m model) renderListView() string {
@@ -409,7 +422,7 @@ func (m model) renderListView() string {
 		fullTable += "\n" + note
 	}
 	full := renderList(m.agg, m.coach, fullTable)
-	if !m.heightKnown || renderedLines(full) <= m.height {
+	if !m.heightKnown || viewFits(full, m.width, m.height) {
 		return full
 	}
 	maxRows := len(m.sessions)
@@ -421,30 +434,48 @@ func (m model) renderListView() string {
 		tableView := renderCompactSessionTable(cols, m.cursor, m.width, rows, m.hiddenCount)
 		candidate := compactView(renderList(m.agg, m.coach, tableView))
 		smallest = candidate
-		if renderedLines(candidate) <= m.height {
+		if viewFits(candidate, m.width, m.height) {
 			return candidate
 		}
 	}
 	if status := renderCompactSessionStatus(cols, m.cursor, m.width, m.hiddenCount); status != "" {
 		candidate := compactView(renderList(m.agg, m.coach, status))
 		smallest = candidate
-		if renderedLines(candidate) <= m.height {
+		if viewFits(candidate, m.width, m.height) {
 			return candidate
 		}
 	}
 	candidate := compactView(renderList(m.agg, m.coach, ""))
 	smallest = candidate
-	if renderedLines(candidate) <= m.height {
+	if viewFits(candidate, m.width, m.height) {
 		return candidate
 	}
 	return smallest
 }
 
-func renderedLines(view string) int {
+func visualRows(view string, width int) int {
 	if view == "" {
 		return 0
 	}
-	return strings.Count(view, "\n") + 1
+	if width <= 0 {
+		return 0
+	}
+	return strings.Count(ansi.Hardwrap(view, width, true), "\n") + 1
+}
+
+func viewFits(view string, width, height int) bool {
+	if view == "" {
+		return true
+	}
+	if width <= 0 || height <= 0 || visualRows(view, width) > height {
+		return false
+	}
+	for _, row := range strings.Split(ansi.Hardwrap(view, width, true), "\n") {
+		if ansi.StringWidth(row) > width {
+			return false
+		}
+	}
+	return true
 }
 
 func compactView(view string) string {
@@ -458,17 +489,36 @@ func compactView(view string) string {
 	return strings.Join(compact, "\n")
 }
 
-func fitViewHeight(view string, height int) string {
-	if height <= 0 {
+func fitViewHeight(view string, width, height int) string {
+	if width <= 0 || height <= 0 {
 		return ""
 	}
-	if renderedLines(view) <= height {
+	if viewFits(view, width, height) {
 		return view
 	}
 	view = compactView(view)
-	lines := strings.Split(view, "\n")
-	if len(lines) <= height {
+	if viewFits(view, width, height) {
 		return view
+	}
+
+	// The emergency fallback favours terminal safety over styling. Stripping
+	// styles before splitting visual rows prevents a crop from separating an
+	// opening escape sequence from its reset.
+	wrapped := ansi.Hardwrap(ansi.Strip(view), width, true)
+	lines := strings.Split(wrapped, "\n")
+	safeLines := lines[:0]
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, width, "")
+		if lines[i] != "" {
+			safeLines = append(safeLines, lines[i])
+		}
+	}
+	lines = safeLines
+	if len(lines) == 0 {
+		return ""
+	}
+	if len(lines) <= height {
+		return strings.Join(lines, "\n")
 	}
 	if height == 1 {
 		return lines[0]
