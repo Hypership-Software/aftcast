@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Hypership-Software/atlas/internal/project"
 	"github.com/Hypership-Software/atlas/internal/schema"
 	"github.com/google/shlex"
 )
@@ -75,6 +76,10 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 		AgentID:   h.AgentID,
 		Subagent:  h.AgentType,
 	}
+
+	root, id := project.Identify(h.Cwd)
+	desc.ProjectRoot = root
+	ev.Project = id
 
 	if h.ToolName != "" {
 		class := classify(h.ToolName)
