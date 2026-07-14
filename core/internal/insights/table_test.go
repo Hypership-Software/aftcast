@@ -148,3 +148,33 @@ func TestRenderSessionTableHonoursZeroAndOneRowLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestZeroRowStatusCountsAroundSelectedSession(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	cols := []tableColumn{{title: "When", cells: []string{"first", "middle", "last"}}}
+	tests := []struct {
+		name   string
+		cursor int
+		want   string
+	}{
+		{name: "first", cursor: 0, want: "selected 1 of 3 · 0 above · 2 below"},
+		{name: "middle", cursor: 1, want: "selected 2 of 3 · 1 above · 1 below"},
+		{name: "last", cursor: 2, want: "selected 3 of 3 · 2 above · 0 below"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out := renderCompactSessionTable(cols, tt.cursor, 80, 0, 2)
+			plain := ansi.Strip(out)
+			if !strings.Contains(plain, tt.want) {
+				t.Fatalf("zero-row status missing exact position %q:\n%s", tt.want, plain)
+			}
+			if !strings.Contains(plain, "2 empty sessions hidden") {
+				t.Fatalf("zero-row status omitted hidden count:\n%s", plain)
+			}
+			status := strings.TrimSpace(strings.Split(plain, "\n")[1])
+			if width := ansi.StringWidth(status); width > 80 {
+				t.Fatalf("zero-row status width = %d, want <= 80: %q", width, status)
+			}
+		})
+	}
+}

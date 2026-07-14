@@ -177,6 +177,10 @@ func renderAttentionBlock(lines []string) string {
 
 func renderScopedEmpty(global, hasHistory bool) string {
 	if !global && hasHistory {
+		return "No Atlas activity for this project in the last 7 days.\n" +
+			ui.Hint("Press g to view all projects · q to quit")
+	}
+	if !global {
 		return "No Atlas activity for this project yet.\n" +
 			ui.Hint("Press g to view all projects · q to quit")
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/Hypership-Software/atlas/internal/telemetry"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestListFitsTwentyFourLineTerminalWithCoach(t *testing.T) {
@@ -78,20 +79,23 @@ func complexHeightModel() model {
 	return m
 }
 
-func renderedLineCount(view string) int {
+func visualRowCount(view string, width int) int {
 	if view == "" {
 		return 0
 	}
-	return strings.Count(view, "\n") + 1
+	if width <= 0 {
+		return 1
+	}
+	return strings.Count(ansi.Hardwrap(view, width, true), "\n") + 1
 }
 
 func TestComplexRecommendationListFitsTwentyFourLines(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	m := complexHeightModel()
-	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 24}))
+	m = must(m.Update(tea.WindowSizeMsg{Width: 80, Height: 24}))
 	view := m.View()
-	if lines := renderedLineCount(view); lines > m.height {
-		t.Fatalf("complex list rendered %d lines into height %d:\n%s", lines, m.height, view)
+	if rows := visualRowCount(view, m.width); rows > m.height {
+		t.Fatalf("complex list rendered %d visual rows into height %d at width %d:\n%s", rows, m.height, m.width, view)
 	}
 	for _, want := range []string{
 		"What the AI worked on", "feature", "bugfix", "docs", "Needs attention", "flagged command",
@@ -104,16 +108,45 @@ func TestComplexRecommendationListFitsTwentyFourLines(t *testing.T) {
 	}
 }
 
-func TestKnownTinyHeightsNeverOverflow(t *testing.T) {
+func TestKnownWidthsAndTinyHeightsNeverOverflow(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	for _, height := range []int{0, 1, 2, 3, 8, 16, 23} {
-		t.Run(fmt.Sprintf("height_%d", height), func(t *testing.T) {
-			m := complexHeightModel()
-			m = must(m.Update(tea.WindowSizeMsg{Width: 80, Height: height}))
-			if lines := renderedLineCount(m.View()); lines > height {
-				t.Fatalf("rendered %d lines into height %d:\n%s", lines, height, m.View())
-			}
-		})
+	for _, width := range []int{80, 48, 19, 1} {
+		for _, height := range []int{0, 1, 2, 3, 8, 16, 23, 24} {
+			t.Run(fmt.Sprintf("width_%d_height_%d", width, height), func(t *testing.T) {
+				m := complexHeightModel()
+				m = must(m.Update(tea.WindowSizeMsg{Width: width, Height: height}))
+				if rows := visualRowCount(m.View(), width); rows > height {
+					t.Fatalf("rendered %d visual rows into height %d at width %d:\n%s", rows, height, width, m.View())
+				}
+			})
+		}
+	}
+}
+
+func TestKnownNonPositiveWidthFailsClosed(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	for _, width := range []int{0, -1} {
+		m := complexHeightModel()
+		m = must(m.Update(tea.WindowSizeMsg{Width: width, Height: 24}))
+		if got := m.View(); got != "" {
+			t.Fatalf("known width %d returned terminal content: %q", width, got)
+		}
+	}
+}
+
+func TestHeightFallbackWrapsUnicodeAndANSIWithoutOverflow(t *testing.T) {
+	view := "\x1b[31mstatus 界界界界界\x1b[0m\n\x1b[1mcoach recommendation is deliberately long\x1b[0m\n? help · q quit"
+	got := fitViewHeight(view, 8, 3)
+	if rows := visualRowCount(got, 8); rows > 3 {
+		t.Fatalf("fallback rendered %d visual rows:\n%q", rows, got)
+	}
+	for _, line := range strings.Split(got, "\n") {
+		if width := ansi.StringWidth(line); width > 8 {
+			t.Fatalf("fallback line width = %d, want <= 8: %q", width, line)
+		}
+	}
+	if strings.Contains(got, "\x1b") {
+		t.Fatalf("fallback retained ANSI after a visual-row crop: %q", got)
 	}
 }
 
@@ -122,13 +155,48 @@ func TestSingleLineTableBudgetKeepsCombinedStatus(t *testing.T) {
 	m := complexHeightModel()
 	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 19}))
 	view := m.View()
-	if lines := renderedLineCount(view); lines > m.height {
-		t.Fatalf("single-line table budget rendered %d lines into height %d:\n%s", lines, m.height, view)
+	if rows := visualRowCount(view, m.width); rows > m.height {
+		t.Fatalf("single-line table budget rendered %d visual rows into height %d:\n%s", rows, m.height, view)
 	}
-	for _, want := range []string{"more sessions above", "more sessions below", "empty session hidden", "q quit"} {
+	for _, want := range []string{"selected 5 of 9", "4 above", "4 below", "empty session hidden", "q quit"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("single-line table budget omitted %q:\n%s", want, view)
 		}
+	}
+}
+
+func TestZeroRowStatusTracksKeyboardNavigation(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	m := complexHeightModel()
+	m.cursor = 0
+	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 19}))
+	assertStatus := func(want string) {
+		t.Helper()
+		if view := m.View(); !strings.Contains(view, want) {
+			t.Fatalf("status missing %q at cursor %d:\n%s", want, m.cursor, view)
+		}
+	}
+	assertStatus("selected 1 of 9 · 0 above · 8 below")
+	for range 4 {
+		m = must(m.Update(key("j")))
+	}
+	assertStatus("selected 5 of 9 · 4 above · 4 below")
+	for range 4 {
+		m = must(m.Update(key("down")))
+	}
+	assertStatus("selected 9 of 9 · 8 above · 0 below")
+	m = must(m.Update(key("k")))
+	assertStatus("selected 8 of 9 · 7 above · 1 below")
+}
+
+func TestKnownAmpleHeightPreservesNormalView(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	m := complexHeightModel()
+	m.width = 100
+	want := m.View()
+	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 100}))
+	if got := m.View(); got != want {
+		t.Fatalf("ample known height changed normal view\nwant:\n%s\ngot:\n%s", want, got)
 	}
 }
 
@@ -172,6 +240,36 @@ func TestHistoricalCoachRendersWhenGlobalOperationalScopeIsEmpty(t *testing.T) {
 	}
 }
 
+func TestHistoricalProjectEmptyCopyDistinguishesSameProjectHistory(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	tests := []struct {
+		name       string
+		projectID  string
+		want       string
+		wantGlobal string
+	}{
+		{name: "same project", projectID: "project-one", want: "No Atlas activity for this project in the last 7 days.", wantGlobal: "No Atlas activity in the last 7 days."},
+		{name: "other project only", projectID: "project-two", want: "No Atlas activity for this project yet.", wantGlobal: "No Atlas activity in the last 7 days."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := build(historicalCoachSessions(sampleNow), Scope{ProjectID: tt.projectID, Name: tt.projectID}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+			wantCoach := renderCoach(m.coach)
+			if view := m.View(); !strings.Contains(view, tt.want) || !strings.Contains(view, wantCoach) {
+				t.Fatalf("project empty view missing honest copy or coach:\n%s", view)
+			}
+			m = must(m.Update(key("g")))
+			if view := m.View(); !strings.Contains(view, tt.wantGlobal) || !strings.Contains(view, wantCoach) {
+				t.Fatalf("global empty view changed copy or coach:\n%s", view)
+			}
+			m = must(m.Update(key("p")))
+			if view := m.View(); !strings.Contains(view, tt.want) || !strings.Contains(view, wantCoach) {
+				t.Fatalf("project empty view after p changed copy or coach:\n%s", view)
+			}
+		})
+	}
+}
+
 func TestCoachRemainsVisibleAcrossPopulatedAndEmptyScopeToggles(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	sessions := historicalCoachSessions(sampleNow)
@@ -187,7 +285,7 @@ func TestCoachRemainsVisibleAcrossPopulatedAndEmptyScopeToggles(t *testing.T) {
 		t.Fatalf("populated global view changed or omitted coach:\n%s", m.View())
 	}
 	m = must(m.Update(key("p")))
-	if !strings.Contains(m.View(), wantCoach) || !strings.Contains(m.View(), "No Atlas activity for this project") {
+	if !strings.Contains(m.View(), wantCoach) || !strings.Contains(m.View(), "No Atlas activity for this project in the last 7 days.") {
 		t.Fatalf("empty project view after p changed or omitted coach:\n%s", m.View())
 	}
 }

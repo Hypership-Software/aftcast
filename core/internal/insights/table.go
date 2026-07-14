@@ -118,6 +118,16 @@ func renderSessionTable(cols []tableColumn, cursor, width, maxRows int) string {
 	var b strings.Builder
 	b.WriteString(cursorBlank)
 	b.WriteString(ui.Bold(joinCells(cols, widths, -1)))
+	if maxRows <= 0 && rows > 0 {
+		if cursor < 0 {
+			cursor = 0
+		}
+		if cursor >= rows {
+			cursor = rows - 1
+		}
+		b.WriteString("\n" + cursorBlank + ui.Hint(selectedPositionNote(cursor, rows)))
+		return b.String()
+	}
 
 	start, end := windowBounds(cursor, rows, maxRows)
 	bothDirections := start > 0 && end < rows
@@ -148,7 +158,8 @@ func renderCompactSessionTable(cols []tableColumn, cursor, width, maxRows, hidde
 	}
 	lines := strings.Split(view, "\n")
 	for i, line := range lines {
-		if strings.Contains(ansi.Strip(line), "more sessions") {
+		plain := ansi.Strip(line)
+		if strings.Contains(plain, "more sessions") || strings.Contains(plain, "selected ") {
 			lines[i] += ui.Hint(" · " + hiddenSummary(hidden) + " · h to show")
 			return strings.Join(lines, "\n")
 		}
@@ -159,7 +170,7 @@ func renderCompactSessionTable(cols []tableColumn, cursor, width, maxRows, hidde
 func renderCompactSessionStatus(cols []tableColumn, cursor, width, hidden int) string {
 	for _, line := range strings.Split(renderCompactSessionTable(cols, cursor, width, 0, hidden), "\n") {
 		plain := ansi.Strip(line)
-		if strings.Contains(plain, "more sessions") || strings.Contains(plain, "empty session") {
+		if strings.Contains(plain, "more sessions") || strings.Contains(plain, "selected ") || strings.Contains(plain, "empty session") {
 			return line
 		}
 	}
@@ -186,4 +197,8 @@ func scrollNote(n int, dir string) string {
 
 func scrollRangeNote(above, below int) string {
 	return fmt.Sprintf("… more sessions above · %d / more sessions below · %d", above, below)
+}
+
+func selectedPositionNote(cursor, rows int) string {
+	return fmt.Sprintf("selected %d of %d · %d above · %d below", cursor+1, rows, cursor, rows-cursor-1)
 }

@@ -191,14 +191,26 @@ func TestRenderHeaderLeadsWithShippedAndIntervention(t *testing.T) {
 
 func TestRenderScopedEmpty(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	if got := renderScopedEmpty(false, true); !strings.Contains(got, "this project") {
-		t.Errorf("project-empty state missing copy:\n%s", got)
+	tests := []struct {
+		name       string
+		global     bool
+		hasHistory bool
+		want       []string
+	}{
+		{name: "project has history", hasHistory: true, want: []string{"No Atlas activity for this project in the last 7 days.", "Press g to view all projects"}},
+		{name: "project has no history", want: []string{"No Atlas activity for this project yet.", "Press g to view all projects"}},
+		{name: "global has history", global: true, hasHistory: true, want: []string{"No Atlas activity in the last 7 days.", "? help"}},
+		{name: "global has no history", global: true, want: []string{"Nothing captured yet", "gated status"}},
 	}
-	if got := renderScopedEmpty(true, false); !strings.Contains(got, "Nothing captured") {
-		t.Errorf("onboarding state missing copy:\n%s", got)
-	}
-	if got := renderScopedEmpty(true, true); !strings.Contains(got, "No Atlas activity in the last 7 days") {
-		t.Errorf("historical empty state missing honest time-window copy:\n%s", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := renderScopedEmpty(tt.global, tt.hasHistory)
+			for _, want := range tt.want {
+				if !strings.Contains(got, want) {
+					t.Fatalf("empty copy missing %q: %q", want, got)
+				}
+			}
+		})
 	}
 }
 
