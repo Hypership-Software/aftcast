@@ -74,15 +74,18 @@ func (s *Store) Project(log *audit.Log) error {
 
 	upsert, err := tx.Prepare(`INSERT INTO sessions
 		(session_id, user, org, harness, started, ended, exit_reason,
-		 turn_count, tool_calls, danger_detected, taint, skills_used, duration_ms, files_touched,
+		 turn_count, tool_calls, danger_detected, taint, skills_used, duration_ms,
+		 files_touched, files_changed, shipped, capture_version,
 		 outcome, clean_delivery, correction_turns, task_type, project_id)
-		VALUES (?,?,?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?, ?)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			user=excluded.user, org=excluded.org, harness=excluded.harness,
 			started=excluded.started, ended=excluded.ended, exit_reason=excluded.exit_reason,
 			turn_count=excluded.turn_count, tool_calls=excluded.tool_calls,
 			danger_detected=excluded.danger_detected, taint=excluded.taint,
-			skills_used=excluded.skills_used, duration_ms=excluded.duration_ms, files_touched=excluded.files_touched,
+			skills_used=excluded.skills_used, duration_ms=excluded.duration_ms,
+			files_touched=excluded.files_touched, files_changed=excluded.files_changed,
+			shipped=excluded.shipped, capture_version=excluded.capture_version,
 			outcome=excluded.outcome, clean_delivery=excluded.clean_delivery,
 			correction_turns=excluded.correction_turns, task_type=excluded.task_type,
 			project_id=excluded.project_id`)
@@ -93,7 +96,9 @@ func (s *Store) Project(log *audit.Log) error {
 	for _, sess := range folded {
 		if _, err := upsert.Exec(sess.SessionID, sess.User, sess.Org, sess.Harness,
 			sess.Started, sess.Ended, sess.ExitReason,
-			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint), sess.SkillsUsed, sess.DurationMS, sess.FilesTouched,
+			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint),
+			sess.SkillsUsed, sess.DurationMS, sess.FilesTouched, sess.FilesChanged,
+			b2i(sess.Shipped), sess.CaptureVersion,
 			sess.Outcome, b2i(sess.CleanDelivery), sess.CorrectionTurns, sess.TaskType, sess.ProjectID); err != nil {
 			return err
 		}
@@ -111,10 +116,11 @@ func (s *Store) Project(log *audit.Log) error {
 // first/last timestamps per session are its start/end.
 func foldSessions(evs []schema.TelemetryEvent) []Session {
 	type acc struct {
-		sess   *Session
-		skills map[string]struct{}
-		files  map[string]struct{}
-		events []schema.TelemetryEvent
+		sess    *Session
+		skills  map[string]struct{}
+		files   map[string]struct{}
+		changed map[string]struct{}
+		events  []schema.TelemetryEvent
 	}
 	byID := make(map[string]*acc)
 	var order []string
@@ -122,12 +128,25 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 	for _, e := range evs {
 		a := byID[e.SessionID]
 		if a == nil {
-			a = &acc{sess: &Session{SessionID: e.SessionID, Started: e.TS}, skills: map[string]struct{}{}, files: map[string]struct{}{}}
+			a = &acc{sess: &Session{SessionID: e.SessionID, Started: e.TS}, skills: map[string]struct{}{}, files: map[string]struct{}{}, changed: map[string]struct{}{}}
 			byID[e.SessionID] = a
 			order = append(order, e.SessionID)
 		}
 		a.events = append(a.events, e)
 		s := a.sess
+		if e.V > s.CaptureVersion {
+			s.CaptureVersion = e.V
+		}
+		if e.ToolClass == schema.ClassFileWrite {
+			for _, f := range e.Files {
+				if f != "" {
+					a.changed[f] = struct{}{}
+				}
+			}
+		}
+		if e.DeliverySignal == schema.DeliveryGitPush {
+			s.Shipped = true
+		}
 		if s.User == "" {
 			s.User = e.User
 		}
@@ -176,6 +195,7 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		a.sess.SkillsUsed = joinSorted(a.skills)
 		a.sess.DurationMS = durationMS(a.sess.Started, a.sess.Ended)
 		a.sess.FilesTouched = len(a.files)
+		a.sess.FilesChanged = len(a.changed)
 		clean, corrections := analytics.CleanDelivery(a.events)
 		taskType, _ := analytics.Taxonomy(a.events)
 		a.sess.Outcome = string(analytics.Outcome(a.events))
