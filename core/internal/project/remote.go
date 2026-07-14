@@ -15,9 +15,16 @@ func normalizeRemote(raw string) string {
 		if at := strings.Index(s, "@"); at >= 0 {
 			s = s[at+1:]
 		}
-	} else if at := strings.Index(s, "@"); at >= 0 {
-		// scp-like: git@host:org/repo.git — turn the first ':' into '/'.
-		s = s[at+1:]
+		// drop a :port sitting between host and the first '/'
+		if slash := strings.Index(s, "/"); slash >= 0 {
+			if colon := strings.IndexByte(s[:slash], ':'); colon >= 0 {
+				s = s[:colon] + s[slash:]
+			}
+		}
+	} else {
+		if at := strings.Index(s, "@"); at >= 0 {
+			s = s[at+1:]
+		}
 		if colon := strings.Index(s, ":"); colon >= 0 {
 			s = s[:colon] + "/" + s[colon+1:]
 		}
