@@ -63,8 +63,8 @@ func (s *Store) Project(log *audit.Log) error {
 	upsert, err := tx.Prepare(`INSERT INTO sessions
 		(session_id, user, org, harness, started, ended, exit_reason,
 		 turn_count, tool_calls, danger_detected, taint, skills_used, duration_ms, files_touched,
-		 outcome, clean_delivery, correction_turns, task_type)
-		VALUES (?,?,?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?)
+		 outcome, clean_delivery, correction_turns, task_type, project_id)
+		VALUES (?,?,?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?, ?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			user=excluded.user, org=excluded.org, harness=excluded.harness,
 			started=excluded.started, ended=excluded.ended, exit_reason=excluded.exit_reason,
@@ -72,7 +72,8 @@ func (s *Store) Project(log *audit.Log) error {
 			danger_detected=excluded.danger_detected, taint=excluded.taint,
 			skills_used=excluded.skills_used, duration_ms=excluded.duration_ms, files_touched=excluded.files_touched,
 			outcome=excluded.outcome, clean_delivery=excluded.clean_delivery,
-			correction_turns=excluded.correction_turns, task_type=excluded.task_type`)
+			correction_turns=excluded.correction_turns, task_type=excluded.task_type,
+			project_id=excluded.project_id`)
 	if err != nil {
 		return err
 	}
@@ -81,7 +82,7 @@ func (s *Store) Project(log *audit.Log) error {
 		if _, err := upsert.Exec(sess.SessionID, sess.User, sess.Org, sess.Harness,
 			sess.Started, sess.Ended, sess.ExitReason,
 			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint), sess.SkillsUsed, sess.DurationMS, sess.FilesTouched,
-			sess.Outcome, b2i(sess.CleanDelivery), sess.CorrectionTurns, sess.TaskType); err != nil {
+			sess.Outcome, b2i(sess.CleanDelivery), sess.CorrectionTurns, sess.TaskType, sess.ProjectID); err != nil {
 			return err
 		}
 	}
@@ -123,6 +124,9 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		}
 		if s.Harness == "" {
 			s.Harness = e.Harness
+		}
+		if s.ProjectID == "" && e.Project != "" {
+			s.ProjectID = e.Project
 		}
 		if e.TS != "" {
 			s.Ended = e.TS
