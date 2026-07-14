@@ -25,7 +25,10 @@ func TestObservedPlanStyleBoundedExplicitMarkers(t *testing.T) {
 		"enter plan mode":         {EventType: schema.EventPreTool, ToolRaw: "eNtErPlAnMoDe"},
 		"brainstorming skill":     {EventType: schema.EventPreTool, ToolClass: schema.ClassSkill, Skill: "superpowers:brainstorming"},
 		"writing plans skill":     {EventType: schema.EventPreTool, ToolClass: schema.ClassSkill, Skill: "superpowers:writing-plans"},
+		"plan skill":              {EventType: schema.EventPreTool, ToolClass: schema.ClassSkill, Skill: "superpowers:plan"},
 		"plan slash command":      {EventType: schema.EventPromptExpansion, Command: "/PLAN"},
+		"brainstorming command":   {EventType: schema.EventPromptExpansion, Command: "/brainstorming"},
+		"writing plans command":   {EventType: schema.EventPromptExpansion, Command: "/writing-plans"},
 		"namespaced plan command": {EventType: schema.EventPromptExpansion, Command: "superpowers:plan"},
 	}
 	for name, marker := range tests {
