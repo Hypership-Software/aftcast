@@ -36,6 +36,9 @@ type SessionStat struct {
 	Started         string
 	Outcome         OutcomeClass
 	CleanDelivery   bool
+	CaptureVersion  int
+	FilesChanged    int
+	Shipped         bool
 	CorrectionTurns int
 	TurnCount       int
 	ToolCalls       int
