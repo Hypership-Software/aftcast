@@ -11,10 +11,8 @@ import (
 	"github.com/Hypership-Software/atlas/internal/telemetry"
 	"github.com/Hypership-Software/atlas/internal/ui"
 
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 type mode int
@@ -39,33 +37,14 @@ const (
 
 func (s sortMode) next() sortMode { return (s + 1) % 3 }
 
-var sessionColumns = []table.Column{
-	{Title: "When", Width: 9},
-	{Title: "Task", Width: 12},
-	{Title: "Outcome", Width: 10},
-	{Title: "Work", Width: 26},
-	{Title: "Flags", Width: 32},
-}
-
-const flagsColMaxWidth = 48
-
-// flagsColumnWidth sizes the Flags column to the widest flags cell in the data
-// (measured the same ANSI/runewidth-aware way the table truncates), so a session
-// carrying all of ⚠/⚑/★ isn't clipped. Capped so a pathological count can't blow
-// the layout. Computed over the full set (not just visible) so it stays stable
-// across hide-empty/sort toggles.
-func flagsColumnWidth(sessions []telemetry.Session) int {
-	w := lipgloss.Width("Flags")
-	for _, s := range sessions {
-		if cw := lipgloss.Width(flagsCell(s)); cw > w {
-			w = cw
-		}
-	}
-	if w > flagsColMaxWidth {
-		w = flagsColMaxWidth
-	}
-	return w
-}
+// Column floors for the responsive layout: the fixed leading columns (When,
+// Task, Outcome, Project) never shrink; Work and Flags give up width first when
+// the terminal is too narrow. Flags keeps the larger floor so the risk glyphs it
+// carries survive as long as possible.
+const (
+	workColFloor  = 12
+	flagsColFloor = 18
+)
 
 type model struct {
 	global      []telemetry.Session // full 7-day set (all projects)
@@ -75,7 +54,7 @@ type model struct {
 	// all is the active scope's (7-day-filtered) session set; it never
 	// reorders or drops rows on its own — hide/sort only ever read from it.
 	all         []telemetry.Session
-	sessions    []telemetry.Session // visible+sorted, in lockstep with table rows: m.sessions[i] is table row i.
+	sessions    []telemetry.Session // visible+sorted; m.sessions[i] is table row i.
 	agg         aggregates
 	events      eventProvider
 	now         time.Time
@@ -83,9 +62,11 @@ type model struct {
 	sortMode    sortMode
 	hiddenCount int
 
+	cursor int // selected row into m.sessions
+	width  int // last known terminal width; 0 until the first WindowSizeMsg
+
 	mode       mode
 	preHelp    mode // where ? was pressed from, so esc/? returns there
-	table      table.Model
 	detail     viewport.Model
 	detailSess telemetry.Session
 	detailEvs  []schema.TelemetryEvent
@@ -99,10 +80,6 @@ func build(sessions []telemetry.Session, scope Scope, events eventProvider, now 
 		events: events,
 		now:    now,
 		mode:   modeList,
-		table: table.New(
-			table.WithColumns(sessionColumns),
-			table.WithFocused(true),
-		),
 		detail: viewport.New(80, 20),
 	}
 	m.scopeGlobal = scope.StartGlobal || scope.ProjectID == ""
@@ -110,7 +87,7 @@ func build(sessions []telemetry.Session, scope Scope, events eventProvider, now 
 }
 
 // applyScope recomputes the active session set and its aggregates for the current
-// scope, then rebuilds the table rows.
+// scope, then rebuilds the visible rows.
 func (m model) applyScope() model {
 	m.all = scopeSessions(m.global, m.scope.ProjectID, m.scopeGlobal)
 	m.agg = aggregate(m.all, m.now)
@@ -138,52 +115,42 @@ func scopeLabel(scope Scope, global bool) string {
 	return scope.Name
 }
 
-// rebuildRows recomputes the visible+sorted session slice from m.all and pushes
-// matching rows into the table, resetting the cursor to the top. Sessions and
-// rows must always be rebuilt together: m.sessions[m.table.Cursor()] is how
-// "enter" resolves which session to open, so an out-of-step rebuild opens the
-// wrong session's detail.
+// rebuildRows recomputes the visible+sorted session slice from m.all and resets
+// the cursor to the top. m.sessions[m.cursor] is how "enter" resolves which
+// session to open, so any hide/sort change rebuilds this slice and re-anchors the
+// cursor together.
 func (m model) rebuildRows() model {
 	visible := visibleSessions(m.all, m.showEmpty)
 	sortSessions(visible, m.sortMode)
-
-	rows := make([]table.Row, len(visible))
-	for i, s := range visible {
-		r := sessionRow(s, m.now)
-		if m.scopeGlobal {
-			r = append(table.Row{m.projectCell(s)}, r...)
-		}
-		rows[i] = r
-	}
-
-	cols := m.columns()
-
 	m.sessions = visible
 	m.hiddenCount = len(m.all) - len(visible)
-	// bubbles/table's SetColumns/SetRows each re-render the viewport immediately
-	// against whatever the OTHER field currently holds. Since the Project column
-	// makes the row width vary by scope, a stale wider/narrower pairing during
-	// this swap indexes out of range — clear rows first so neither setter ever
-	// renders mismatched cols/rows.
-	m.table.SetRows(nil)
-	m.table.SetColumns(cols)
-	m.table.SetRows(rows)
-	// SetHeight reserves one line for the header internally, so +1 here is what
-	// makes clampHeight's return value the number of visible DATA rows.
-	m.table.SetHeight(clampHeight(len(rows)) + 1)
-	m.table.SetCursor(0)
+	m.cursor = 0
 	return m
 }
 
-// columns returns the table columns for the active scope: the global view gets a
-// leading Project column; the last column (Flags) is auto-widened either way.
-func (m model) columns() []table.Column {
-	cols := make([]table.Column, 0, len(sessionColumns)+1)
+// buildColumns projects the visible sessions into the table's columns for the
+// active scope: the global view gets a leading Project column; Work and Flags
+// carry floors so they absorb (or give up) the terminal's spare width.
+func (m model) buildColumns() []tableColumn {
+	titles := []string{"When", "Task", "Outcome", "Work", "Flags"}
+	floors := []int{0, 0, 0, workColFloor, flagsColFloor}
 	if m.scopeGlobal {
-		cols = append(cols, table.Column{Title: "Project", Width: 14})
+		titles = append([]string{"Project"}, titles...)
+		floors = append([]int{0}, floors...)
 	}
-	cols = append(cols, sessionColumns...)
-	cols[len(cols)-1].Width = flagsColumnWidth(m.all)
+	cols := make([]tableColumn, len(titles))
+	for i := range titles {
+		cols[i] = tableColumn{title: titles[i], floor: floors[i], cells: make([]string, len(m.sessions))}
+	}
+	for r, s := range m.sessions {
+		row := sessionRow(s, m.now)
+		if m.scopeGlobal {
+			row = append([]string{m.projectCell(s)}, row...)
+		}
+		for i := range cols {
+			cols[i].cells[r] = row[i]
+		}
+	}
 	return cols
 }
 
@@ -240,8 +207,8 @@ func startedUnixNano(s telemetry.Session) int64 {
 	return t.UnixNano()
 }
 
-func sessionRow(s telemetry.Session, now time.Time) table.Row {
-	return table.Row{
+func sessionRow(s telemetry.Session, now time.Time) []string {
+	return []string{
 		humanize(s.Started, now),
 		taskCell(s.TaskType),
 		outcomeCell(s),
@@ -289,22 +256,12 @@ func flagsCell(s telemetry.Session) string {
 	return strings.Join(parts, " ")
 }
 
-func clampHeight(n int) int {
-	switch {
-	case n < 1:
-		return 1
-	case n > 15:
-		return 15
-	default:
-		return n
-	}
-}
-
 func (m model) Init() tea.Cmd { return nil }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		m.width = msg.Width
 		m.detail.Width = msg.Width
 		if h := msg.Height - 4; h > 0 {
 			m.detail.Height = h
@@ -342,12 +299,16 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.preHelp = modeList
 		m.mode = modeHelp
 		return m, nil
-	case "h":
-		m.showEmpty = !m.showEmpty
-		return m.rebuildRows(), nil
-	case "s":
-		m.sortMode = m.sortMode.next()
-		return m.rebuildRows(), nil
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+		return m, nil
+	case "down", "j":
+		if m.cursor < len(m.sessions)-1 {
+			m.cursor++
+		}
+		return m, nil
 	case "g":
 		if !m.scopeGlobal {
 			m.scopeGlobal = true
@@ -360,29 +321,36 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.applyScope(), nil
 		}
 		return m, nil
+	case "h":
+		m.showEmpty = !m.showEmpty
+		return m.rebuildRows(), nil
+	case "s":
+		m.sortMode = m.sortMode.next()
+		return m.rebuildRows(), nil
 	case "enter":
 		if len(m.sessions) == 0 {
 			return m, nil
 		}
-		sess := m.sessions[m.table.Cursor()]
-		m.mode = modeDetail
-		m.detailSess = sess
-		m.showRaw = false
-		evs, err := m.events(sess.SessionID)
-		if err != nil {
-			m.detailEvs = nil
-			m.detail.SetContent("failed to load events: " + err.Error())
-			m.detail.GotoTop()
-			return m, nil
-		}
-		m.detailEvs = evs
-		m.detail.SetContent(detailBody(sess, evs, false))
+		return m.openDetail(m.sessions[m.cursor])
+	}
+	return m, nil
+}
+
+func (m model) openDetail(sess telemetry.Session) (tea.Model, tea.Cmd) {
+	m.mode = modeDetail
+	m.detailSess = sess
+	m.showRaw = false
+	evs, err := m.events(sess.SessionID)
+	if err != nil {
+		m.detailEvs = nil
+		m.detail.SetContent("failed to load events: " + err.Error())
 		m.detail.GotoTop()
 		return m, nil
 	}
-	var cmd tea.Cmd
-	m.table, cmd = m.table.Update(msg)
-	return m, cmd
+	m.detailEvs = evs
+	m.detail.SetContent(detailBody(sess, evs, false))
+	m.detail.GotoTop()
+	return m, nil
 }
 
 func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -417,7 +385,7 @@ func (m model) View() string {
 	if m.mode == modeDetail {
 		return renderDetail(m.detail.View())
 	}
-	tableView := m.table.View()
+	tableView := renderSessionTable(m.buildColumns(), m.cursor, m.width)
 	if note := hiddenNote(m.hiddenCount); note != "" {
 		tableView += "\n" + note
 	}
