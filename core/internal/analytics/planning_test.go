@@ -20,6 +20,51 @@ func TestObservedPlanStyleExplicitMarker(t *testing.T) {
 	}
 }
 
+func TestObservedPlanStyleBoundedExplicitMarkers(t *testing.T) {
+	tests := map[string]schema.TelemetryEvent{
+		"enter plan mode":         {EventType: schema.EventPreTool, ToolRaw: "eNtErPlAnMoDe"},
+		"brainstorming skill":     {EventType: schema.EventPreTool, ToolClass: schema.ClassSkill, Skill: "superpowers:brainstorming"},
+		"writing plans skill":     {EventType: schema.EventPreTool, ToolClass: schema.ClassSkill, Skill: "superpowers:writing-plans"},
+		"plan slash command":      {EventType: schema.EventPromptExpansion, Command: "/PLAN"},
+		"namespaced plan command": {EventType: schema.EventPromptExpansion, Command: "superpowers:plan"},
+	}
+	for name, marker := range tests {
+		t.Run(name, func(t *testing.T) {
+			events := []schema.TelemetryEvent{
+				marker,
+				planEvent("p1", schema.EventPreTool, schema.ClassFileWrite),
+			}
+			if got := ObservedPlanStyle(events); got != PlanFirst {
+				t.Fatalf("explicit marker = %q, want plan_first", got)
+			}
+		})
+	}
+}
+
+func TestObservedPlanStyleIncidentalNamesAreNotPlanningMarkers(t *testing.T) {
+	tests := map[string]schema.TelemetryEvent{
+		"nonbrainstormer":          {EventType: schema.EventPreTool, ToolClass: schema.ClassSkill, Skill: "nonbrainstormer"},
+		"rewriting plans":          {EventType: schema.EventPreTool, ToolClass: schema.ClassSkill, Skill: "rewriting-plans"},
+		"subscription plan export": {EventType: schema.EventPromptExpansion, Command: "subscription_plan_export"},
+		"planet":                   {EventType: schema.EventPromptExpansion, Command: "planet"},
+		"brainstorm notes":         {EventType: schema.EventPreTool, ToolClass: schema.ClassSkill, Skill: "brainstorm-notes"},
+		"planning report":          {EventType: schema.EventPromptExpansion, Command: "planning-report"},
+	}
+	for name, marker := range tests {
+		t.Run(name, func(t *testing.T) {
+			marker.PromptID = "p1"
+			events := []schema.TelemetryEvent{
+				planEvent("p1", schema.EventUserPrompt, ""),
+				marker,
+				planEvent("p1", schema.EventPreTool, schema.ClassFileWrite),
+			}
+			if got := ObservedPlanStyle(events); got != PlanDirect {
+				t.Fatalf("incidental marker = %q, want direct_to_edit", got)
+			}
+		})
+	}
+}
+
 func TestObservedPlanStylePreparatoryPrompt(t *testing.T) {
 	events := []schema.TelemetryEvent{
 		planEvent("p1", schema.EventPreTool, schema.ClassFileRead),
@@ -38,6 +83,49 @@ func TestObservedPlanStyleDirectToEdit(t *testing.T) {
 	}
 	if got := ObservedPlanStyle(events); got != PlanDirect {
 		t.Fatalf("first-prompt edit = %q, want direct_to_edit", got)
+	}
+}
+
+func TestObservedPlanStyleUnknownForUnidentifiedEarlierPrompt(t *testing.T) {
+	events := []schema.TelemetryEvent{
+		planEvent("", schema.EventUserPrompt, ""),
+		planEvent("p2", schema.EventPreTool, schema.ClassFileWrite),
+	}
+	if got := ObservedPlanStyle(events); got != PlanUnknown {
+		t.Fatalf("unidentified earlier prompt = %q, want unknown", got)
+	}
+}
+
+func TestObservedPlanStyleUnknownForUnidentifiedPreWriteActivity(t *testing.T) {
+	events := []schema.TelemetryEvent{
+		planEvent("", schema.EventPreTool, schema.ClassFileRead),
+		planEvent("p2", schema.EventUserPrompt, ""),
+		planEvent("p2", schema.EventPreTool, schema.ClassFileWrite),
+	}
+	if got := ObservedPlanStyle(events); got != PlanUnknown {
+		t.Fatalf("unidentified pre-write activity = %q, want unknown", got)
+	}
+}
+
+func TestObservedPlanStyleUnknownForEarlierIdentifiedPromptGroup(t *testing.T) {
+	events := []schema.TelemetryEvent{
+		planEvent("p0", schema.EventPreTool, schema.ClassFileRead),
+		planEvent("p1", schema.EventUserPrompt, ""),
+		planEvent("p1", schema.EventPreTool, schema.ClassFileWrite),
+	}
+	if got := ObservedPlanStyle(events); got != PlanUnknown {
+		t.Fatalf("earlier identified prompt group = %q, want unknown", got)
+	}
+}
+
+func TestObservedPlanStyleExplicitMarkerWithIncompletePromptGrouping(t *testing.T) {
+	events := []schema.TelemetryEvent{
+		planEvent("", schema.EventUserPrompt, ""),
+		{EventType: schema.EventPreTool, ToolRaw: "EnterPlanMode"},
+		planEvent("p2", schema.EventPreTool, schema.ClassFileWrite),
+	}
+	if got := ObservedPlanStyle(events); got != PlanFirst {
+		t.Fatalf("explicit marker with incomplete grouping = %q, want plan_first", got)
 	}
 }
 
