@@ -3,6 +3,7 @@ package insights
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/Hypership-Software/atlas/internal/schema"
 )
@@ -182,7 +183,7 @@ func isLowSignal(r traceRow) bool {
 	if r.Verb == "read" {
 		return true
 	}
-	return r.Verb == lowSignalGlob || r.Verb == lowSignalGrep
+	return strings.EqualFold(r.Verb, lowSignalGlob) || strings.EqualFold(r.Verb, lowSignalGrep)
 }
 
 func collapseRuns(rows []traceRow) []traceRow {
