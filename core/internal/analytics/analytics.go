@@ -37,6 +37,7 @@ type SessionStat struct {
 	Outcome         OutcomeClass
 	CleanDelivery   bool
 	CaptureVersion  int
+	PlanStyle       PlanStyle
 	FilesChanged    int
 	Shipped         bool
 	CorrectionTurns int
