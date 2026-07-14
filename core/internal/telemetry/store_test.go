@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Hypership-Software/atlas/internal/analytics"
 	"github.com/Hypership-Software/atlas/internal/audit"
 	"github.com/Hypership-Software/atlas/internal/schema"
 )
@@ -143,6 +144,23 @@ func TestProjectFoldsDeliveryFacts(t *testing.T) {
 	}
 	if got["new"].CaptureVersion != 2 || got["new"].FilesChanged != 1 || !got["new"].Shipped {
 		t.Fatalf("new session = %+v", got["new"])
+	}
+}
+
+func TestProjectFoldsObservedPlanStyle(t *testing.T) {
+	evs := []schema.TelemetryEvent{
+		{V: 2, SessionID: "planned", PromptID: "p1", EventType: schema.EventPreTool, ToolClass: schema.ClassFileRead, TS: ts(0)},
+		{V: 2, SessionID: "planned", PromptID: "p1", EventType: schema.EventPreTool, ToolClass: schema.ClassAgentSpawn, TS: ts(1)},
+		{V: 2, SessionID: "planned", PromptID: "p2", EventType: schema.EventPreTool, ToolClass: schema.ClassFileWrite, Files: []string{"x.go"}, TS: ts(2)},
+	}
+	log := buildLog(t, evs)
+	defer log.Close()
+	store := openStore(t)
+	if err := store.Project(log); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionsByID(t, store)["planned"].PlanStyle; got != string(analytics.PlanFirst) {
+		t.Fatalf("plan_style = %q, want plan_first", got)
 	}
 }
 
@@ -338,8 +356,8 @@ func TestSessions_ScansProjectID(t *testing.T) {
 		(session_id, user, org, harness, started, ended, exit_reason,
 		 turn_count, tool_calls, danger_detected, taint, outcome, clean_delivery,
 		 correction_turns, task_type, skills_used, duration_ms, files_touched,
-		 files_changed, shipped, capture_version, project_id)
-		VALUES ('s1','','','','','','',0,5,0,0,'',0,0,'','',0,0,0,0,0,'proj123')`); err != nil {
+		 files_changed, shipped, capture_version, plan_style, project_id)
+		VALUES ('s1','','','','','','',0,5,0,0,'',0,0,'','',0,0,0,0,0,'','proj123')`); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.Sessions()

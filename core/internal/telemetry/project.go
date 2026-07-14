@@ -75,9 +75,9 @@ func (s *Store) Project(log *audit.Log) error {
 	upsert, err := tx.Prepare(`INSERT INTO sessions
 		(session_id, user, org, harness, started, ended, exit_reason,
 		 turn_count, tool_calls, danger_detected, taint, skills_used, duration_ms,
-		 files_touched, files_changed, shipped, capture_version,
+		 files_touched, files_changed, shipped, capture_version, plan_style,
 		 outcome, clean_delivery, correction_turns, task_type, project_id)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			user=excluded.user, org=excluded.org, harness=excluded.harness,
 			started=excluded.started, ended=excluded.ended, exit_reason=excluded.exit_reason,
@@ -86,6 +86,7 @@ func (s *Store) Project(log *audit.Log) error {
 			skills_used=excluded.skills_used, duration_ms=excluded.duration_ms,
 			files_touched=excluded.files_touched, files_changed=excluded.files_changed,
 			shipped=excluded.shipped, capture_version=excluded.capture_version,
+			plan_style=excluded.plan_style,
 			outcome=excluded.outcome, clean_delivery=excluded.clean_delivery,
 			correction_turns=excluded.correction_turns, task_type=excluded.task_type,
 			project_id=excluded.project_id`)
@@ -98,7 +99,7 @@ func (s *Store) Project(log *audit.Log) error {
 			sess.Started, sess.Ended, sess.ExitReason,
 			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint),
 			sess.SkillsUsed, sess.DurationMS, sess.FilesTouched, sess.FilesChanged,
-			b2i(sess.Shipped), sess.CaptureVersion,
+			b2i(sess.Shipped), sess.CaptureVersion, sess.PlanStyle,
 			sess.Outcome, b2i(sess.CleanDelivery), sess.CorrectionTurns, sess.TaskType, sess.ProjectID); err != nil {
 			return err
 		}
@@ -202,6 +203,7 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		a.sess.CleanDelivery = clean
 		a.sess.CorrectionTurns = corrections
 		a.sess.TaskType = taskType
+		a.sess.PlanStyle = string(analytics.ObservedPlanStyle(a.events))
 		out = append(out, *a.sess)
 	}
 	return out
