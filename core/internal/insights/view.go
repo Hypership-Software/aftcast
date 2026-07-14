@@ -213,7 +213,22 @@ func renderList(agg aggregates, tableView string) string {
 		renderAttentionBlock(agg.needsAttention),
 		"",
 		tableView,
-		ui.Hint("↑↓ move · ↵ open · s sort · h show/hide empty · q quit"),
+		ui.Hint("↑↓ (k/j) move · ↵ open · s sort · h show/hide empty · ? help · q quit"),
+	}, "\n")
+}
+
+// renderHelp is the full keybinding overlay, opened with ? from either the
+// list or detail screen. It only lists keys the model actually handles —
+// no aspirational bindings (e.g. no "/" filter, which isn't implemented yet).
+func renderHelp() string {
+	return strings.Join([]string{
+		ui.Bold("Keybindings — help"),
+		"",
+		"↑↓ (k/j) move · ↵ open · esc back · s sort · h show/hide empty · r raw (detail) · ? help · q quit",
+		"",
+		"⚠ untrusted input · ⚑ flagged actions · ★ skills",
+		"",
+		ui.Hint("esc or ? to close"),
 	}, "\n")
 }
 
@@ -407,6 +422,6 @@ func detailBody(sess telemetry.Session, events []schema.TelemetryEvent, raw bool
 func renderDetail(body string) string {
 	return strings.Join([]string{
 		body,
-		ui.Hint("↑↓ scroll · r raw · esc back · q quit"),
+		ui.Hint("↑↓ scroll · r raw · esc back · ? help · q quit"),
 	}, "\n")
 }

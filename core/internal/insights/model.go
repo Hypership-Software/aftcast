@@ -21,6 +21,7 @@ type mode int
 const (
 	modeList mode = iota
 	modeDetail
+	modeHelp
 )
 
 // eventProvider loads a session's events on drill-down. Injected so the model is
@@ -58,6 +59,7 @@ type model struct {
 	hiddenCount int
 
 	mode       mode
+	preHelp    mode // where ? was pressed from, so esc/? returns there
 	table      table.Model
 	detail     viewport.Model
 	detailSess telemetry.Session
@@ -215,10 +217,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyMsg:
-		if m.mode == modeDetail {
+		switch m.mode {
+		case modeHelp:
+			return m.updateHelp(msg)
+		case modeDetail:
 			return m.updateDetail(msg)
+		default:
+			return m.updateList(msg)
 		}
-		return m.updateList(msg)
+	}
+	return m, nil
+}
+
+func (m model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "esc", "?":
+		m.mode = m.preHelp
+		return m, nil
 	}
 	return m, nil
 }
@@ -227,6 +244,10 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
+	case "?":
+		m.preHelp = modeList
+		m.mode = modeHelp
+		return m, nil
 	case "h":
 		m.showEmpty = !m.showEmpty
 		return m.rebuildRows(), nil
@@ -262,6 +283,10 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
+	case "?":
+		m.preHelp = modeDetail
+		m.mode = modeHelp
+		return m, nil
 	case "esc":
 		m.mode = modeList
 		return m, nil
@@ -277,6 +302,9 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
+	if m.mode == modeHelp {
+		return renderHelp()
+	}
 	if len(m.all) == 0 {
 		return renderEmpty()
 	}

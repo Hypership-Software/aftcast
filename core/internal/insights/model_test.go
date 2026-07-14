@@ -107,5 +107,63 @@ func TestEmptyState(t *testing.T) {
 	}
 }
 
+func TestHelpOverlayToggles(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	m := build(nil, aggregates{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}))
+	if !strings.Contains(m.View(), "help") {
+		t.Error("? did not open help overlay")
+	}
+}
+
+func TestHelpOverlayClosesBackToPreviousMode(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	m := sampleModel()
+	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 40}))
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyEnter}))
+	if m.mode != modeDetail {
+		t.Fatalf("enter did not switch to detail mode")
+	}
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}))
+	if m.mode != modeHelp {
+		t.Fatalf("? from detail did not open help, got mode %v", m.mode)
+	}
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyEsc}))
+	if m.mode != modeDetail {
+		t.Fatalf("esc from help should return to detail, got mode %v", m.mode)
+	}
+
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}))
+	if m.mode != modeHelp {
+		t.Fatalf("? from detail (second time) did not open help, got mode %v", m.mode)
+	}
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}))
+	if m.mode != modeDetail {
+		t.Fatalf("? from help should return to detail, got mode %v", m.mode)
+	}
+
+	m.mode = modeList
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}))
+	if m.mode != modeHelp {
+		t.Fatalf("? from list did not open help, got mode %v", m.mode)
+	}
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyEsc}))
+	if m.mode != modeList {
+		t.Fatalf("esc from help should return to list, got mode %v", m.mode)
+	}
+}
+
+func TestHelpOverlayQuitKey(t *testing.T) {
+	m := sampleModel()
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}))
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if cmd == nil {
+		t.Fatalf("q from help produced no command")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatalf("q from help did not produce QuitMsg")
+	}
+}
+
 // must unwraps an Update result back to the concrete model for assertions.
 func must(mdl tea.Model, _ tea.Cmd) model { return mdl.(model) }
