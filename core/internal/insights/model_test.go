@@ -28,6 +28,24 @@ func sampleModel() model {
 	return build(sessions, aggregate(sessions, sampleNow), provider, sampleNow)
 }
 
+func TestFlagsColumnFitsAllFlags(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	s := telemetry.Session{SessionID: "cccc3333", Harness: "claudecode", TaskType: "testing",
+		Outcome: "success", CorrectionTurns: 1, ToolCalls: 179, FilesTouched: 44,
+		Taint: true, DangerDetected: 11, SkillsUsed: "a,b,c,d",
+		Started: sampleNow.Add(-20 * time.Hour).Format(time.RFC3339Nano)}
+	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
+	m := build([]telemetry.Session{s}, aggregate([]telemetry.Session{s}, sampleNow), provider, sampleNow)
+	v := m.View()
+	// All three flags co-occur here; the Flags column must widen to fit rather
+	// than truncate the trailing "★ 4 skills".
+	for _, want := range []string{"⚠ untrusted input", "⚑ 11 flagged", "★ 4 skills"} {
+		if !strings.Contains(v, want) {
+			t.Fatalf("flags column truncated %q:\n%s", want, v)
+		}
+	}
+}
+
 func TestListViewRendersSessions(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	v := sampleModel().View()

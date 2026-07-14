@@ -27,6 +27,15 @@ func shortID(id string) string {
 	return id
 }
 
+const metricLabelWidth = 16
+
+// metricLabel pads the plain label to a fixed width BEFORE styling. fmt's %-Ns
+// counts a style's ANSI escape bytes, so padding a coloured label would misalign
+// the meters in a real terminal — pad first, then colour the padded string.
+func metricLabel(s string) string {
+	return ui.Bold(fmt.Sprintf("%-*s", metricLabelWidth, s))
+}
+
 func renderHeader(agg aggregates) string {
 	return strings.Join([]string{
 		headerContext(agg),
@@ -52,12 +61,12 @@ func renderLandedClean(p analytics.Profile) string {
 		filled = cleanBarLen
 	}
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", cleanBarLen-filled)
-	return fmt.Sprintf("%-16s %s  %.0f%%%s    %d of %d sessions, no rework needed",
-		ui.Bold("Landed clean"), bar, rate*100, trendClause(p), p.CleanCount, p.Sessions)
+	return fmt.Sprintf("%s %s  %.0f%%%s    %d of %d sessions, no rework needed",
+		metricLabel("Landed clean"), bar, rate*100, trendClause(p), p.CleanCount, p.Sessions)
 }
 
 func renderRework(p analytics.Profile) string {
-	return fmt.Sprintf("%-16s %.1f fixes / session", ui.Bold("Rework"), p.CorrectionLoad)
+	return fmt.Sprintf("%s %.1f fixes / session", metricLabel("Rework"), p.CorrectionLoad)
 }
 
 // trendClause reads Profile.Trend, the clean-delivery-rate change (later half
@@ -96,7 +105,7 @@ func renderRisk(agg aggregates) string {
 	if agg.tainted > 0 || agg.danger > 0 {
 		suffix = ui.Warn("⚠ review")
 	}
-	return fmt.Sprintf("%-16s %s   %s", ui.Bold("Risk"), base, suffix)
+	return fmt.Sprintf("%s %s   %s", metricLabel("Risk"), base, suffix)
 }
 
 func renderTaskMix(mix []taskCount) string {

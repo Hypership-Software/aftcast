@@ -8,7 +8,20 @@ import (
 	"github.com/Hypership-Software/atlas/internal/analytics"
 	"github.com/Hypership-Software/atlas/internal/schema"
 	"github.com/Hypership-Software/atlas/internal/telemetry"
+
+	"github.com/charmbracelet/lipgloss"
 )
+
+func TestMetricLabelsAlignToFixedWidth(t *testing.T) {
+	// Colour-safe alignment: the styled meter label must occupy a constant
+	// display width regardless of length or ANSI styling, so the three meters
+	// line up. lipgloss.Width strips ANSI, so this holds under colour too.
+	for _, s := range []string{"Landed clean", "Rework", "Risk"} {
+		if w := lipgloss.Width(metricLabel(s)); w != metricLabelWidth {
+			t.Errorf("metricLabel(%q) display width = %d, want %d", s, w, metricLabelWidth)
+		}
+	}
+}
 
 func sampleAgg() aggregates {
 	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)

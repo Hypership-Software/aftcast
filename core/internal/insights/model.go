@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type mode int
@@ -44,6 +45,26 @@ var sessionColumns = []table.Column{
 	{Title: "Outcome", Width: 10},
 	{Title: "Work", Width: 26},
 	{Title: "Flags", Width: 32},
+}
+
+const flagsColMaxWidth = 48
+
+// flagsColumnWidth sizes the Flags column to the widest flags cell in the data
+// (measured the same ANSI/runewidth-aware way the table truncates), so a session
+// carrying all of ⚠/⚑/★ isn't clipped. Capped so a pathological count can't blow
+// the layout. Computed over the full set (not just visible) so it stays stable
+// across hide-empty/sort toggles.
+func flagsColumnWidth(sessions []telemetry.Session) int {
+	w := lipgloss.Width("Flags")
+	for _, s := range sessions {
+		if cw := lipgloss.Width(flagsCell(s)); cw > w {
+			w = cw
+		}
+	}
+	if w > flagsColMaxWidth {
+		w = flagsColMaxWidth
+	}
+	return w
 }
 
 type model struct {
@@ -97,8 +118,13 @@ func (m model) rebuildRows() model {
 		rows[i] = sessionRow(s, m.now)
 	}
 
+	cols := make([]table.Column, len(sessionColumns))
+	copy(cols, sessionColumns)
+	cols[len(cols)-1].Width = flagsColumnWidth(m.all)
+
 	m.sessions = visible
 	m.hiddenCount = len(m.all) - len(visible)
+	m.table.SetColumns(cols)
 	m.table.SetRows(rows)
 	// SetHeight reserves one line for the header internally, so +1 here is what
 	// makes clampHeight's return value the number of visible DATA rows.
