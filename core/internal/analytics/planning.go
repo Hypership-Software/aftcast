@@ -2,7 +2,6 @@ package analytics
 
 import (
 	"strings"
-	"unicode"
 
 	"github.com/Hypership-Software/atlas/internal/schema"
 )
@@ -41,7 +40,17 @@ func ObservedPlanStyle(events []schema.TelemetryEvent) PlanStyle {
 	var order []string
 	seen := map[string]bool{}
 	prep := map[string]int{}
+	firstPrompt := ""
+	sawPrompt := false
+	incomplete := false
 	for i, e := range events[:firstWrite+1] {
+		if i < firstWrite && e.PromptID == "" && promptScoped(e.EventType) {
+			incomplete = true
+		}
+		if e.EventType == schema.EventUserPrompt && !sawPrompt {
+			sawPrompt = true
+			firstPrompt = e.PromptID
+		}
 		if e.PromptID != "" && !seen[e.PromptID] {
 			seen[e.PromptID] = true
 			order = append(order, e.PromptID)
@@ -53,7 +62,7 @@ func ObservedPlanStyle(events []schema.TelemetryEvent) PlanStyle {
 	if len(order) == 0 {
 		return PlanUnknown
 	}
-	if order[0] == writePrompt {
+	if sawPrompt && !incomplete && firstPrompt == writePrompt && order[0] == writePrompt {
 		return PlanDirect
 	}
 	for _, promptID := range order {
@@ -67,26 +76,35 @@ func ObservedPlanStyle(events []schema.TelemetryEvent) PlanStyle {
 	return PlanUnknown
 }
 
+func promptScoped(event schema.EventType) bool {
+	return event == schema.EventUserPrompt || event == schema.EventPromptExpansion || event == schema.EventPreTool || event == schema.EventPostTool
+}
+
 func preparatoryClass(class schema.ToolClass) bool {
 	return class == schema.ClassFileRead || class == schema.ClassNetSearch || class == schema.ClassNetFetch || class == schema.ClassAgentSpawn
 }
 
 func explicitPlanningMarker(e schema.TelemetryEvent) bool {
-	return strings.EqualFold(e.ToolRaw, "EnterPlanMode") || planningName(e.Skill) || planningName(e.Command)
+	return strings.EqualFold(e.ToolRaw, "EnterPlanMode") || planningSkill(e.Skill) || planningCommand(e.Command)
 }
 
-func planningName(name string) bool {
-	lower := strings.ToLower(name)
-	if strings.Contains(lower, "brainstorm") || strings.Contains(lower, "writing-plans") {
+func planningSkill(name string) bool {
+	switch explicitName(name) {
+	case "brainstorming", "writing-plans":
 		return true
+	default:
+		return false
 	}
-	parts := strings.FieldsFunc(lower, func(r rune) bool {
-		return unicode.IsSpace(r) || strings.ContainsRune(":-_/.", r)
-	})
-	for _, part := range parts {
-		if part == "plan" {
-			return true
-		}
+}
+
+func planningCommand(name string) bool {
+	return explicitName(name) == "plan"
+}
+
+func explicitName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if i := strings.LastIndexAny(name, ":/"); i >= 0 {
+		name = name[i+1:]
 	}
-	return false
+	return name
 }
