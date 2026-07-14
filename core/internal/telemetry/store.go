@@ -38,6 +38,9 @@ type Session struct {
 	SkillsUsed      string
 	DurationMS      int64
 	FilesTouched    int
+	CaptureVersion  int
+	FilesChanged    int
+	Shipped         bool
 	ProjectID       string
 }
 
@@ -65,6 +68,9 @@ CREATE TABLE IF NOT EXISTS sessions (
 	skills_used      TEXT,
 	duration_ms      INTEGER,
 	files_touched    INTEGER,
+	files_changed    INTEGER,
+	shipped          INTEGER,
+	capture_version  INTEGER,
 	project_id       TEXT
 );
 CREATE TABLE IF NOT EXISTS events (
@@ -103,7 +109,8 @@ func (s *Store) Close() error { return s.db.Close() }
 func (s *Store) Sessions() ([]Session, error) {
 	rows, err := s.db.Query(`SELECT session_id, user, org, harness, started, ended, exit_reason,
 		turn_count, tool_calls, danger_detected, taint,
-		outcome, clean_delivery, correction_turns, task_type, skills_used, duration_ms, files_touched, project_id
+		outcome, clean_delivery, correction_turns, task_type, skills_used, duration_ms,
+		files_touched, files_changed, shipped, capture_version, project_id
 		FROM sessions ORDER BY session_id`)
 	if err != nil {
 		return nil, err
@@ -112,16 +119,18 @@ func (s *Store) Sessions() ([]Session, error) {
 
 	var out []Session
 	for rows.Next() {
-		var s Session
-		var taint, clean int
-		if err := rows.Scan(&s.SessionID, &s.User, &s.Org, &s.Harness, &s.Started, &s.Ended, &s.ExitReason,
-			&s.TurnCount, &s.ToolCalls, &s.DangerDetected, &taint,
-			&s.Outcome, &clean, &s.CorrectionTurns, &s.TaskType, &s.SkillsUsed, &s.DurationMS, &s.FilesTouched, &s.ProjectID); err != nil {
+		var session Session
+		var taint, clean, shipped int
+		if err := rows.Scan(&session.SessionID, &session.User, &session.Org, &session.Harness, &session.Started, &session.Ended, &session.ExitReason,
+			&session.TurnCount, &session.ToolCalls, &session.DangerDetected, &taint,
+			&session.Outcome, &clean, &session.CorrectionTurns, &session.TaskType, &session.SkillsUsed, &session.DurationMS,
+			&session.FilesTouched, &session.FilesChanged, &shipped, &session.CaptureVersion, &session.ProjectID); err != nil {
 			return nil, err
 		}
-		s.Taint = taint != 0
-		s.CleanDelivery = clean != 0
-		out = append(out, s)
+		session.Taint = taint != 0
+		session.CleanDelivery = clean != 0
+		session.Shipped = shipped != 0
+		out = append(out, session)
 	}
 	return out, rows.Err()
 }

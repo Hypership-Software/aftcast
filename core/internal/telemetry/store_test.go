@@ -120,6 +120,32 @@ func TestProjectCountsMultipleFilesPerEvent(t *testing.T) {
 	}
 }
 
+func TestProjectFoldsDeliveryFacts(t *testing.T) {
+	evs := []schema.TelemetryEvent{
+		{V: 1, SessionID: "old", EventType: schema.EventUserPrompt, TS: ts(0)},
+		{V: 1, SessionID: "old", EventType: schema.EventPreTool, ToolClass: schema.ClassFileWrite, Files: []string{"old.go"}, TS: ts(1)},
+		{V: 2, SessionID: "new", EventType: schema.EventUserPrompt, TS: ts(2)},
+		{V: 2, SessionID: "new", EventType: schema.EventPreTool, ToolClass: schema.ClassFileWrite, Files: []string{"a.go", "a.go"}, TS: ts(3)},
+		{V: 2, SessionID: "new", EventType: schema.EventPostTool, ToolClass: schema.ClassFileWrite, Files: []string{"a.go"}, ToolOK: schema.OutcomeOK, TS: ts(4)},
+		{V: 2, SessionID: "new", EventType: schema.EventPostTool, ToolClass: schema.ClassExec, ToolOK: schema.OutcomeOK, DeliverySignal: schema.DeliveryGitPush, TS: ts(5)},
+	}
+
+	log := buildLog(t, evs)
+	defer log.Close()
+	store := openStore(t)
+	if err := store.Project(log); err != nil {
+		t.Fatal(err)
+	}
+
+	got := sessionsByID(t, store)
+	if got["old"].CaptureVersion != 1 || got["old"].Shipped {
+		t.Fatalf("old session = %+v", got["old"])
+	}
+	if got["new"].CaptureVersion != 2 || got["new"].FilesChanged != 1 || !got["new"].Shipped {
+		t.Fatalf("new session = %+v", got["new"])
+	}
+}
+
 func TestProjectFoldsTwoSessions(t *testing.T) {
 	log := buildLog(t, twoSessions())
 	defer log.Close()
@@ -311,8 +337,9 @@ func TestSessions_ScansProjectID(t *testing.T) {
 	if _, err := s.db.Exec(`INSERT INTO sessions
 		(session_id, user, org, harness, started, ended, exit_reason,
 		 turn_count, tool_calls, danger_detected, taint, outcome, clean_delivery,
-		 correction_turns, task_type, skills_used, duration_ms, files_touched, project_id)
-		VALUES ('s1','','','','','','',0,5,0,0,'',0,0,'','',0,0,'proj123')`); err != nil {
+		 correction_turns, task_type, skills_used, duration_ms, files_touched,
+		 files_changed, shipped, capture_version, project_id)
+		VALUES ('s1','','','','','','',0,5,0,0,'',0,0,'','',0,0,0,0,0,'proj123')`); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.Sessions()
