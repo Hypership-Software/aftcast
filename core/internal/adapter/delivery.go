@@ -6,41 +6,170 @@ import (
 	"strings"
 
 	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/google/shlex"
 )
 
-var shellSeparator = map[string]bool{
-	"&&": true,
-	"||": true,
-	";":  true,
-	"|":  true,
-}
+func deliverySignal(command string) schema.DeliverySignal {
+	segments, operators, ok := parseShellCommand(command)
+	if !ok {
+		return ""
+	}
 
-func deliverySignal(argv []string) schema.DeliverySignal {
-	for _, segment := range commandSegments(argv) {
-		if isGitPush(segment) {
-			return schema.DeliveryGitPush
+	start := 0
+	for i, operator := range operators {
+		if operator == ";" {
+			start = i + 1
 		}
+	}
+	for _, operator := range operators[start:] {
+		if operator != "&&" {
+			return ""
+		}
+	}
+
+	found := false
+	for _, segment := range segments[start:] {
+		if alwaysFails(segment) {
+			return ""
+		}
+		if isGitPush(segment) {
+			found = true
+		}
+	}
+	if found {
+		return schema.DeliveryGitPush
 	}
 	return ""
 }
 
-func commandSegments(argv []string) [][]string {
-	var out [][]string
-	var current []string
-	for _, tok := range argv {
-		if shellSeparator[tok] {
-			if len(current) > 0 {
-				out = append(out, current)
-				current = nil
+func parseShellCommand(command string) ([][]string, []string, bool) {
+	rawSegments, operators, ok := splitShellCommand(command)
+	if !ok {
+		return nil, nil, false
+	}
+	segments := make([][]string, 0, len(rawSegments))
+	for _, raw := range rawSegments {
+		argv, err := shlex.Split(raw)
+		if err != nil || len(argv) == 0 {
+			return nil, nil, false
+		}
+		segments = append(segments, argv)
+	}
+	return segments, operators, true
+}
+
+func splitShellCommand(command string) ([]string, []string, bool) {
+	var segments []string
+	var operators []string
+	var quote byte
+	escaped := false
+	start := 0
+
+scan:
+	for i := 0; i < len(command); i++ {
+		ch := command[i]
+		if escaped {
+			escaped = false
+			continue
+		}
+		if quote != 0 {
+			if quote == '"' && ch == '\\' {
+				escaped = true
+				continue
+			}
+			if ch == quote {
+				quote = 0
 			}
 			continue
 		}
-		current = append(current, tok)
+		if ch == '\\' {
+			escaped = true
+			continue
+		}
+		if ch == '\'' || ch == '"' {
+			quote = ch
+			continue
+		}
+		if ch == '(' || ch == ')' || ch == '`' {
+			return nil, nil, false
+		}
+		if ch == '#' && startsShellComment(command, i) {
+			newline := strings.IndexByte(command[i:], '\n')
+			if newline < 0 {
+				command = command[:i]
+				break scan
+			}
+			i += newline - 1
+			continue
+		}
+
+		operator := ""
+		width := 1
+		switch ch {
+		case '&':
+			if i+1 >= len(command) || command[i+1] != '&' {
+				return nil, nil, false
+			}
+			operator = "&&"
+			width = 2
+		case '|':
+			operator = "|"
+			if i+1 < len(command) && command[i+1] == '|' {
+				operator = "||"
+				width = 2
+			}
+		case ';', '\n':
+			operator = ";"
+		}
+		if operator == "" {
+			continue
+		}
+		segment := strings.TrimSpace(command[start:i])
+		if segment == "" {
+			return nil, nil, false
+		}
+		segments = append(segments, segment)
+		operators = append(operators, operator)
+		i += width - 1
+		start = i + 1
 	}
-	if len(current) > 0 {
-		out = append(out, current)
+
+	if quote != 0 || escaped {
+		return nil, nil, false
 	}
-	return out
+	tail := strings.TrimSpace(command[start:])
+	if tail == "" {
+		if len(operators) == 0 || operators[len(operators)-1] != ";" {
+			return nil, nil, false
+		}
+		operators = operators[:len(operators)-1]
+	} else {
+		segments = append(segments, tail)
+	}
+	if len(segments) != len(operators)+1 {
+		return nil, nil, false
+	}
+	return segments, operators, true
+}
+
+func startsShellComment(command string, i int) bool {
+	if i == 0 {
+		return true
+	}
+	switch command[i-1] {
+	case ' ', '\t', '\r', '\n', ';', '&', '|':
+		return true
+	default:
+		return false
+	}
+}
+
+func alwaysFails(segment []string) bool {
+	i := 0
+	for i < len(segment) && envAssignRe.MatchString(segment[i]) {
+		i++
+	}
+	return i < len(segment) && programName(segment[i]) == "false"
 }
 
 func isGitPush(segment []string) bool {
@@ -77,7 +206,7 @@ subcommand:
 		return false
 	}
 	for _, arg := range segment[i+1:] {
-		if arg == "-n" || arg == "-d" || strings.HasPrefix(arg, "--dry-run") || strings.HasPrefix(arg, "--delete") || strings.HasPrefix(arg, ":") {
+		if arg == "-n" || arg == "-d" || strings.HasPrefix(arg, "--dry-run") || strings.HasPrefix(arg, "--delete") || strings.HasPrefix(arg, ":") || strings.HasPrefix(arg, "+:") {
 			return false
 		}
 	}

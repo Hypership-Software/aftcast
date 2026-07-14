@@ -267,7 +267,7 @@ func TestNormalizeSuccessfulPushEmitsMetadataOnlyDelivery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, secret := range []string{"feature/coach", "git commit", "origin", "pushed"} {
+	for _, secret := range []string{"feature/coach", "git commit", "origin", "pushed", "delivery-success-stderr-secret"} {
 		if strings.Contains(string(blob), secret) {
 			t.Fatalf("telemetry leaked %q: %s", secret, blob)
 		}
@@ -278,6 +278,15 @@ func TestNormalizeFailedPushDoesNotShip(t *testing.T) {
 	_, e := normalize(t, "posttoolusefailure-git-push.json")
 	if e.ToolOK != schema.OutcomeFailed || e.DeliverySignal != "" {
 		t.Fatalf("failed push = {ok:%q delivery:%q}", e.ToolOK, e.DeliverySignal)
+	}
+	blob, err := json.Marshal(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"feature/coach", "git commit", "origin", "delivery-failure-error-secret"} {
+		if strings.Contains(string(blob), secret) {
+			t.Fatalf("failed telemetry leaked %q: %s", secret, blob)
+		}
 	}
 }
 
