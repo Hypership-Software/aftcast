@@ -4,16 +4,11 @@ import (
 	"testing"
 
 	"github.com/Hypership-Software/atlas/internal/schema"
-	"github.com/google/shlex"
 )
 
-func commandTokens(t *testing.T, command string) []string {
+func detectCommand(t *testing.T, command string) schema.DeliverySignal {
 	t.Helper()
-	toks, err := shlex.Split(command)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return toks
+	return deliverySignal(command)
 }
 
 func TestDeliverySignalGitPushVariants(t *testing.T) {
@@ -29,6 +24,13 @@ func TestDeliverySignalGitPushVariants(t *testing.T) {
 		{"environment prefix", `GIT_SSH_COMMAND="ssh -i key" git push`, schema.DeliveryGitPush},
 		{"chained", `git commit -m coach && git push`, schema.DeliveryGitPush},
 		{"later real segment", `echo preparing && git push`, schema.DeliveryGitPush},
+		{"or fallback masks failure", `git push || true`, ""},
+		{"or may skip push", `true || git push`, ""},
+		{"failed suffix contradicts success", `git push && false`, ""},
+		{"quoted separator", `echo "&&" git push`, ""},
+		{"commented push", `echo ok # && git push`, ""},
+		{"nested push", `echo $(true && git push )`, ""},
+		{"unspaced separator", `echo ok;git push`, schema.DeliveryGitPush},
 		{"status", `git status`, ""},
 		{"quoted mention", `echo "git push"`, ""},
 		{"unquoted echo", `echo git push`, ""},
@@ -36,11 +38,12 @@ func TestDeliverySignalGitPushVariants(t *testing.T) {
 		{"dry run short", `git push -n origin main`, ""},
 		{"delete flag", `git push --delete origin old`, ""},
 		{"delete refspec", `git push origin :old`, ""},
+		{"force delete refspec", `git push origin +:old`, ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := deliverySignal(commandTokens(t, tt.command)); got != tt.want {
+			if got := detectCommand(t, tt.command); got != tt.want {
 				t.Fatalf("deliverySignal(%q) = %q, want %q", tt.command, got, tt.want)
 			}
 		})

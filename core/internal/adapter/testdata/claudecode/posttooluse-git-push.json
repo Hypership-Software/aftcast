@@ -9,7 +9,7 @@
   },
   "tool_response": {
     "stdout": "pushed",
-    "stderr": ""
+    "stderr": "delivery-success-stderr-secret"
   },
   "tool_use_id": "toolu_delivery_success",
   "duration_ms": 1200

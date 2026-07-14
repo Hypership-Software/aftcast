@@ -8,6 +8,6 @@
     "command": "git commit -m coach && git push origin feature/coach"
   },
   "tool_use_id": "toolu_delivery_failure",
-  "error": "Exit code 1\npush rejected",
+  "error": "Exit code 1\ndelivery-failure-error-secret",
   "duration_ms": 1200
 }

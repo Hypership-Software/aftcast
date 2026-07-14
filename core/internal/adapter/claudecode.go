@@ -81,11 +81,12 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 	desc.ProjectRoot = root
 	ev.Project = id
 
+	command := ""
 	if h.ToolName != "" {
 		class := classify(h.ToolName)
 		desc.ToolClass = class
 		ev.ToolClass = class
-		extract(&desc, class, h)
+		command = extract(&desc, class, h)
 		ev.Files, ev.Verbs, ev.Domain, ev.Skill = desc.Files, desc.Verbs, desc.Domain, desc.Skill
 	}
 
@@ -104,7 +105,7 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 			ev.ToolOK = schema.OutcomeOK
 		}
 		if ev.ToolOK == schema.OutcomeOK && ev.ToolClass == schema.ClassExec {
-			ev.DeliverySignal = deliverySignal(desc.Argv)
+			ev.DeliverySignal = deliverySignal(command)
 		}
 	}
 
@@ -155,7 +156,7 @@ func classify(tool string) schema.ToolClass {
 	}
 }
 
-func extract(d *schema.Descriptor, class schema.ToolClass, h ccHook) {
+func extract(d *schema.Descriptor, class schema.ToolClass, h ccHook) string {
 	switch class {
 	case schema.ClassExec:
 		var in struct {
@@ -173,6 +174,7 @@ func extract(d *schema.Descriptor, class schema.ToolClass, h ccHook) {
 		if v := commandVerb(toks); v != "" {
 			d.Verbs = []string{v}
 		}
+		return in.Command
 	case schema.ClassFileRead, schema.ClassFileWrite:
 		var in struct {
 			FilePath string `json:"file_path"`
@@ -198,6 +200,7 @@ func extract(d *schema.Descriptor, class schema.ToolClass, h ccHook) {
 		_ = json.Unmarshal(h.ToolInput, &in)
 		d.Skill = in.Skill
 	}
+	return ""
 }
 
 // commandVerb returns the invoked program's name. It skips leading NAME=value
