@@ -16,7 +16,7 @@ func TestMetricLabelsAlignToFixedWidth(t *testing.T) {
 	// Colour-safe alignment: the styled meter label must occupy a constant
 	// display width regardless of length or ANSI styling, so the three meters
 	// line up. lipgloss.Width strips ANSI, so this holds under colour too.
-	for _, s := range []string{"Landed clean", "Rework", "Risk"} {
+	for _, s := range []string{"Shipped", "Intervention", "Risk"} {
 		if w := lipgloss.Width(metricLabel(s)); w != metricLabelWidth {
 			t.Errorf("metricLabel(%q) display width = %d, want %d", s, w, metricLabelWidth)
 		}
@@ -27,20 +27,25 @@ func sampleAgg() aggregates {
 	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
 	sessions := []telemetry.Session{
 		{
-			SessionID:     "s1",
-			User:          "dev",
-			TaskType:      "testing",
-			Outcome:       "success",
-			CleanDelivery: true,
-			TurnCount:     3,
-			ToolCalls:     10,
-			Started:       now.Add(-2 * time.Hour).Format(time.RFC3339Nano),
+			SessionID:      "s1",
+			User:           "dev",
+			TaskType:       "testing",
+			Outcome:        "success",
+			CleanDelivery:  true,
+			CaptureVersion: 2,
+			FilesChanged:   1,
+			Shipped:        true,
+			TurnCount:      3,
+			ToolCalls:      10,
+			Started:        now.Add(-2 * time.Hour).Format(time.RFC3339Nano),
 		},
 		{
 			SessionID:       "s2",
 			User:            "dev",
 			TaskType:        "testing",
 			Outcome:         "success",
+			CaptureVersion:  2,
+			FilesChanged:    1,
 			CorrectionTurns: 2,
 			DangerDetected:  3,
 			Taint:           true,
@@ -55,12 +60,12 @@ func sampleAgg() aggregates {
 func TestOverviewIsPlainLanguage(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	out := renderList(sampleAgg(), "TABLE")
-	for _, banned := range []string{"corr/deliv", "clean_delivery", "taint", "danger ", "unknown"} {
+	for _, banned := range []string{"corr/deliv", "clean_delivery", "taint", "danger ", "unknown", "Landed clean"} {
 		if strings.Contains(out, banned) {
 			t.Errorf("overview leaked code word %q:\n%s", banned, out)
 		}
 	}
-	for _, want := range []string{"Landed clean", "fixes / session", "untrusted input"} {
+	for _, want := range []string{"Shipped", "Intervention", "untrusted input"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("overview missing plain-language %q:\n%s", want, out)
 		}
@@ -68,12 +73,23 @@ func TestOverviewIsPlainLanguage(t *testing.T) {
 }
 
 func TestToStatSplitsSkills(t *testing.T) {
-	st := toStat(telemetry.Session{Outcome: "success", SkillsUsed: "a,b", CleanDelivery: true})
+	st := toStat(telemetry.Session{
+		Outcome:        "success",
+		SkillsUsed:     "a,b",
+		CleanDelivery:  true,
+		CaptureVersion: 2,
+		FilesChanged:   1,
+		Shipped:        true,
+		PlanStyle:      "plan_first",
+	})
 	if len(st.Skills) != 2 || st.Skills[0] != "a" {
 		t.Fatalf("skills not split: %v", st.Skills)
 	}
 	if st.Outcome != analytics.Success {
 		t.Fatalf("outcome not mapped: %v", st.Outcome)
+	}
+	if st.CaptureVersion != 2 || st.FilesChanged != 1 || !st.Shipped || st.PlanStyle != analytics.PlanFirst {
+		t.Fatalf("delivery fields not mapped: %+v", st)
 	}
 }
 
@@ -95,16 +111,22 @@ func TestAggregateMatchesProductivity(t *testing.T) {
 	}
 }
 
-func TestRenderHeaderAndEmpty(t *testing.T) {
+func TestRenderHeaderLeadsWithShippedAndIntervention(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	h := renderHeader(aggregate([]telemetry.Session{{Outcome: "success", CleanDelivery: true}}, time.Now()))
-	for _, want := range []string{"last 7 days", "Landed clean", "no rework needed", "fixes / session", "flagged actions"} {
+	sessions := []telemetry.Session{
+		{CaptureVersion: 2, FilesChanged: 2, Shipped: true, Outcome: "success", CleanDelivery: true},
+		{CaptureVersion: 2, FilesChanged: 1, Outcome: "success", CorrectionTurns: 1},
+	}
+	h := renderHeader(aggregate(sessions, time.Now()))
+	for _, want := range []string{"last 7 days", "Shipped", "1 of 2 delivery sessions", "50%", "Intervention", "0.5 human fixes / completed session", "Risk"} {
 		if !strings.Contains(h, want) {
 			t.Fatalf("header missing %q:\n%s", want, h)
 		}
 	}
-	if !strings.Contains(renderScopedEmpty(true, false), "Nothing captured") {
-		t.Fatalf("empty state missing copy")
+	for _, banned := range []string{"Landed clean", "no rework needed"} {
+		if strings.Contains(h, banned) {
+			t.Fatalf("header retained %q:\n%s", banned, h)
+		}
 	}
 }
 

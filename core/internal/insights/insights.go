@@ -25,7 +25,6 @@ func Run(store *telemetry.Store, scope Scope) error {
 		return fmt.Errorf("insights: load sessions: %w", err)
 	}
 	now := time.Now()
-	sessions = recentSessions(sessions, now)
 	m := build(sessions, scope, store.EventsForSession, now)
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 		return fmt.Errorf("insights: run tui: %w", err)

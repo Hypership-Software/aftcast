@@ -4,8 +4,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Hypership-Software/atlas/internal/schema"
 	"github.com/Hypership-Software/atlas/internal/telemetry"
 )
+
+func TestBuildKeepsFullHistoryButScopesOperationalRowsToSevenDays(t *testing.T) {
+	now := time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
+	sessions := []telemetry.Session{
+		{SessionID: "recent", Started: now.Add(-time.Hour).Format(time.RFC3339Nano)},
+		{SessionID: "history", Started: now.Add(-30 * 24 * time.Hour).Format(time.RFC3339Nano)},
+	}
+	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, now)
+	if len(m.history) != 2 || len(m.global) != 1 || m.global[0].SessionID != "recent" {
+		t.Fatalf("history=%d operational=%v", len(m.history), m.global)
+	}
+}
 
 func TestRecentSessionsFiltersToSevenDayWindow(t *testing.T) {
 	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)

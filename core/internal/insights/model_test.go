@@ -55,7 +55,7 @@ func TestListViewRendersSessions(t *testing.T) {
 	if !strings.Contains(v, "4 calls") || !strings.Contains(v, "2 files") {
 		t.Fatalf("list view missing work cell: %q", v)
 	}
-	if !strings.Contains(v, "clean") {
+	if !strings.Contains(v, "no intervention") {
 		t.Fatalf("list view missing header: %q", v)
 	}
 }
@@ -76,10 +76,18 @@ func TestSessionRowIsHumanReadable(t *testing.T) {
 		CleanDelivery: true, ToolCalls: 165, FilesTouched: 12, Started: "2026-07-13T13:00:00Z"}
 	row := sessionRow(s, now)
 	joined := strings.Join(row, " | ")
-	for _, want := range []string{"2h ago", "testing", "clean", "165 calls", "12 files"} {
+	for _, want := range []string{"2h ago", "testing", "no intervention", "165 calls", "12 files"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("row %q missing %q", joined, want)
 		}
+	}
+}
+
+func TestOutcomeCellPrefersObservedShipment(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	got := outcomeCell(telemetry.Session{Shipped: true, Outcome: "unknown"})
+	if !strings.Contains(got, "shipped") {
+		t.Fatalf("outcome cell = %q", got)
 	}
 }
 
