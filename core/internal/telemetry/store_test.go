@@ -301,3 +301,25 @@ func TestProjectEmptyLog(t *testing.T) {
 		t.Fatalf("empty log projected %d sessions, want 0", len(rows))
 	}
 }
+
+func TestSessions_ScansProjectID(t *testing.T) {
+	s, err := OpenStore(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err := s.db.Exec(`INSERT INTO sessions
+		(session_id, user, org, harness, started, ended, exit_reason,
+		 turn_count, tool_calls, danger_detected, taint, outcome, clean_delivery,
+		 correction_turns, task_type, skills_used, duration_ms, files_touched, project_id)
+		VALUES ('s1','','','','','','',0,5,0,0,'',0,0,'','',0,0,'proj123')`); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Sessions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ProjectID != "proj123" {
+		t.Fatalf("ProjectID = %q, want proj123", got[0].ProjectID)
+	}
+}

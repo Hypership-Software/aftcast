@@ -61,3 +61,14 @@ func TestProjectExcludesInternalSessions(t *testing.T) {
 		t.Fatalf("re-project changed the read-model: %+v", sessions2)
 	}
 }
+
+func TestFoldSessions_ProjectID(t *testing.T) {
+	evs := []schema.TelemetryEvent{
+		{SessionID: "s1", EventType: schema.EventSessionStart, TS: "2026-07-14T00:00:00Z"},
+		{SessionID: "s1", EventType: schema.EventPreTool, Project: "proj123", TS: "2026-07-14T00:00:01Z"},
+	}
+	got := foldSessions(evs)
+	if len(got) != 1 || got[0].ProjectID != "proj123" {
+		t.Fatalf("ProjectID = %q, want proj123", got[0].ProjectID)
+	}
+}
