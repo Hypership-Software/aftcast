@@ -8,19 +8,35 @@ import (
 	"github.com/Hypership-Software/atlas/internal/schema"
 )
 
-// Taxonomy classifies a session's task from the files it touched and the commands
-// it ran — deterministic, most-specific category first. confidence is the share of
-// touched files supporting the winner (a coarse verb-only signal defaults to 0.5).
+// write categories. Every written file maps to exactly one, most-specific first;
+// anything that is not a recognized specialized artifact is implementation source.
+const (
+	catImpl      = "impl"
+	catTest      = "test"
+	catMigration = "migration"
+	catInfra     = "infra"
+	catConfig    = "config"
+	catDocs      = "docs"
+)
+
+// Taxonomy classifies a session's task from the files it wrote and the commands it
+// ran. The governing rule: if the session wrote implementation source, it is feature
+// work — tests, docs, and config written alongside are in service of the feature,
+// not the task's identity. This is deliberate: a TDD session writes tests with its
+// code, and writing tests must not make it a "testing" task. Only a session with no
+// implementation source takes its identity from its dominant specialized output.
+// confidence is the winning category's share of the written files.
+//
+// (There is intentionally no automatic "bugfix" class: a red→green cycle is
+// indistinguishable from ordinary TDD with metadata alone — ADR-011 — so guessing
+// bugfix from tool failures mislabels the disciplined workflow it should reward.)
 func Taxonomy(evts []schema.TelemetryEvent) (taskType string, confidence float64) {
 	var written, read []string
-	ranTest, failedBeforeWrite, sawFailure := false, false, false
+	ranTest := false
 	for _, e := range evts {
 		switch e.ToolClass {
 		case schema.ClassFileWrite:
 			written = append(written, e.Files...)
-			if sawFailure {
-				failedBeforeWrite = true
-			}
 		case schema.ClassFileRead:
 			read = append(read, e.Files...)
 		case schema.ClassExec:
@@ -28,38 +44,65 @@ func Taxonomy(evts []schema.TelemetryEvent) (taskType string, confidence float64
 				ranTest = true
 			}
 		}
-		if e.ToolOK == schema.OutcomeFailed {
-			sawFailure = true
-		}
 	}
 	written, read = dedup(written), dedup(read)
 	total := len(written)
+	if total == 0 {
+		if ranTest {
+			return TaskTesting, 0.5
+		}
+		return TaskExploration, ratio(len(read), len(read))
+	}
 
-	if n := count(written, isMigration); n > 0 {
-		return TaskMigration, ratio(n, total)
+	buckets := map[string]int{}
+	for _, f := range written {
+		buckets[fileCategory(f)]++
 	}
-	if n := count(written, isTestFile); n > 0 {
-		return TaskTesting, ratio(n, total)
+	if impl := buckets[catImpl]; impl > 0 {
+		return TaskFeature, ratio(impl, total)
 	}
-	if ranTest && total == 0 {
-		return TaskTesting, 0.5
+	// No implementation source: identity is the dominant specialized output; ties
+	// resolve by the specificity order below.
+	for _, o := range []struct{ cat, task string }{
+		{catMigration, TaskMigration},
+		{catInfra, TaskInfra},
+		{catConfig, TaskConfig},
+		{catTest, TaskTesting},
+		{catDocs, TaskDocs},
+	} {
+		if buckets[o.cat] == maxBucket(buckets) {
+			return o.task, ratio(buckets[o.cat], total)
+		}
 	}
-	if n := count(written, isInfra); n > 0 {
-		return TaskInfra, ratio(n, total)
+	return TaskFeature, ratio(total, total)
+}
+
+// fileCategory maps a written file to exactly one category, most-specific first.
+func fileCategory(f string) string {
+	switch {
+	case isMigration(f):
+		return catMigration
+	case isInfra(f):
+		return catInfra
+	case isTestFile(f):
+		return catTest
+	case isConfig(f):
+		return catConfig
+	case isDocs(f):
+		return catDocs
+	default:
+		return catImpl
 	}
-	if n := count(written, isConfig); n > 0 {
-		return TaskConfig, ratio(n, total)
+}
+
+func maxBucket(buckets map[string]int) int {
+	max := 0
+	for _, n := range buckets {
+		if n > max {
+			max = n
+		}
 	}
-	if total > 0 && count(written, isDocs) == total {
-		return TaskDocs, 1.0
-	}
-	if failedBeforeWrite && total > 0 {
-		return TaskBugfix, ratio(total, total)
-	}
-	if total > 0 {
-		return TaskFeature, ratio(total, total)
-	}
-	return TaskExploration, ratio(len(read), len(read))
+	return max
 }
 
 func isTestFile(f string) bool {
@@ -98,16 +141,6 @@ func isDocs(f string) bool {
 func slash(f string) string { return filepath.ToSlash(f) }
 func base(f string) string  { return path.Base(slash(f)) }
 func ext(f string) string   { return strings.ToLower(path.Ext(slash(f))) }
-
-func count(files []string, pred func(string) bool) int {
-	n := 0
-	for _, f := range files {
-		if pred(f) {
-			n++
-		}
-	}
-	return n
-}
 
 func dedup(xs []string) []string {
 	seen := map[string]struct{}{}

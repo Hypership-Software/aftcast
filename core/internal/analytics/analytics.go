@@ -77,12 +77,16 @@ func promptCount(evts []schema.TelemetryEvent) int {
 	return n
 }
 
-// turnFailed reports whether a turn contains a failed tool call.
-func turnFailed(seg []schema.TelemetryEvent) bool {
+// turnEndedInFailure reports whether the turn's LAST completed tool call failed —
+// i.e. the agent handed control back to the human with something still broken. A
+// failure the agent recovered from mid-turn (a later call in the same turn
+// succeeded) is not counted: it was never the human's to fix.
+func turnEndedInFailure(seg []schema.TelemetryEvent) bool {
+	var last schema.ToolOutcome
 	for _, e := range seg {
-		if e.ToolOK == schema.OutcomeFailed {
-			return true
+		if e.EventType == schema.EventPostTool && e.ToolOK != "" {
+			last = e.ToolOK
 		}
 	}
-	return false
+	return last == schema.OutcomeFailed
 }
