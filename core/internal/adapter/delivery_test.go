@@ -8,7 +8,12 @@ import (
 
 func detectCommand(t *testing.T, command string) schema.DeliverySignal {
 	t.Helper()
-	return deliverySignal(command)
+	return detectToolCommand(t, "Bash", command)
+}
+
+func detectToolCommand(t *testing.T, tool, command string) schema.DeliverySignal {
+	t.Helper()
+	return successfulDeliverySignal(tool, command)
 }
 
 func TestDeliverySignalGitPushVariants(t *testing.T) {
@@ -36,15 +41,40 @@ func TestDeliverySignalGitPushVariants(t *testing.T) {
 		{"unquoted echo", `echo git push`, ""},
 		{"dry run long", `git push --dry-run origin main`, ""},
 		{"dry run short", `git push -n origin main`, ""},
+		{"dry run bundled after verbose", `git push -vn origin main`, ""},
+		{"delete bundled after verbose", `git push -vd origin main`, ""},
+		{"dry run delete bundle", `git push -nd origin main`, ""},
 		{"delete flag", `git push --delete origin old`, ""},
 		{"delete refspec", `git push origin :old`, ""},
 		{"force delete refspec", `git push origin +:old`, ""},
+		{"signed long option", `git push --signed origin main`, schema.DeliveryGitPush},
+		{"refspec containing bundle letters", `git push origin topic:refs/heads/send`, schema.DeliveryGitPush},
+		{"option terminator protects repository", `git push -- -nd`, schema.DeliveryGitPush},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := detectCommand(t, tt.command); got != tt.want {
-				t.Fatalf("deliverySignal(%q) = %q, want %q", tt.command, got, tt.want)
+				t.Fatalf("successfulDeliverySignal(Bash, %q) = %q, want %q", tt.command, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSuccessfulDeliverySignalShellDialects(t *testing.T) {
+	for _, shell := range []string{"Bash", "sh", "/bin/dash", "zsh", "ksh"} {
+		t.Run(shell, func(t *testing.T) {
+			if got := detectToolCommand(t, shell, "git push"); got != schema.DeliveryGitPush {
+				t.Fatalf("successfulDeliverySignal(%q, git push) = %q, want git_push", shell, got)
+			}
+		})
+	}
+
+	for _, shell := range []string{"PowerShell", "pwsh", "cmd"} {
+		t.Run(shell, func(t *testing.T) {
+			command := `git push definitely-not-a-remote\; exit 0`
+			if got := detectToolCommand(t, shell, command); got != "" {
+				t.Fatalf("successfulDeliverySignal(%q, %q) = %q, want empty", shell, command, got)
 			}
 		})
 	}

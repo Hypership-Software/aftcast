@@ -301,6 +301,28 @@ func TestNormalizePreToolPushDoesNotShip(t *testing.T) {
 	}
 }
 
+func TestNormalizePowerShellPushFailsClosed(t *testing.T) {
+	raw := []byte(`{"session_id":"s","cwd":".","hook_event_name":"PostToolUse","tool_name":"PowerShell","tool_input":{"command":"git push definitely-not-a-remote\\; exit 0"}}`)
+	_, e, err := cc(t).Normalize("", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.ToolOK != schema.OutcomeOK || e.DeliverySignal != "" {
+		t.Fatalf("PowerShell push = {ok:%q delivery:%q}, want ok with no delivery", e.ToolOK, e.DeliverySignal)
+	}
+}
+
+func TestNormalizeContradictorySuccessfulPushDoesNotShip(t *testing.T) {
+	raw := []byte(`{"session_id":"s","cwd":".","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"git push && false"}}`)
+	_, e, err := cc(t).Normalize("", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.ToolOK != schema.OutcomeOK || e.DeliverySignal != "" {
+		t.Fatalf("contradictory push = {ok:%q delivery:%q}, want ok with no delivery", e.ToolOK, e.DeliverySignal)
+	}
+}
+
 func TestGetUnknownHarness(t *testing.T) {
 	if _, ok := Get("nope"); ok {
 		t.Error("Get returned an adapter for an unknown harness")

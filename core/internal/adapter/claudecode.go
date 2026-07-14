@@ -105,7 +105,7 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 			ev.ToolOK = schema.OutcomeOK
 		}
 		if ev.ToolOK == schema.OutcomeOK && ev.ToolClass == schema.ClassExec {
-			ev.DeliverySignal = deliverySignal(command)
+			ev.DeliverySignal = successfulDeliverySignal(h.ToolName, command)
 		}
 	}
 
