@@ -25,10 +25,11 @@ type TelemetryEvent struct {
 	// ToolUseID pairs a pre_tool with its post_tool (Claude Code sends the same id
 	// on both), so latency and outcome attribute to the right call. Added later per
 	// the append-only rule.
-	ToolUseID string      `json:"tool_use_id,omitempty"`
-	Risk      Risk        `json:"risk,omitempty"`
-	RuleID    string      `json:"rule_id,omitempty"`
-	ToolOK    ToolOutcome `json:"tool_ok,omitempty"`
+	ToolUseID      string         `json:"tool_use_id,omitempty"`
+	Risk           Risk           `json:"risk,omitempty"`
+	RuleID         string         `json:"rule_id,omitempty"`
+	ToolOK         ToolOutcome    `json:"tool_ok,omitempty"`
+	DeliverySignal DeliverySignal `json:"delivery_signal,omitempty"`
 	// BashExitCode is parsed from a PostToolUseFailure. Added later per the
 	// append-only rule; omitempty so it's absent on non-failing/non-exec events.
 	BashExitCode int      `json:"bash_exit_code,omitempty"`

@@ -252,3 +252,33 @@ func TestEventsEmptyLog(t *testing.T) {
 		t.Fatalf("empty log Events() = %d, want 0", len(evs))
 	}
 }
+
+func TestVerifyMixedSchemaVersionsWithDeliverySignal(t *testing.T) {
+	l, err := NewLog(t.TempDir(), testKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+
+	v1 := ev("s1", "2026-07-10T12:00:00Z")
+	v1.V = 1
+	v2 := ev("s2", "2026-07-10T12:00:01Z")
+	v2.V = schema.SchemaVersion
+	v2.EventType = schema.EventPostTool
+	v2.ToolOK = schema.OutcomeOK
+	v2.DeliverySignal = schema.DeliveryGitPush
+	if err := l.Record(v1); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Record(v2); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := l.Verify()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.OK || report.Count != 2 {
+		t.Fatalf("mixed-version verify = %+v", report)
+	}
+}
