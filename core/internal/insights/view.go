@@ -246,7 +246,9 @@ func renderTrace(sess telemetry.Session, evs []schema.TelemetryEvent) string {
 		fmt.Fprintf(&b, "  %s\n", turnHeader(t))
 		maxDur := maxRowDur(t.Rows)
 		for _, r := range t.Rows {
-			b.WriteString(renderTraceRow(r, maxDur) + "\n")
+			if row := renderTraceRow(r, maxDur); row != "" {
+				b.WriteString(row + "\n")
+			}
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")
@@ -256,10 +258,14 @@ func renderVerdictHeader(sess telemetry.Session) string {
 	rest := []string{
 		taskCell(sess.TaskType),
 		verdictOutcome(sess),
-		humanizeDuration(sess.DurationMS),
+	}
+	if dur := humanizeDuration(sess.DurationMS); dur != "" {
+		rest = append(rest, dur)
+	}
+	rest = append(rest,
 		fmt.Sprintf("%d calls", sess.ToolCalls),
 		fmt.Sprintf("%d files", sess.FilesTouched),
-	}
+	)
 	if flags := flagsCell(sess); flags != "" {
 		rest = append(rest, flags)
 	}
@@ -285,7 +291,11 @@ func turnHeader(t traceTurn) string {
 	if phase != "" {
 		phase += " "
 	}
-	return fmt.Sprintf("turn %d · %s%d calls · %s", t.Index, phase, t.Calls, humanizeDuration(t.DurMS))
+	parts := []string{fmt.Sprintf("turn %d", t.Index), fmt.Sprintf("%s%d calls", phase, t.Calls)}
+	if dur := humanizeDuration(t.DurMS); dur != "" {
+		parts = append(parts, dur)
+	}
+	return strings.Join(parts, " · ")
 }
 
 func maxRowDur(rows []traceRow) int64 {
@@ -304,7 +314,13 @@ func renderTraceRow(r traceRow, maxDur int64) string {
 		verb = "read"
 	}
 	head := strings.TrimRight(rowGlyph(r)+" "+verb, " ")
-	parts := []string{head}
+	if head == "" && r.Detail == "" {
+		return ""
+	}
+	var parts []string
+	if head != "" {
+		parts = append(parts, head)
+	}
 	if r.Detail != "" {
 		parts = append(parts, r.Detail)
 	}

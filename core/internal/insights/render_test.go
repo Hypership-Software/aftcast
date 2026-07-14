@@ -126,3 +126,24 @@ func TestRenderTraceHasVerdictAndNoEmptyFields(t *testing.T) {
 		t.Errorf("trace missing paired call / duration:\n%s", out)
 	}
 }
+
+func TestRenderTraceOmitsEmptyDurationSeparators(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	sess := telemetry.Session{SessionID: "abc12345", TaskType: "testing", Outcome: "success",
+		DurationMS: 0, ToolCalls: 1, FilesTouched: 0}
+	unpairedPre := schema.TelemetryEvent{EventType: schema.EventPreTool, ToolClass: schema.ClassExec, ToolUseID: "p1", Verbs: []string{"go"}}
+	orphanPost := schema.TelemetryEvent{EventType: schema.EventPostTool, ToolUseID: "orphan", ToolOK: schema.OutcomeOK}
+	out := renderTrace(sess, []schema.TelemetryEvent{unpairedPre, orphanPost})
+
+	if strings.Contains(out, "·  ·") {
+		t.Errorf("doubled separator from empty field:\n%s", out)
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasSuffix(line, "· ") || strings.HasSuffix(line, "·") {
+			t.Errorf("line ends in a dangling separator: %q\nfull:\n%s", line, out)
+		}
+		if g := strings.TrimSpace(line); g == "✓" || g == "✗" {
+			t.Errorf("row rendered as bare glyph only: %q\nfull:\n%s", line, out)
+		}
+	}
+}
