@@ -103,8 +103,18 @@ func TestRenderHeaderAndEmpty(t *testing.T) {
 			t.Fatalf("header missing %q:\n%s", want, h)
 		}
 	}
-	if !strings.Contains(renderEmpty(), "No sessions") {
+	if !strings.Contains(renderScopedEmpty(true, false), "Nothing captured") {
 		t.Fatalf("empty state missing copy")
+	}
+}
+
+func TestRenderScopedEmpty(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	if got := renderScopedEmpty(false, true); !strings.Contains(got, "this project") {
+		t.Errorf("project-empty state missing copy:\n%s", got)
+	}
+	if got := renderScopedEmpty(true, false); !strings.Contains(got, "Nothing captured") {
+		t.Errorf("onboarding state missing copy:\n%s", got)
 	}
 }
 

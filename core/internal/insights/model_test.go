@@ -25,7 +25,7 @@ func sampleModel() model {
 			{SessionID: id, EventType: schema.EventPostTool, ToolUseID: "t1", ToolOK: schema.OutcomeOK},
 		}, nil
 	}
-	return build(sessions, aggregate(sessions, sampleNow), provider, sampleNow)
+	return build(sessions, Scope{}, provider, sampleNow)
 }
 
 func TestFlagsColumnFitsAllFlags(t *testing.T) {
@@ -35,7 +35,7 @@ func TestFlagsColumnFitsAllFlags(t *testing.T) {
 		Taint: true, DangerDetected: 11, SkillsUsed: "a,b,c,d",
 		Started: sampleNow.Add(-20 * time.Hour).Format(time.RFC3339Nano)}
 	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
-	m := build([]telemetry.Session{s}, aggregate([]telemetry.Session{s}, sampleNow), provider, sampleNow)
+	m := build([]telemetry.Session{s}, Scope{}, provider, sampleNow)
 	v := m.View()
 	// All three flags co-occur here; the Flags column must widen to fit rather
 	// than truncate the trailing "★ 4 skills".
@@ -119,15 +119,15 @@ func TestQuitKey(t *testing.T) {
 
 func TestEmptyState(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	m := build(nil, aggregate(nil, sampleNow), func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
-	if !strings.Contains(m.View(), "No sessions") {
+	m := build(nil, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	if !strings.Contains(m.View(), "Nothing captured") {
 		t.Fatalf("empty model should show empty state: %q", m.View())
 	}
 }
 
 func TestHelpOverlayToggles(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	m := build(nil, aggregates{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m := build(nil, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
 	m = must(m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}))
 	if !strings.Contains(m.View(), "help") {
 		t.Error("? did not open help overlay")
@@ -191,3 +191,39 @@ func TestHelpOverlayQuitKey(t *testing.T) {
 
 // must unwraps an Update result back to the concrete model for assertions.
 func must(mdl tea.Model, _ tea.Cmd) model { return mdl.(model) }
+
+func key(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)} }
+
+func TestProjectScopeToggle(t *testing.T) {
+	sessions := []telemetry.Session{
+		{SessionID: "a", ProjectID: "p1", ToolCalls: 3},
+		{SessionID: "b", ProjectID: "p2", ToolCalls: 4},
+	}
+	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
+	m := build(sessions, Scope{ProjectID: "p1", Name: "proj-one"}, provider, sampleNow)
+	if len(m.all) != 1 || m.all[0].SessionID != "a" {
+		t.Fatalf("project scope should show only p1, got %d", len(m.all))
+	}
+	gm, _ := m.updateList(key("g"))
+	if len(gm.(model).all) != 2 {
+		t.Fatalf("global should show all, got %d", len(gm.(model).all))
+	}
+	pm, _ := gm.(model).updateList(key("p"))
+	if len(pm.(model).all) != 1 {
+		t.Fatalf("back to project should show 1, got %d", len(pm.(model).all))
+	}
+}
+
+func TestProjectCell(t *testing.T) {
+	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
+	m := build(nil, Scope{ProjectID: "p1abcdef", Name: "myproj"}, provider, sampleNow)
+	if got := m.projectCell(telemetry.Session{ProjectID: "p1abcdef"}); got != "myproj" {
+		t.Errorf("current project cell = %q, want myproj", got)
+	}
+	if got := m.projectCell(telemetry.Session{ProjectID: "otherhash1234"}); got != shortID("otherhash1234") {
+		t.Errorf("other project cell = %q, want short hash", got)
+	}
+	if got := m.projectCell(telemetry.Session{ProjectID: ""}); got != "unknown" {
+		t.Errorf("empty project cell = %q, want unknown", got)
+	}
+}

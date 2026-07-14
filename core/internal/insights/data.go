@@ -27,6 +27,7 @@ type aggregates struct {
 	taskMix        []taskCount
 	needsAttention []string
 	user           string
+	scopeLabel     string
 }
 
 // recentSessions keeps sessions within the last 7 days of Started. A session

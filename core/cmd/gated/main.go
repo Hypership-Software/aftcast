@@ -90,7 +90,7 @@ func run(args []string) int {
 			return fail("insights", err)
 		}
 		defer store.Close()
-		if err := insights.Run(store); err != nil {
+		if err := insights.Run(store, insights.Scope{}); err != nil {
 			return fail("insights", err)
 		}
 		return 0
