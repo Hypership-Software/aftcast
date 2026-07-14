@@ -218,13 +218,24 @@ subcommand:
 		return false
 	}
 	options := true
-	for _, arg := range segment[i+1:] {
+	for i = i + 1; i < len(segment); i++ {
+		arg := segment[i]
 		if options && arg == "--" {
 			options = false
 			continue
 		}
-		if options && unsafePushOption(arg) {
-			return false
+		if options {
+			unsafe, consumesNext := classifyPushOption(arg)
+			if unsafe {
+				return false
+			}
+			if consumesNext {
+				if i+1 >= len(segment) {
+					return false
+				}
+				i++
+				continue
+			}
 		}
 		if strings.HasPrefix(arg, ":") || strings.HasPrefix(arg, "+:") {
 			return false
@@ -233,22 +244,40 @@ subcommand:
 	return true
 }
 
-func unsafePushOption(arg string) bool {
-	if strings.HasPrefix(arg, "--d") {
-		return true
+func classifyPushOption(arg string) (unsafe, consumesNext bool) {
+	if strings.HasPrefix(arg, "--") {
+		name, _, hasValue := strings.Cut(strings.TrimPrefix(arg, "--"), "=")
+		switch {
+		case strings.HasPrefix(name, "d"):
+			return true, false
+		case name == "help":
+			return true, false
+		case isAcceptedLongOption(name, "mirror", 1):
+			return true, false
+		case isAcceptedLongOption(name, "prune", 3):
+			return true, false
+		case isAcceptedLongOption(name, "push-option", 2):
+			return false, !hasValue
+		default:
+			return false, false
+		}
 	}
-	if len(arg) < 2 || arg[0] != '-' || arg[1] == '-' {
-		return false
+	if len(arg) < 2 || arg[0] != '-' {
+		return false, false
 	}
 	for i := 1; i < len(arg); i++ {
 		switch arg[i] {
-		case 'n', 'd':
-			return true
+		case 'n', 'd', 'h':
+			return true, false
 		case 'o':
-			return false
+			return false, i == len(arg)-1
 		}
 	}
-	return false
+	return false, false
+}
+
+func isAcceptedLongOption(name, full string, minimum int) bool {
+	return len(name) >= minimum && strings.HasPrefix(full, name)
 }
 
 func programName(tok string) string {
