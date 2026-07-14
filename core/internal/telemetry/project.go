@@ -39,6 +39,15 @@ func (s *Store) Project(log *audit.Log) error {
 		}
 	}
 
+	// Fold first so the event mirror can be filtered to the same set of real
+	// sessions the summary table holds — an empty shell contributes no session
+	// row, so mirroring its events would leave orphaned rows no consumer reads.
+	folded := foldSessions(visible)
+	real := make(map[string]struct{}, len(folded))
+	for i := range folded {
+		real[folded[i].SessionID] = struct{}{}
+	}
+
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -51,6 +60,9 @@ func (s *Store) Project(log *audit.Log) error {
 	}
 	defer insEvent.Close()
 	for _, e := range visible {
+		if _, ok := real[e.SessionID]; !ok {
+			continue
+		}
 		raw, err := json.Marshal(e)
 		if err != nil {
 			return err
@@ -78,7 +90,7 @@ func (s *Store) Project(log *audit.Log) error {
 		return err
 	}
 	defer upsert.Close()
-	for _, sess := range foldSessions(visible) {
+	for _, sess := range folded {
 		if _, err := upsert.Exec(sess.SessionID, sess.User, sess.Org, sess.Harness,
 			sess.Started, sess.Ended, sess.ExitReason,
 			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint), sess.SkillsUsed, sess.DurationMS, sess.FilesTouched,
@@ -158,6 +170,9 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 	out := make([]Session, 0, len(order))
 	for _, id := range order {
 		a := byID[id]
+		if !hasAgentActivity(a.sess) {
+			continue
+		}
 		a.sess.SkillsUsed = joinSorted(a.skills)
 		a.sess.DurationMS = durationMS(a.sess.Started, a.sess.Ended)
 		a.sess.FilesTouched = len(a.files)
@@ -170,6 +185,17 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		out = append(out, *a.sess)
 	}
 	return out
+}
+
+// hasAgentActivity reports whether a folded session recorded real agent work —
+// at least one user prompt or one tool call. A session_start/stop-only shell (a
+// Claude Code session opened and closed with no interaction, e.g. a /clear, or a
+// lone probe marker) has neither. Such a shell belongs in the audit log but is
+// not an agent session, so — like an IsInternalSession marker — the read-model
+// drops it: counting it would inflate the session count and pollute the
+// clean-delivery denominator with a session that never did anything.
+func hasAgentActivity(s *Session) bool {
+	return s.TurnCount > 0 || s.ToolCalls > 0
 }
 
 func joinSorted(set map[string]struct{}) string {
