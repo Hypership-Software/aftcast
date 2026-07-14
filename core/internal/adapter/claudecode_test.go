@@ -255,6 +255,43 @@ func TestNormalizeCapturesToolUseIDAndLatency(t *testing.T) {
 	}
 }
 
+func TestNormalizeSuccessfulPushEmitsMetadataOnlyDelivery(t *testing.T) {
+	d, e := normalize(t, "posttooluse-git-push.json")
+	if e.DeliverySignal != schema.DeliveryGitPush {
+		t.Fatalf("delivery_signal = %q, want git_push", e.DeliverySignal)
+	}
+	if len(d.Argv) == 0 {
+		t.Fatal("evaluation-only argv should still be available")
+	}
+	blob, err := json.Marshal(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"feature/coach", "git commit", "origin", "pushed"} {
+		if strings.Contains(string(blob), secret) {
+			t.Fatalf("telemetry leaked %q: %s", secret, blob)
+		}
+	}
+}
+
+func TestNormalizeFailedPushDoesNotShip(t *testing.T) {
+	_, e := normalize(t, "posttoolusefailure-git-push.json")
+	if e.ToolOK != schema.OutcomeFailed || e.DeliverySignal != "" {
+		t.Fatalf("failed push = {ok:%q delivery:%q}", e.ToolOK, e.DeliverySignal)
+	}
+}
+
+func TestNormalizePreToolPushDoesNotShip(t *testing.T) {
+	raw := []byte(`{"session_id":"s","cwd":".","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git push"}}`)
+	_, e, err := cc(t).Normalize("", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.DeliverySignal != "" {
+		t.Fatalf("pre-tool event emitted delivery %q", e.DeliverySignal)
+	}
+}
+
 func TestGetUnknownHarness(t *testing.T) {
 	if _, ok := Get("nope"); ok {
 		t.Error("Get returned an adapter for an unknown harness")

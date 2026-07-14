@@ -1,0 +1,13 @@
+{
+  "session_id": "delivery-failure",
+  "cwd": "C:\\Users\\dev\\project",
+  "prompt_id": "prompt-delivery-failure",
+  "hook_event_name": "PostToolUseFailure",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git commit -m coach && git push origin feature/coach"
+  },
+  "tool_use_id": "toolu_delivery_failure",
+  "error": "Exit code 1\npush rejected",
+  "duration_ms": 1200
+}
