@@ -90,6 +90,21 @@ func TestCleanDeliveryAssistedAfterFailure(t *testing.T) {
 	}
 }
 
+func TestCleanDeliveryRecoveredFailureNotCounted(t *testing.T) {
+	// A failure the agent recovers from within the same turn (the turn ends OK) is
+	// not a human correction: an incidental cd/read failure mid-turn must not
+	// disqualify an otherwise clean, autonomous delivery. Only an unrecovered
+	// failure at hand-off — the prior turn's LAST tool call failed — counts.
+	evts := []schema.TelemetryEvent{
+		prompt(), run("cd", false), wrote("pkg/foo.go"), run("go", true),
+		prompt(), wrote("pkg/foo.go"), run("go", true), stop(),
+	}
+	clean, corrections := CleanDelivery(evts)
+	if !clean || corrections != 0 {
+		t.Errorf("CleanDelivery = (%v,%d), want (true,0) — a mid-turn failure the agent recovered from is not a correction", clean, corrections)
+	}
+}
+
 // --- Taxonomy ---
 
 func TestTaxonomyTesting(t *testing.T) {
@@ -124,6 +139,28 @@ func TestTaxonomyFeature(t *testing.T) {
 	evts := []schema.TelemetryEvent{prompt(), wrote("internal/foo/foo.go"), wrote("internal/foo/bar.go")}
 	if tt, _ := Taxonomy(evts); tt != TaskFeature {
 		t.Errorf("Taxonomy = %q, want feature", tt)
+	}
+}
+
+func TestTaxonomyFeatureWithTests(t *testing.T) {
+	// TDD: a feature session writes implementation AND its tests in the same session.
+	// Writing test files must not, by itself, make it a "testing" task — when
+	// implementation source is present, the session is feature work.
+	evts := []schema.TelemetryEvent{
+		prompt(), wrote("internal/foo/foo.go"), wrote("internal/foo/foo_test.go"), run("go", true),
+	}
+	if tt, _ := Taxonomy(evts); tt != TaskFeature {
+		t.Errorf("Taxonomy = %q, want feature (tests alongside implementation are feature work)", tt)
+	}
+}
+
+func TestTaxonomyTestingOnlyWhenNoImplementation(t *testing.T) {
+	// A pure test-writing session (no implementation source) is still testing.
+	evts := []schema.TelemetryEvent{
+		prompt(), wrote("internal/foo/foo_test.go"), wrote("internal/foo/bar_test.go"), run("go", true),
+	}
+	if tt, _ := Taxonomy(evts); tt != TaskTesting {
+		t.Errorf("Taxonomy = %q, want testing (tests only, no implementation)", tt)
 	}
 }
 
