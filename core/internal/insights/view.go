@@ -52,35 +52,38 @@ func renderLandedClean(p analytics.Profile) string {
 		filled = cleanBarLen
 	}
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", cleanBarLen-filled)
-	clean := int(math.Round(rate * float64(p.Sessions)))
-	return fmt.Sprintf("%-16s %s  %.0f%%    %d of %d sessions, no rework needed",
-		ui.Bold("Landed clean"), bar, rate*100, clean, p.Sessions)
+	return fmt.Sprintf("%-16s %s  %.0f%%%s    %d of %d sessions, no rework needed",
+		ui.Bold("Landed clean"), bar, rate*100, trendClause(p), p.CleanCount, p.Sessions)
 }
 
 func renderRework(p analytics.Profile) string {
-	clause := trendClause(p)
-	return fmt.Sprintf("%-16s %.1f fixes / session%s", ui.Bold("Rework"), p.CorrectionLoad, clause)
+	return fmt.Sprintf("%-16s %.1f fixes / session", ui.Bold("Rework"), p.CorrectionLoad)
 }
 
+// trendClause reads Profile.Trend, the clean-delivery-rate change (later half
+// minus earlier half). analytics.trend returns 0 both for "flat" and for
+// "too few sessions to compute"; we can't tell them apart, so a 0 trend omits
+// the clause rather than fabricate a "→ flat" that might be a non-computation.
 func trendClause(p analytics.Profile) string {
-	if p.Sessions < 2 {
-		return ""
-	}
+	prev := clampPercent(int(math.Round((p.CleanDeliveryRate - p.Trend) * 100)))
 	switch {
 	case p.Trend > trendEps:
-		return fmt.Sprintf("   ↑ up from %.1f last week", clampNonNegative(p.CorrectionLoad-p.Trend))
+		return fmt.Sprintf("  ↑ up from %d%%", prev)
 	case p.Trend < -trendEps:
-		return fmt.Sprintf("   ↓ down from %.1f last week", clampNonNegative(p.CorrectionLoad-p.Trend))
+		return fmt.Sprintf("  ↓ down from %d%%", prev)
 	default:
-		return "   → flat"
+		return ""
 	}
 }
 
-func clampNonNegative(f float64) float64 {
-	if f < 0 {
+func clampPercent(n int) int {
+	if n < 0 {
 		return 0
 	}
-	return f
+	if n > 100 {
+		return 100
+	}
+	return n
 }
 
 func renderRisk(agg aggregates) string {
