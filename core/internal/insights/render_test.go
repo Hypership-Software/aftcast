@@ -262,18 +262,20 @@ func TestDetailBodyRawShowsSubagent(t *testing.T) {
 
 func TestRenderTraceHasVerdictAndNoEmptyFields(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	sess := telemetry.Session{SessionID: "s", TaskType: "testing", Outcome: "success",
-		DurationMS: 1080000, ToolCalls: 165, FilesTouched: 12, Taint: true}
+	sess := telemetry.Session{SessionID: "s", ProjectName: "atlas", TaskType: "testing", Outcome: "success",
+		DurationMS: 1080000, ToolCalls: 165, FilesChanged: 7, FilesTouched: 12}
 	pre := schema.TelemetryEvent{EventType: schema.EventPreTool, ToolClass: schema.ClassExec, ToolUseID: "t1", Verbs: []string{"go"}}
 	post := schema.TelemetryEvent{EventType: schema.EventPostTool, ToolUseID: "t1", LatencyMS: 9109, ToolOK: schema.OutcomeOK}
 	out := renderTrace(sess, []schema.TelemetryEvent{pre, post})
-	if !strings.Contains(out, "untrusted input") { // taint flag in header
-		t.Error("verdict header missing untrusted-input flag")
+	for _, want := range []string{"atlas · testing · ✓ succeeded", "wall span 18m", "observed tool time 9s", "7 changed", "12 touched"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("verdict header missing %q:\n%s", want, out)
+		}
 	}
 	if strings.Contains(out, "risk=") || strings.Contains(out, "sub=") || strings.Contains(out, "[t0]") {
 		t.Errorf("trace leaked raw debug fields:\n%s", out)
 	}
-	if !strings.Contains(out, "ran") || !strings.Contains(out, "9.1s") {
+	if !strings.Contains(out, "ran") || !strings.Contains(out, "9s") {
 		t.Errorf("trace missing paired call / duration:\n%s", out)
 	}
 }

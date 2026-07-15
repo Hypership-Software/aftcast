@@ -93,21 +93,127 @@ func TestDigestOmitsHighlightsWhenClean(t *testing.T) {
 	}
 }
 
-// The per-turn breakdown counts calls by activity, folds collapsed runs into
-// their real count, and leaves skills to Highlights rather than the breakdown.
-func TestTurnBreakdownCountsAndExcludesSkills(t *testing.T) {
+func TestVerdictHeaderNamesRepositoryAndExplicitTimeUnits(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	sess := telemetry.Session{
+		SessionID:    "c8aec3ff-x",
+		ProjectName:  "agent-gate",
+		TaskType:     "feature",
+		Outcome:      "success",
+		DurationMS:   6240000,
+		ToolCalls:    119,
+		FilesChanged: 17,
+		FilesTouched: 30,
+		SkillsUsed:   "strategic-review",
+	}
+	turns := []traceTurn{
+		{Index: 1},
+		{Index: 2, Calls: 109, DurMS: 103190},
+		{Index: 3, Calls: 2, DurMS: 5},
+		{Index: 4, Calls: 8, DurMS: 5000},
+	}
+	got := verdictHeader(sess, turns)
+	for _, want := range []string{
+		"agent-gate · feature · ✓ succeeded",
+		"wall span 1h 44m",
+		"observed tool time 1m 48s",
+		"119 calls · 17 changed · 30 touched · ★ 1 skill",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestFailureTextExplainsRecoveryAndHumanCorrections(t *testing.T) {
+	fails := []rowRef{{}, {}, {}}
+	tests := []struct {
+		name string
+		sess telemetry.Session
+		want string
+	}{
+		{"agent recovered", telemetry.Session{Outcome: "success"}, "3 failed attempts · agent recovered"},
+		{"human corrected", telemetry.Session{Outcome: "success", CorrectionTurns: 1}, "3 failed attempts · 1 human correction"},
+		{"session failed", telemetry.Session{Outcome: "failure"}, "3 failed attempts · session failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := failureText(fails, tt.sess); got != tt.want {
+				t.Fatalf("failureText = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTurnBreakdownAccountsForEveryCallAndTranslatesTools(t *testing.T) {
+	var rows []traceRow
+	add := func(n int, verb string, skill bool) {
+		for i := 0; i < n; i++ {
+			rows = append(rows, traceRow{Verb: verb, Skill: skill})
+		}
+	}
+	add(55, "ran", false)
+	add(25, "edited", false)
+	add(22, "read", false)
+	add(4, "Glob", false)
+	add(2, "Grep", false)
+	add(1, "AskUserQuestion", false)
+	got := turnBreakdown(traceTurn{Calls: 109, Rows: rows})
+	if got != "55 ran · 25 edited · 22 read · 4 searched · +3 other" {
+		t.Fatalf("breakdown = %q", got)
+	}
+
+	got = turnBreakdown(traceTurn{Calls: 2, Rows: []traceRow{{Verb: "AskUserQuestion"}, {Verb: "skill", Skill: true}}})
+	if got != "1 asked · 1 skill" {
+		t.Fatalf("translated breakdown = %q", got)
+	}
+}
+
+func TestTimelineHasNoSpeculativePhaseAndNamesZeroCalls(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	got := strings.Join(timelineLines([]traceTurn{{Index: 1}, {Index: 2, Calls: 1, DurMS: 5}}), "\n")
+	for _, banned := range []string{"planning", "execution", "wrap-up", "0 calls", "0.0s"} {
+		if strings.Contains(got, banned) {
+			t.Fatalf("timeline retained %q:\n%s", banned, got)
+		}
+	}
+	for _, want := range []string{"turn 1", "no tool calls", "1 call", "<1s"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("timeline missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestCountNounUsesSingularAndPlural(t *testing.T) {
+	for _, tc := range []struct {
+		n               int
+		one, many, want string
+	}{
+		{1, "skill", "skills", "1 skill"},
+		{2, "skill", "skills", "2 skills"},
+		{1, "human correction", "human corrections", "1 human correction"},
+	} {
+		if got := countNoun(tc.n, tc.one, tc.many); got != tc.want {
+			t.Errorf("countNoun(%d) = %q, want %q", tc.n, got, tc.want)
+		}
+	}
+}
+
+// The per-turn breakdown counts calls by activity and folds collapsed runs into
+// their real count. Skills remain visible because every call must be accounted for.
+func TestTurnBreakdownCountsCollapsedRunsAndSkills(t *testing.T) {
 	got := turnBreakdown(traceTurn{Rows: []traceRow{
 		{Verb: "edited"},
 		{Verb: "edited"},
 		{Verb: "ran"},
 		{Verb: "read", CollapsedN: 8}, // a folded run of 8 reads
-		{Verb: "skill", Skill: true},  // excluded — lives in Highlights
-		{Verb: ""},                    // orphan post — not a call
+		{Verb: "skill", Skill: true},
+		{Verb: ""}, // orphan post — not a call
 	}})
 	if !strings.Contains(got, "8 read") || !strings.Contains(got, "2 edited") || !strings.Contains(got, "1 ran") {
 		t.Errorf("breakdown miscounted: %q", got)
 	}
-	if strings.Contains(got, "skill") {
-		t.Errorf("skills must not appear in the breakdown: %q", got)
+	if !strings.Contains(got, "1 skill") {
+		t.Errorf("skills must appear in the breakdown: %q", got)
 	}
 }

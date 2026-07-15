@@ -294,8 +294,8 @@ var sampleNow = time.Date(2026, 7, 13, 15, 0, 0, 0, time.UTC)
 
 func sampleModel() model {
 	sessions := []telemetry.Session{
-		{SessionID: "aaaa1111", Harness: "claudecode", TaskType: "feature", Outcome: "success", CleanDelivery: true, TurnCount: 3, ToolCalls: 4, FilesTouched: 2, Started: sampleNow.Add(-2 * time.Hour).Format(time.RFC3339Nano)},
-		{SessionID: "bbbb2222", Harness: "claudecode", TaskType: "bugfix", Outcome: "failure", CorrectionTurns: 2, TurnCount: 6, ToolCalls: 11, FilesTouched: 5, Started: sampleNow.Add(-3 * time.Hour).Format(time.RFC3339Nano)},
+		{SessionID: "aaaa1111", Harness: "claudecode", TaskType: "feature", Outcome: "success", CleanDelivery: true, TurnCount: 3, ToolCalls: 4, FilesChanged: 2, FilesTouched: 2, Started: sampleNow.Add(-2 * time.Hour).Format(time.RFC3339Nano)},
+		{SessionID: "bbbb2222", Harness: "claudecode", TaskType: "bugfix", Outcome: "failure", CorrectionTurns: 2, TurnCount: 6, ToolCalls: 11, FilesChanged: 5, FilesTouched: 5, Started: sampleNow.Add(-3 * time.Hour).Format(time.RFC3339Nano)},
 	}
 	provider := func(id string) ([]schema.TelemetryEvent, error) {
 		return []schema.TelemetryEvent{
@@ -331,11 +331,11 @@ func TestListViewRendersSessions(t *testing.T) {
 	if !strings.Contains(v, "feature") || !strings.Contains(v, "2h ago") {
 		t.Fatalf("list view missing session row: %q", v)
 	}
-	if !strings.Contains(v, "4 calls") || !strings.Contains(v, "2 files") {
+	if !strings.Contains(v, "2 changed · 4 calls") {
 		t.Fatalf("list view missing work cell: %q", v)
 	}
-	if !strings.Contains(v, "no intervention") {
-		t.Fatalf("list view missing header: %q", v)
+	if !strings.Contains(v, "succeeded") {
+		t.Fatalf("list view missing result: %q", v)
 	}
 }
 
@@ -352,13 +352,20 @@ func TestVisibleSessionsHidesEmptyByDefault(t *testing.T) {
 func TestSessionRowIsHumanReadable(t *testing.T) {
 	now := time.Date(2026, 7, 13, 15, 0, 0, 0, time.UTC)
 	s := telemetry.Session{SessionID: "32b1a075x", TaskType: "testing", Outcome: "success",
-		CleanDelivery: true, ToolCalls: 165, FilesTouched: 12, Started: "2026-07-13T13:00:00Z"}
+		CleanDelivery: true, ToolCalls: 119, FilesChanged: 17, FilesTouched: 30, Started: "2026-07-13T13:00:00Z"}
 	row := sessionRow(s, now)
 	joined := strings.Join(row, " | ")
-	for _, want := range []string{"2h ago", "testing", "no intervention", "165 calls", "12 files"} {
+	for _, want := range []string{"2h ago", "testing", "succeeded", "17 changed · 119 calls"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("row %q missing %q", joined, want)
 		}
+	}
+}
+
+func TestFlagsCellUsesSingularSkill(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	if got := flagsCell(telemetry.Session{SkillsUsed: "strategic-review"}); got != "★ 1 skill" {
+		t.Fatalf("flagsCell = %q, want singular skill", got)
 	}
 }
 
