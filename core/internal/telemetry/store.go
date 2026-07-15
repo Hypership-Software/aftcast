@@ -43,6 +43,7 @@ type Session struct {
 	FilesChanged    int
 	Shipped         bool
 	ProjectID       string
+	ProjectName     string
 }
 
 type Store struct {
@@ -73,7 +74,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 	shipped          INTEGER,
 	capture_version  INTEGER,
 	plan_style       TEXT,
-	project_id       TEXT
+	project_id       TEXT,
+	project_name     TEXT
 );
 CREATE TABLE IF NOT EXISTS events (
 	seq         INTEGER PRIMARY KEY,
@@ -112,7 +114,7 @@ func (s *Store) Sessions() ([]Session, error) {
 	rows, err := s.db.Query(`SELECT session_id, user, org, harness, started, ended, exit_reason,
 		turn_count, tool_calls, danger_detected, taint,
 		outcome, clean_delivery, correction_turns, task_type, skills_used, duration_ms,
-		files_touched, files_changed, shipped, capture_version, plan_style, project_id
+		files_touched, files_changed, shipped, capture_version, plan_style, project_id, project_name
 		FROM sessions ORDER BY session_id`)
 	if err != nil {
 		return nil, err
@@ -126,7 +128,7 @@ func (s *Store) Sessions() ([]Session, error) {
 		if err := rows.Scan(&session.SessionID, &session.User, &session.Org, &session.Harness, &session.Started, &session.Ended, &session.ExitReason,
 			&session.TurnCount, &session.ToolCalls, &session.DangerDetected, &taint,
 			&session.Outcome, &clean, &session.CorrectionTurns, &session.TaskType, &session.SkillsUsed, &session.DurationMS,
-			&session.FilesTouched, &session.FilesChanged, &shipped, &session.CaptureVersion, &session.PlanStyle, &session.ProjectID); err != nil {
+			&session.FilesTouched, &session.FilesChanged, &shipped, &session.CaptureVersion, &session.PlanStyle, &session.ProjectID, &session.ProjectName); err != nil {
 			return nil, err
 		}
 		session.Taint = taint != 0

@@ -1,10 +1,12 @@
 package telemetry
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/Hypership-Software/atlas/internal/audit"
+	"github.com/Hypership-Software/atlas/internal/project"
 	"github.com/Hypership-Software/atlas/internal/schema"
 )
 
@@ -133,5 +135,69 @@ func TestFoldSessions_ProjectID(t *testing.T) {
 	got := foldSessions(evs)
 	if len(got) != 1 || got[0].ProjectID != "proj123" {
 		t.Fatalf("ProjectID = %q, want proj123", got[0].ProjectID)
+	}
+}
+
+func TestFoldSessionsInfersLocalProjectName(t *testing.T) {
+	repoA := makeTestRepo(t, "zeta", "git@github.com:acme/zeta.git")
+	repoB := makeTestRepo(t, "alpha", "git@github.com:acme/alpha.git")
+	_, idA := project.Identify(repoA)
+	missing := filepath.Join(t.TempDir(), "deleted", "gone.go")
+
+	events := []schema.TelemetryEvent{
+		fileEvent("current", idA, filepath.Join(repoA, "current.go")),
+		fileEvent("legacy", "", filepath.Join(repoB, "legacy.go")),
+		fileEvent("mixed", "", filepath.Join(repoA, "one.go"), filepath.Join(repoB, "one.go"), filepath.Join(repoB, "two.go")),
+		fileEvent("tie", "", filepath.Join(repoA, "tie.go"), filepath.Join(repoB, "tie.go")),
+		fileEvent("mismatch", idA, filepath.Join(repoB, "wrong.go")),
+		fileEvent("deleted", "", missing),
+	}
+
+	got := map[string]Session{}
+	for _, session := range foldSessions(events) {
+		got[session.SessionID] = session
+	}
+	if got["current"].ProjectName != filepath.Base(repoA) {
+		t.Fatalf("current ProjectName = %q, want %q", got["current"].ProjectName, filepath.Base(repoA))
+	}
+	if got["legacy"].ProjectName != filepath.Base(repoB) {
+		t.Fatalf("legacy ProjectName = %q, want %q", got["legacy"].ProjectName, filepath.Base(repoB))
+	}
+	if got["mixed"].ProjectName != filepath.Base(repoB) {
+		t.Fatalf("mixed ProjectName = %q, want majority %q", got["mixed"].ProjectName, filepath.Base(repoB))
+	}
+	wantTie := filepath.Base(repoA)
+	if filepath.Base(repoB) < wantTie {
+		wantTie = filepath.Base(repoB)
+	}
+	if got["tie"].ProjectName != wantTie {
+		t.Fatalf("tie ProjectName = %q, want lexicographic %q", got["tie"].ProjectName, wantTie)
+	}
+	if got["mismatch"].ProjectName != "" || got["deleted"].ProjectName != "" {
+		t.Fatalf("unproven names must stay empty: mismatch=%q deleted=%q", got["mismatch"].ProjectName, got["deleted"].ProjectName)
+	}
+}
+
+func makeTestRepo(t *testing.T, name, remote string) string {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), name)
+	gitDir := filepath.Join(root, ".git")
+	if err := os.MkdirAll(gitDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	config := "[remote \"origin\"]\n\turl = " + remote + "\n"
+	if err := os.WriteFile(filepath.Join(gitDir, "config"), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func fileEvent(sessionID, projectID string, files ...string) schema.TelemetryEvent {
+	return schema.TelemetryEvent{
+		SessionID: sessionID,
+		EventType: schema.EventPreTool,
+		ToolClass: schema.ClassFileRead,
+		Project:   projectID,
+		Files:     files,
 	}
 }

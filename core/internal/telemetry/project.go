@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/Hypership-Software/atlas/internal/analytics"
 	"github.com/Hypership-Software/atlas/internal/audit"
+	"github.com/Hypership-Software/atlas/internal/project"
 	"github.com/Hypership-Software/atlas/internal/schema"
 )
 
@@ -76,8 +78,8 @@ func (s *Store) Project(log *audit.Log) error {
 		(session_id, user, org, harness, started, ended, exit_reason,
 		 turn_count, tool_calls, danger_detected, taint, skills_used, duration_ms,
 		 files_touched, files_changed, shipped, capture_version, plan_style,
-		 outcome, clean_delivery, correction_turns, task_type, project_id)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		 outcome, clean_delivery, correction_turns, task_type, project_id, project_name)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			user=excluded.user, org=excluded.org, harness=excluded.harness,
 			started=excluded.started, ended=excluded.ended, exit_reason=excluded.exit_reason,
@@ -89,7 +91,7 @@ func (s *Store) Project(log *audit.Log) error {
 			plan_style=excluded.plan_style,
 			outcome=excluded.outcome, clean_delivery=excluded.clean_delivery,
 			correction_turns=excluded.correction_turns, task_type=excluded.task_type,
-			project_id=excluded.project_id`)
+			project_id=excluded.project_id, project_name=excluded.project_name`)
 	if err != nil {
 		return err
 	}
@@ -100,7 +102,7 @@ func (s *Store) Project(log *audit.Log) error {
 			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint),
 			sess.SkillsUsed, sess.DurationMS, sess.FilesTouched, sess.FilesChanged,
 			b2i(sess.Shipped), sess.CaptureVersion, sess.PlanStyle,
-			sess.Outcome, b2i(sess.CleanDelivery), sess.CorrectionTurns, sess.TaskType, sess.ProjectID); err != nil {
+			sess.Outcome, b2i(sess.CleanDelivery), sess.CorrectionTurns, sess.TaskType, sess.ProjectID, sess.ProjectName); err != nil {
 			return err
 		}
 	}
@@ -197,6 +199,7 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		a.sess.DurationMS = durationMS(a.sess.Started, a.sess.Ended)
 		a.sess.FilesTouched = len(a.files)
 		a.sess.FilesChanged = len(a.changed)
+		a.sess.ProjectName = inferredProjectName(a.sess.ProjectID, a.files)
 		clean, corrections := analytics.CleanDelivery(a.events)
 		taskType, _ := analytics.Taxonomy(a.events)
 		a.sess.Outcome = string(analytics.Outcome(a.events))
@@ -207,6 +210,27 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		out = append(out, *a.sess)
 	}
 	return out
+}
+
+// inferredProjectName resolves a human label from files already observed in the
+// local audit log. A v2 project id must match the repository proof; legacy rows
+// use the most frequently observed repository, with a stable tie-break.
+func inferredProjectName(projectID string, files map[string]struct{}) string {
+	counts := make(map[string]int)
+	for file := range files {
+		root, id, ok := project.Repository(filepath.Dir(file))
+		if !ok || (projectID != "" && id != projectID) {
+			continue
+		}
+		counts[filepath.Base(root)]++
+	}
+	best, bestCount := "", 0
+	for name, count := range counts {
+		if count > bestCount || (count == bestCount && (best == "" || name < best)) {
+			best, bestCount = name, count
+		}
+	}
+	return best
 }
 
 // hasAgentActivity reports whether a folded session recorded real agent work —

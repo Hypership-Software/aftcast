@@ -356,15 +356,15 @@ func TestSessions_ScansProjectID(t *testing.T) {
 		(session_id, user, org, harness, started, ended, exit_reason,
 		 turn_count, tool_calls, danger_detected, taint, outcome, clean_delivery,
 		 correction_turns, task_type, skills_used, duration_ms, files_touched,
-		 files_changed, shipped, capture_version, plan_style, project_id)
-		VALUES ('s1','','','','','','',0,5,0,0,'',0,0,'','',0,0,0,0,0,'','proj123')`); err != nil {
+		 files_changed, shipped, capture_version, plan_style, project_id, project_name)
+		VALUES ('s1','','','','','','',0,5,0,0,'',0,0,'','',0,0,0,0,0,'','proj123','my-repo')`); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.Sessions()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].ProjectID != "proj123" {
-		t.Fatalf("ProjectID = %q, want proj123", got[0].ProjectID)
+	if len(got) != 1 || got[0].ProjectID != "proj123" || got[0].ProjectName != "my-repo" {
+		t.Fatalf("project identity = (%q, %q), want (proj123, my-repo)", got[0].ProjectID, got[0].ProjectName)
 	}
 }
