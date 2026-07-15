@@ -1,6 +1,9 @@
 package install
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 // addToPath returns pathVal with dir appended (';'-separated) when absent; changed
 // is false if dir was already present (case-insensitive, trailing-slash-insensitive).
@@ -36,4 +39,25 @@ func pathListContains(pathVal, dir string) bool {
 
 func pathEntryEqual(a, b string) bool {
 	return strings.EqualFold(strings.TrimRight(a, `\`), strings.TrimRight(b, `\`))
+}
+
+func shellProfilePath(home, shell string, exists func(string) bool) string {
+	profile := func(name string) string { return filepath.Join(home, name) }
+	switch strings.ToLower(filepath.Base(shell)) {
+	case "zsh":
+		return profile(".zshrc")
+	case "bash":
+		for _, name := range []string{".bashrc", ".bash_profile"} {
+			if path := profile(name); exists(path) {
+				return path
+			}
+		}
+		return profile(".profile")
+	}
+	for _, name := range []string{".zshrc", ".bashrc", ".bash_profile", ".profile"} {
+		if path := profile(name); exists(path) {
+			return path
+		}
+	}
+	return profile(".profile")
 }
