@@ -3,6 +3,7 @@ package insights
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Hypership-Software/atlas/internal/analytics"
@@ -129,10 +130,13 @@ func summarizeProject(key string, sessions []telemetry.Session, scope Scope, now
 
 func projectGroupKey(session telemetry.Session) string {
 	switch {
+	case session.ProjectName != "":
+		// Historical sessions can carry different project IDs for the same
+		// repository as capture moved from path to remote-backed identity. The
+		// local, proven repository name is the stable developer-facing join key.
+		return "name:" + strings.ToLower(strings.TrimSpace(session.ProjectName))
 	case session.ProjectID != "":
 		return "id:" + session.ProjectID
-	case session.ProjectName != "":
-		return "name:" + session.ProjectName
 	default:
 		return "other"
 	}

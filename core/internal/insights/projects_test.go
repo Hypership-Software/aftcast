@@ -9,7 +9,7 @@ import (
 	"github.com/Hypership-Software/atlas/internal/telemetry"
 )
 
-func TestGroupProjectsUsesIdentityAndStableFallbacks(t *testing.T) {
+func TestGroupProjectsReconcilesHistoricalIdentitiesByRepositoryName(t *testing.T) {
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	sessions := []telemetry.Session{
 		{SessionID: "p1-old", ProjectID: "p1", ProjectName: "agent-gate", Started: now.Add(-2 * time.Hour).Format(time.RFC3339Nano), ToolCalls: 1},
@@ -22,17 +22,17 @@ func TestGroupProjectsUsesIdentityAndStableFallbacks(t *testing.T) {
 	}
 
 	got := groupProjects(sessions, Scope{}, now)
-	if len(got) != 4 {
-		t.Fatalf("groups = %d, want 4: %+v", len(got), got)
+	if len(got) != 3 {
+		t.Fatalf("groups = %d, want 3: %+v", len(got), got)
 	}
-	if got[0].Key != "id:p1" || got[1].Key != "id:p2" || got[2].Key != "name:kuper" || got[3].Key != "other" {
-		t.Fatalf("order = %q, %q, %q, %q", got[0].Key, got[1].Key, got[2].Key, got[3].Key)
+	if got[0].Key != "name:agent-gate" || got[1].Key != "name:kuper" || got[2].Key != "other" {
+		t.Fatalf("order = %q, %q, %q", got[0].Key, got[1].Key, got[2].Key)
 	}
-	if len(got[0].Sessions) != 2 || got[0].Sessions[0].SessionID != "p1-new" {
-		t.Fatalf("p1 sessions = %+v", got[0].Sessions)
+	if len(got[0].Sessions) != 3 || got[0].Sessions[0].SessionID != "p1-new" {
+		t.Fatalf("agent-gate sessions = %+v", got[0].Sessions)
 	}
-	if got[3].Name != "other project" || len(got[3].Sessions) != 2 {
-		t.Fatalf("fallback = %+v", got[3])
+	if got[2].Name != "other project" || len(got[2].Sessions) != 2 {
+		t.Fatalf("fallback = %+v", got[2])
 	}
 }
 
