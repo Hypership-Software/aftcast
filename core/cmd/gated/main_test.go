@@ -33,3 +33,15 @@ func TestOffNotWiredYet(t *testing.T) {
 		t.Fatalf("off: exit = %d, want 2 (deferred; guidance printed)", code)
 	}
 }
+
+func TestCoachUnknownSubcommand(t *testing.T) {
+	if code := run([]string{"coach", "bogus"}); code != 2 {
+		t.Fatalf("coach bogus: exit = %d, want 2", code)
+	}
+}
+
+func TestHelpMentionsCoach(t *testing.T) {
+	if !strings.Contains(helpText(), "coach") {
+		t.Fatalf("help text should list the coach command")
+	}
+}
