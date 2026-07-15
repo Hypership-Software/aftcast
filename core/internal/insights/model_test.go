@@ -30,26 +30,24 @@ func TestListFitsTwentyFourLineTerminalWithScrollNotes(t *testing.T) {
 	sessions := make([]telemetry.Session, 11)
 	for i := range sessions {
 		sessions[i] = telemetry.Session{
-			SessionID: fmt.Sprintf("session-%d", i),
-			TaskType:  "feature",
-			ToolCalls: 1,
-			Started:   sampleNow.Add(-time.Duration(i) * time.Hour).Format(time.RFC3339Nano),
+			SessionID:   fmt.Sprintf("session-%d", i),
+			ProjectID:   fmt.Sprintf("project-%d", i),
+			ProjectName: fmt.Sprintf("repo-%d", i),
+			TaskType:    "feature",
+			ToolCalls:   1,
+			Started:     sampleNow.Add(-time.Duration(i) * time.Hour).Format(time.RFC3339Nano),
 		}
 	}
-	sessions[len(sessions)-1].ToolCalls = 0
 	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
 	m.coach = analytics.PlanAssociation{Status: analytics.CoachRecommend, TaskType: "feature", Total: 24,
 		Planned: 10, Direct: 14, PlannedRate: .8, DirectRate: .55}
-	m.cursor = 5
+	m.projectCursor = 5
 	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 24}))
 	if lines := strings.Count(m.View(), "\n") + 1; lines > 24 {
 		t.Fatalf("list with scroll notes rendered %d lines into a 24-line terminal:\n%s", lines, m.View())
 	}
-	if !strings.Contains(m.View(), "▸") || !strings.Contains(m.View(), "5h ago") {
-		t.Fatalf("height-limited list omitted the selected session:\n%s", m.View())
-	}
-	if !strings.Contains(m.View(), "empty session hidden") {
-		t.Fatalf("height-limited list omitted its hidden-session note:\n%s", m.View())
+	if !strings.Contains(m.View(), "▸") || !strings.Contains(m.View(), "repo-5") {
+		t.Fatalf("height-limited list omitted the selected project:\n%s", m.View())
 	}
 }
 
@@ -59,7 +57,8 @@ func complexHeightModel() model {
 	for i := range sessions {
 		session := telemetry.Session{
 			SessionID:    fmt.Sprintf("complex-%d", i),
-			ProjectID:    "project-two",
+			ProjectID:    fmt.Sprintf("project-%d", i),
+			ProjectName:  tasks[i%len(tasks)] + fmt.Sprintf("-%d", i),
 			TaskType:     tasks[i%len(tasks)],
 			ToolCalls:    2,
 			FilesTouched: 1,
@@ -71,11 +70,10 @@ func complexHeightModel() model {
 		}
 		sessions[i] = session
 	}
-	sessions[len(sessions)-1].ToolCalls = 0
 	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
 	m.coach = analytics.PlanAssociation{Status: analytics.CoachRecommend, Window: 24, TaskType: "feature", Total: 24,
 		Planned: 10, Direct: 14, PlannedRate: .8, DirectRate: .55}
-	m.cursor = 4
+	m.projectCursor = 4
 	return m
 }
 
@@ -99,8 +97,8 @@ func TestComplexRecommendationListFitsTwentyFourLines(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Shipped", "Work observed", "Corrections", "Security", "feature", "bugfix", "docs",
-		"What's moving your needle", "Try next", "Recent sessions", "Project",
-		"empty session hidden", "q quit",
+		"What's moving your needle", "Try next", "Projects", "Project",
+		"q quit",
 	} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("complex height-constrained list missing %q:\n%s", want, view)
@@ -158,7 +156,7 @@ func TestSingleLineTableBudgetKeepsCombinedStatus(t *testing.T) {
 	if rows := visualRowCount(view, m.width); rows > m.height {
 		t.Fatalf("single-line table budget rendered %d visual rows into height %d:\n%s", rows, m.height, view)
 	}
-	for _, want := range []string{"▸", "4h ago", "empty session hidden", "q quit"} {
+	for _, want := range []string{"▸", "4h ago", "q quit"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("single-line table budget omitted %q:\n%s", want, view)
 		}
@@ -168,7 +166,7 @@ func TestSingleLineTableBudgetKeepsCombinedStatus(t *testing.T) {
 func TestZeroRowStatusTracksKeyboardNavigation(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	m := complexHeightModel()
-	m.cursor = 0
+	m.projectCursor = 0
 	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 19}))
 	assertSelected := func(want string) {
 		t.Helper()
@@ -177,7 +175,7 @@ func TestZeroRowStatusTracksKeyboardNavigation(t *testing.T) {
 				return
 			}
 		}
-		t.Fatalf("selected row missing %q at cursor %d:\n%s", want, m.cursor, m.View())
+		t.Fatalf("selected row missing %q at cursor %d:\n%s", want, m.projectCursor, m.View())
 	}
 	assertSelected("just now")
 	for range 4 {
@@ -206,7 +204,7 @@ func TestKnownAmpleHeightPreservesNormalView(t *testing.T) {
 func TestUnknownHeightRetainsNormalList(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	view := complexHeightModel().View()
-	for _, want := range []string{"Recent sessions", "Try next", "4h ago", "q quit"} {
+	for _, want := range []string{"Projects", "Try next", "4h ago", "q quit"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("unknown-height list missing %q:\n%s", want, view)
 		}
@@ -219,7 +217,7 @@ func TestOverviewColumnsKeepSecurityOutOfTheMainTable(t *testing.T) {
 	for _, col := range m.buildColumns() {
 		titles = append(titles, col.title)
 	}
-	if got := strings.Join(titles, "|"); got != "Project|When|Task|Result|Work" {
+	if got := strings.Join(titles, "|"); got != "Project|Active|Sessions|Shipped|Duration|Changes" {
 		t.Fatalf("overview columns = %q", got)
 	}
 }
@@ -253,8 +251,8 @@ func TestSecuritySurfaceSelectsOnlyFlaggedAndReturnsFromDetail(t *testing.T) {
 		t.Fatalf("Esc lost originating surface: mode=%v surface=%v", m.mode, m.surface)
 	}
 	m = must(m.Update(tea.KeyMsg{Type: tea.KeyTab}))
-	if m.surface != surfaceOverview || len(m.sessions) != 2 {
-		t.Fatalf("Tab did not restore Overview: surface=%v sessions=%d", m.surface, len(m.sessions))
+	if m.surface != surfaceOverview || len(m.projects) != 2 || len(m.sessions) != 0 {
+		t.Fatalf("Tab did not restore Projects: surface=%v projects=%d sessions=%d", m.surface, len(m.projects), len(m.sessions))
 	}
 }
 
@@ -323,7 +321,7 @@ func TestSecuritySurfaceFitsEightyByTwentyFour(t *testing.T) {
 	if rows := visualRowCount(m.View(), 80); rows > 24 {
 		t.Fatalf("security rendered %d rows:\n%s", rows, m.View())
 	}
-	for _, want := range []string{"Security review", "Signal", "more sessions below", "tab overview"} {
+	for _, want := range []string{"Security review", "Signal", "more sessions below", "tab projects"} {
 		if !strings.Contains(strings.ToLower(m.View()), strings.ToLower(want)) {
 			t.Fatalf("security view missing %q:\n%s", want, m.View())
 		}
@@ -375,16 +373,16 @@ func TestHistoricalProjectEmptyCopyDistinguishesSameProjectHistory(t *testing.T)
 		t.Run(tt.name, func(t *testing.T) {
 			m := build(historicalCoachSessions(sampleNow), Scope{ProjectID: tt.projectID, Name: tt.projectID}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
 			wantCoach := renderCoach(m.coach)
-			if view := m.View(); !strings.Contains(view, tt.want) || !strings.Contains(view, wantCoach) {
-				t.Fatalf("project empty view missing honest copy or coach:\n%s", view)
+			if view := m.View(); !strings.Contains(view, tt.projectID+" · last 7 days") || !strings.Contains(view, "Starts with your next captured session") || strings.Contains(view, wantCoach) {
+				t.Fatalf("project empty workspace is wrong:\n%s", view)
 			}
 			m = must(m.Update(key("g")))
 			if view := m.View(); !strings.Contains(view, tt.wantGlobal) || !strings.Contains(view, wantCoach) {
 				t.Fatalf("global empty view changed copy or coach:\n%s", view)
 			}
 			m = must(m.Update(key("p")))
-			if view := m.View(); !strings.Contains(view, tt.want) || !strings.Contains(view, wantCoach) {
-				t.Fatalf("project empty view after p changed copy or coach:\n%s", view)
+			if view := m.View(); !strings.Contains(view, tt.projectID+" · last 7 days") || strings.Contains(view, wantCoach) {
+				t.Fatalf("project empty workspace after p is wrong:\n%s", view)
 			}
 		})
 	}
@@ -397,16 +395,16 @@ func TestCoachRemainsVisibleAcrossPopulatedAndEmptyScopeToggles(t *testing.T) {
 		ToolCalls: 2, Started: sampleNow.Add(-time.Hour).Format(time.RFC3339Nano)})
 	m := build(sessions, Scope{ProjectID: "project-one", Name: "project-one"}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
 	wantCoach := renderCoach(m.coach)
-	if !strings.Contains(m.View(), wantCoach) {
-		t.Fatalf("empty project view omitted coach:\n%s", m.View())
+	if strings.Contains(m.View(), wantCoach) || !strings.Contains(m.View(), "project-one · last 7 days") {
+		t.Fatalf("project workspace should not repeat global coach:\n%s", m.View())
 	}
 	m = must(m.Update(key("g")))
-	if !strings.Contains(m.View(), wantCoach) || !strings.Contains(m.View(), "docs") {
+	if !strings.Contains(m.View(), wantCoach) || !strings.Contains(m.View(), "other project") {
 		t.Fatalf("populated global view changed or omitted coach:\n%s", m.View())
 	}
 	m = must(m.Update(key("p")))
-	if !strings.Contains(m.View(), wantCoach) || !strings.Contains(m.View(), "No Atlas activity for this project in the last 7 days.") {
-		t.Fatalf("empty project view after p changed or omitted coach:\n%s", m.View())
+	if strings.Contains(m.View(), wantCoach) || !strings.Contains(m.View(), "project-one · last 7 days") {
+		t.Fatalf("project workspace after p is wrong:\n%s", m.View())
 	}
 }
 
@@ -450,12 +448,17 @@ func TestOverviewSummarizesSecurityWithoutCrowdingSessionRows(t *testing.T) {
 
 func TestListViewRendersSessions(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	v := sampleModel().View()
-	if !strings.Contains(v, "feature") || !strings.Contains(v, "2h ago") {
-		t.Fatalf("list view missing session row: %q", v)
+	m := sampleModel()
+	if v := m.View(); !strings.Contains(v, "Projects") || !strings.Contains(v, "other project") || !strings.Contains(v, "2") {
+		t.Fatalf("projects view missing repository summary: %q", v)
 	}
-	if !strings.Contains(v, "2 changed · 4 calls") {
-		t.Fatalf("list view missing work cell: %q", v)
+	m = must(m.Update(key("enter")))
+	v := m.View()
+	if !strings.Contains(v, "feature") || !strings.Contains(v, "2h ago") {
+		t.Fatalf("project view missing session row: %q", v)
+	}
+	if !strings.Contains(v, "2 files") || strings.Contains(v, "4 calls") {
+		t.Fatalf("project view has wrong change cell: %q", v)
 	}
 	if !strings.Contains(v, "succeeded") {
 		t.Fatalf("list view missing result: %q", v)
@@ -505,8 +508,12 @@ func TestEnterOpensDetailRawTogglesEscReturns(t *testing.T) {
 	m := sampleModel()
 	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 40}))
 	m = must(m.Update(tea.KeyMsg{Type: tea.KeyEnter}))
+	if m.mode != modeProject {
+		t.Fatalf("first enter did not switch to project mode")
+	}
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyEnter}))
 	if m.mode != modeDetail {
-		t.Fatalf("enter did not switch to detail mode")
+		t.Fatalf("second enter did not switch to detail mode")
 	}
 	if !strings.Contains(m.View(), "fetched") {
 		t.Fatalf("detail view missing tool: %q", m.View())
@@ -519,8 +526,12 @@ func TestEnterOpensDetailRawTogglesEscReturns(t *testing.T) {
 		t.Fatalf("raw detail view missing subagent field: %q", m.View())
 	}
 	m = must(m.Update(tea.KeyMsg{Type: tea.KeyEsc}))
+	if m.mode != modeProject {
+		t.Fatalf("esc did not return to project")
+	}
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyEsc}))
 	if m.mode != modeList {
-		t.Fatalf("esc did not return to list")
+		t.Fatalf("second esc did not return to projects")
 	}
 }
 
@@ -555,6 +566,7 @@ func TestHelpOverlayClosesBackToPreviousMode(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	m := sampleModel()
 	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 40}))
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyEnter}))
 	m = must(m.Update(tea.KeyMsg{Type: tea.KeyEnter}))
 	if m.mode != modeDetail {
 		t.Fatalf("enter did not switch to detail mode")
@@ -651,5 +663,69 @@ func TestProjectCell(t *testing.T) {
 	}
 	if got := m.projectCell(telemetry.Session{ProjectID: ""}); got != "other project" {
 		t.Errorf("empty project cell = %q, want other project", got)
+	}
+}
+
+func TestProjectNavigationOpensRepositoryBeforeSessionAndRestoresSelection(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	sessions := []telemetry.Session{
+		{SessionID: "a1", ProjectID: "p1", ProjectName: "agent-gate", ToolCalls: 2, Started: sampleNow.Add(-time.Hour).Format(time.RFC3339Nano)},
+		{SessionID: "a2", ProjectID: "p1", ProjectName: "agent-gate", ToolCalls: 2, Started: sampleNow.Add(-2 * time.Hour).Format(time.RFC3339Nano)},
+		{SessionID: "k1", ProjectID: "p2", ProjectName: "kuper", ToolCalls: 2, Started: sampleNow.Add(-3 * time.Hour).Format(time.RFC3339Nano)},
+	}
+	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
+	m := build(sessions, Scope{ProjectID: "p1", Name: "agent-gate", StartGlobal: true}, provider, sampleNow)
+	if m.mode != modeList || len(m.projects) != 2 {
+		t.Fatalf("global start = mode %v projects %d", m.mode, len(m.projects))
+	}
+	m = must(m.Update(key("enter")))
+	if m.mode != modeProject || m.selectedProject.Name != "agent-gate" || len(m.sessions) != 2 {
+		t.Fatalf("opened project = mode %v project %+v sessions %d", m.mode, m.selectedProject, len(m.sessions))
+	}
+	m = must(m.Update(key("down")))
+	m = must(m.Update(key("enter")))
+	if m.mode != modeDetail || m.detailSess.SessionID != "a2" {
+		t.Fatalf("opened session = mode %v session %q", m.mode, m.detailSess.SessionID)
+	}
+	m = must(m.Update(key("esc")))
+	if m.mode != modeProject || m.cursor != 1 {
+		t.Fatalf("detail return = mode %v cursor %d", m.mode, m.cursor)
+	}
+	m = must(m.Update(key("esc")))
+	if m.mode != modeList || m.projectCursor != 0 {
+		t.Fatalf("project return = mode %v cursor %d", m.mode, m.projectCursor)
+	}
+}
+
+func TestCurrentProjectStartsInWorkspaceAndGReturnsToProjects(t *testing.T) {
+	sessions := []telemetry.Session{
+		{SessionID: "a", ProjectID: "p1", ProjectName: "agent-gate", ToolCalls: 2, Started: sampleNow.Format(time.RFC3339Nano)},
+		{SessionID: "k", ProjectID: "p2", ProjectName: "kuper", ToolCalls: 2, Started: sampleNow.Add(-time.Hour).Format(time.RFC3339Nano)},
+	}
+	m := build(sessions, Scope{ProjectID: "p1", Name: "agent-gate"}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	if m.mode != modeProject || m.selectedProject.Name != "agent-gate" || len(m.sessions) != 1 {
+		t.Fatalf("project start = mode %v project %+v sessions %d", m.mode, m.selectedProject, len(m.sessions))
+	}
+	m = must(m.Update(key("g")))
+	if m.mode != modeList || !m.scopeGlobal || len(m.projects) != 2 {
+		t.Fatalf("global = mode %v scopeGlobal %v projects %d", m.mode, m.scopeGlobal, len(m.projects))
+	}
+	m = must(m.Update(key("p")))
+	if m.mode != modeProject || m.scopeGlobal || m.selectedProject.Name != "agent-gate" {
+		t.Fatalf("project = mode %v scopeGlobal %v project %+v", m.mode, m.scopeGlobal, m.selectedProject)
+	}
+}
+
+func TestSecurityDetailReturnsToSecuritySurface(t *testing.T) {
+	sessions := []telemetry.Session{{SessionID: "risk", ProjectID: "p1", ProjectName: "agent-gate", ToolCalls: 2, Taint: true}}
+	m := build(sessions, Scope{StartGlobal: true}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m = must(m.Update(key("tab")))
+	if m.surface != surfaceSecurity || len(m.sessions) != 1 {
+		t.Fatalf("security = surface %v sessions %d", m.surface, len(m.sessions))
+	}
+	m = must(m.Update(key("enter")))
+	m = must(m.Update(key("esc")))
+	if m.mode != modeList || m.surface != surfaceSecurity {
+		t.Fatalf("security return = mode %v surface %v", m.mode, m.surface)
 	}
 }
