@@ -58,16 +58,22 @@ func buildProjectSessionColumns(sessions []telemetry.Session, now time.Time) []t
 	return columns
 }
 
-func renderProjects(agg aggregates, coach analytics.PlanAssociation, tableView string) string {
-	return strings.Join([]string{
+func renderProjects(agg aggregates, coach analytics.PlanAssociation, friction []analytics.FrictionCluster, tableView string) string {
+	sections := []string{
 		renderHeader(agg),
 		"",
 		renderCoach(coach),
 		"",
+	}
+	if card := renderFriction(friction); card != "" {
+		sections = append(sections, card, "")
+	}
+	sections = append(sections,
 		ui.Bold("Projects"),
 		tableView,
 		ui.Hint("↑↓ move · ↵ open · tab security · g/p scope · ? help · q quit"),
-	}, "\n")
+	)
+	return strings.Join(sections, "\n")
 }
 
 func renderProjectWorkspace(project projectSummary, tableView string) string {

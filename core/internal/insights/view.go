@@ -202,6 +202,7 @@ func renderHelp() string {
 		"Shipped = a successful git push in a delivery session",
 		"Delivery session = changed files or successfully pushed, captured with v2 telemetry",
 		"Observed plan-first = explicit planning, or a completed preparatory prompt before editing",
+		"Worth a permanent fix = the same kind of failure in 3+ sessions on 2+ days this week",
 		"",
 		ui.Hint("esc or ? to close"),
 	}, "\n")

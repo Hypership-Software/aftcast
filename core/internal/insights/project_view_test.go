@@ -41,7 +41,7 @@ func TestProjectTableRendersCompactRepositoryRows(t *testing.T) {
 
 func TestRenderProjectsHasNoFlatSessionList(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	out := renderProjects(aggregates{}, analytics.PlanAssociation{}, "PROJECT TABLE")
+	out := renderProjects(aggregates{}, analytics.PlanAssociation{}, nil, "PROJECT TABLE")
 	for _, want := range []string{"Projects", "PROJECT TABLE", "What's moving your needle"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("output missing %q:\n%s", want, out)

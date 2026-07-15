@@ -24,8 +24,12 @@ func Run(store *telemetry.Store, scope Scope) error {
 	if err != nil {
 		return fmt.Errorf("insights: load sessions: %w", err)
 	}
+	failures, err := store.FailedCalls()
+	if err != nil {
+		return fmt.Errorf("insights: load failed calls: %w", err)
+	}
 	now := time.Now()
-	m := build(sessions, scope, store.EventsForSession, now)
+	m := build(sessions, scope, store.EventsForSession, failures, now)
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 		return fmt.Errorf("insights: run tui: %w", err)
 	}

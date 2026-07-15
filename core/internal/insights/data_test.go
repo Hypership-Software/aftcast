@@ -89,7 +89,7 @@ func TestBuildKeepsFullHistoryButScopesOperationalRowsToSevenDays(t *testing.T) 
 		{SessionID: "recent", Started: now.Add(-time.Hour).Format(time.RFC3339Nano)},
 		{SessionID: "history", Started: now.Add(-30 * 24 * time.Hour).Format(time.RFC3339Nano)},
 	}
-	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, now)
+	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, nil, now)
 	if len(m.history) != 2 || len(m.global) != 1 || m.global[0].SessionID != "recent" {
 		t.Fatalf("history=%d operational=%v", len(m.history), m.global)
 	}
