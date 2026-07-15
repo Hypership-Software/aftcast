@@ -3,17 +3,13 @@ package insights
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/Hypership-Software/atlas/internal/analytics"
 	"github.com/Hypership-Software/atlas/internal/schema"
 	"github.com/Hypership-Software/atlas/internal/telemetry"
 	"github.com/Hypership-Software/atlas/internal/ui"
 )
-
-const maxBar = 40
 
 func shortID(id string) string {
 	if len(id) > 8 {
@@ -36,8 +32,9 @@ func renderHeader(agg aggregates) string {
 		headerContext(agg),
 		"",
 		renderShipped(agg.shipping),
-		renderIntervention(agg.profile),
-		renderRisk(agg),
+		renderWorkObserved(agg),
+		renderCorrections(agg.profile),
+		renderSecurity(agg),
 	}, "\n")
 }
 
@@ -46,133 +43,51 @@ func headerContext(agg aggregates) string {
 	if label == "" {
 		label = "all projects"
 	}
-	line := fmt.Sprintf("Atlas — %s · last 7 days · %d sessions", label, agg.profile.Sessions)
+	parts := []string{}
 	if agg.user != "" {
-		line += " · " + agg.user
+		parts = append(parts, agg.user)
 	}
-	return line
+	parts = append(parts, label, "last 7 days")
+	return "Atlas — " + strings.Join(parts, " · ")
 }
 
 func renderShipped(p analytics.ShippedProfile) string {
-	if p.Eligible == 0 {
-		return fmt.Sprintf("%s no observable delivery sessions yet", metricLabel("Shipped"))
+	if p.Eligible > 0 {
+		return fmt.Sprintf("%s %d of %d delivery sessions · %.0f%%", metricLabel("Shipped"), p.Shipped, p.Eligible, p.Rate*100)
 	}
-	return fmt.Sprintf("%s %d of %d delivery sessions  %.0f%%", metricLabel("Shipped"), p.Shipped, p.Eligible, p.Rate*100)
+	if !p.TrackingSince.IsZero() {
+		return fmt.Sprintf("%s Tracking since %s · waiting for first delivery session", metricLabel("Shipped"), p.TrackingSince.Format("2 Jan"))
+	}
+	return fmt.Sprintf("%s Starts with your next captured session", metricLabel("Shipped"))
 }
 
-func renderIntervention(p analytics.Profile) string {
-	return fmt.Sprintf("%s %.1f human fixes / completed session", metricLabel("Intervention"), p.CorrectionLoad)
+func renderWorkObserved(agg aggregates) string {
+	return fmt.Sprintf("%s %s across %s", metricLabel("Work observed"),
+		countNoun(agg.profile.Sessions, "session", "sessions"), countNoun(agg.projects, "project", "projects"))
 }
 
-func renderRisk(agg aggregates) string {
-	sessionWord := "sessions"
-	if agg.tainted == 1 {
-		sessionWord = "session"
+func renderCorrections(p analytics.Profile) string {
+	if p.Completed == 0 {
+		return fmt.Sprintf("%s no completed sessions yet", metricLabel("Corrections"))
 	}
-	base := fmt.Sprintf("%d %s on untrusted input · %d flagged actions", agg.tainted, sessionWord, agg.danger)
-	suffix := ui.OK("✓ nothing flagged")
-	if agg.tainted > 0 || agg.danger > 0 {
-		suffix = ui.Warn("⚠ review")
+	prefix := "none"
+	if p.TotalCorrections > 0 {
+		prefix = countNoun(p.TotalCorrections, "human correction", "human corrections")
 	}
-	return fmt.Sprintf("%s %s   %s", metricLabel("Risk"), base, suffix)
+	return fmt.Sprintf("%s %s across %s", metricLabel("Corrections"), prefix,
+		countNoun(p.Completed, "completed session", "completed sessions"))
 }
 
-func renderTaskMix(mix []taskCount) string {
-	var b strings.Builder
-	for _, tc := range mix {
-		label := tc.task
-		if label == "unknown" || label == "" {
-			label = "other"
-		}
-		n := tc.n
-		if n > maxBar {
-			n = maxBar
-		}
-		fmt.Fprintf(&b, "%-12s %s %d\n", label, strings.Repeat("█", n), tc.n)
+func renderSecurity(agg aggregates) string {
+	if agg.securitySessions == 0 && agg.danger == 0 {
+		return fmt.Sprintf("%s nothing flagged", metricLabel("Security"))
 	}
-	return strings.TrimRight(b.String(), "\n")
-}
-
-// renderNeedsAttention builds the 0-3 actionable lines for the overview's
-// "Needs attention" section: tainted/danger sessions (most recent first),
-// then the existing skill-opportunity signal if room remains.
-func renderNeedsAttention(sessions []telemetry.Session, agg aggregates, now time.Time) []string {
-	var flagged []telemetry.Session
-	for _, s := range sessions {
-		if s.Taint || s.DangerDetected > 0 {
-			flagged = append(flagged, s)
-		}
+	verb := "need"
+	if agg.securitySessions == 1 {
+		verb = "needs"
 	}
-	sort.SliceStable(flagged, func(i, j int) bool { return flagged[i].Started > flagged[j].Started })
-
-	var lines []string
-	for _, s := range flagged {
-		if len(lines) >= 3 {
-			break
-		}
-		lines = append(lines, riskAttentionLine(s, now))
-	}
-	if len(lines) < 3 {
-		if line, ok := skillOpportunityLine(sessions, agg.skills); ok {
-			lines = append(lines, line)
-		}
-	}
-	return lines
-}
-
-func riskAttentionLine(s telemetry.Session, now time.Time) string {
-	var reason string
-	switch {
-	case s.Taint && s.DangerDetected > 0:
-		reason = "untrusted input + a flagged command"
-	case s.Taint:
-		reason = "untrusted input"
-	default:
-		reason = pluralActions(s.DangerDetected)
-	}
-	when := humanize(s.Started, now)
-	if when == "" {
-		when = "recently"
-	}
-	return fmt.Sprintf("%s  session %s — %s      → ↵ to inspect", ui.Warn("⚠"), when, reason)
-}
-
-func pluralActions(n int) string {
-	if n == 1 {
-		return "1 flagged action"
-	}
-	return fmt.Sprintf("%d flagged actions", n)
-}
-
-func skillOpportunityLine(sessions []telemetry.Session, sk analytics.SkillReport) (string, bool) {
-	if len(sk.Opportunities) == 0 {
-		return "", false
-	}
-	oppTypes := map[string]bool{}
-	for _, t := range sk.Opportunities {
-		oppTypes[t] = true
-	}
-	n := 0
-	for _, s := range sessions {
-		if s.CorrectionTurns > 0 && s.SkillsUsed == "" && oppTypes[s.TaskType] {
-			n++
-		}
-	}
-	if n == 0 {
-		return "", false
-	}
-	plural := ""
-	if n != 1 {
-		plural = "s"
-	}
-	return fmt.Sprintf("○  %d rework-heavy session%s ran with no skill in play         → skill opportunity", n, plural), true
-}
-
-func renderAttentionBlock(lines []string) string {
-	if len(lines) == 0 {
-		return ui.OK("✓ nothing needs attention")
-	}
-	return strings.Join(lines, "\n")
+	return fmt.Sprintf("%s %s %s review · %s", metricLabel("Security"),
+		countNoun(agg.securitySessions, "session", "sessions"), verb, countNoun(agg.danger, "flagged action", "flagged actions"))
 }
 
 func renderScopedEmpty(global, hasHistory bool) string {
@@ -197,7 +112,7 @@ func renderEmptyList(coach analytics.PlanAssociation, empty string) string {
 }
 
 func renderCoach(a analytics.PlanAssociation) string {
-	title := "What's moving your needle · across your projects"
+	title := "What's moving your needle"
 	if a.Window > 0 {
 		title += fmt.Sprintf(" · latest %d comparable sessions", a.Window)
 	}
@@ -226,11 +141,11 @@ func renderCoach(a analytics.PlanAssociation) string {
 		}, "\n")
 	default:
 		if a.Total == 0 {
-			return title + "\n  Atlas is learning your workflow · no comparable delivery sessions yet."
+			return title + "\n  Learning your baseline · 0 of 20 comparable delivery sessions"
 		}
 		return strings.Join([]string{
 			title,
-			fmt.Sprintf("  Atlas is learning your workflow · %d comparable sessions", a.Total),
+			fmt.Sprintf("  Learning your baseline · %d of 20 comparable delivery sessions", a.Total),
 			fmt.Sprintf("  plan-first %d · direct-to-edit %d · need 20 total and 5 each way", a.Planned, a.Direct),
 		}, "\n")
 	}
@@ -240,14 +155,9 @@ func renderList(agg aggregates, coach analytics.PlanAssociation, tableView strin
 	return strings.Join([]string{
 		renderHeader(agg),
 		"",
-		"What the AI worked on",
-		renderTaskMix(agg.taskMix),
-		"",
-		"Needs attention",
-		renderAttentionBlock(agg.needsAttention),
-		"",
 		renderCoach(coach),
 		"",
+		ui.Bold("Recent sessions"),
 		tableView,
 		ui.Hint("↑↓ (k/j) move · ↵ open · s sort · h show/hide empty · g/p scope · ? help · q quit"),
 	}, "\n")

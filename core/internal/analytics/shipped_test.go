@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"testing"
+	"time"
 
 	"github.com/Hypership-Software/atlas/internal/schema"
 )
@@ -25,5 +26,22 @@ func TestShippingProfileEmptyIsZero(t *testing.T) {
 	got := ShippingProfile(nil)
 	if got != (ShippedProfile{}) {
 		t.Fatalf("empty profile = %+v", got)
+	}
+}
+
+func TestShippingProfileTracksFirstV2SessionBeforeEligibility(t *testing.T) {
+	sessions := []SessionStat{
+		{CaptureVersion: 1, Started: "2026-07-10T09:00:00Z", FilesChanged: 2},
+		{CaptureVersion: schema.DeliverySignalVersion, Started: "2026-07-15T11:00:00Z"},
+		{CaptureVersion: schema.DeliverySignalVersion, Started: "not-a-time", FilesChanged: 1},
+		{CaptureVersion: schema.DeliverySignalVersion, Started: "2026-07-16T11:00:00Z", FilesChanged: 1},
+	}
+	got := ShippingProfile(sessions)
+	want := time.Date(2026, 7, 15, 11, 0, 0, 0, time.UTC)
+	if !got.TrackingSince.Equal(want) {
+		t.Fatalf("TrackingSince = %v, want %v", got.TrackingSince, want)
+	}
+	if got.Eligible != 2 {
+		t.Fatalf("Eligible = %d, want 2; tracking must not change eligibility", got.Eligible)
 	}
 }

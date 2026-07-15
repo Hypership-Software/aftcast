@@ -17,21 +17,14 @@ const (
 	coachWindowSize = 60
 )
 
-type taskCount struct {
-	task string
-	n    int
-}
-
 type aggregates struct {
-	profile        analytics.Profile
-	shipping       analytics.ShippedProfile
-	skills         analytics.SkillReport
-	danger         int
-	tainted        int
-	taskMix        []taskCount
-	needsAttention []string
-	user           string
-	scopeLabel     string
+	profile          analytics.Profile
+	shipping         analytics.ShippedProfile
+	danger           int
+	securitySessions int
+	projects         int
+	user             string
+	scopeLabel       string
 }
 
 // recentSessions keeps sessions within the last 7 days of Started. A session
@@ -71,46 +64,36 @@ func coachWindow(sessions []telemetry.Session) []analytics.SessionStat {
 
 func aggregate(sessions []telemetry.Session, now time.Time) aggregates {
 	stats := make([]analytics.SessionStat, len(sessions))
-	counts := map[string]int{}
-	var order []string
+	projects := map[string]struct{}{}
 	danger := 0
-	tainted := 0
+	securitySessions := 0
 	user := ""
 	for i, s := range sessions {
 		stats[i] = toStat(s)
 		danger += s.DangerDetected
-		if s.Taint {
-			tainted++
+		if s.Taint || s.DangerDetected > 0 {
+			securitySessions++
 		}
 		if user == "" && s.User != "" {
 			user = s.User
 		}
-		tt := s.TaskType
-		if tt == "" {
-			tt = "unknown"
+		projectKey := "other"
+		switch {
+		case s.ProjectName != "":
+			projectKey = "name:" + s.ProjectName
+		case s.ProjectID != "":
+			projectKey = "id:" + s.ProjectID
 		}
-		if _, ok := counts[tt]; !ok {
-			order = append(order, tt)
-		}
-		counts[tt]++
+		projects[projectKey] = struct{}{}
 	}
-	sort.Strings(order)
-	mix := make([]taskCount, len(order))
-	for i, tt := range order {
-		mix[i] = taskCount{task: tt, n: counts[tt]}
+	return aggregates{
+		profile:          analytics.Productivity(stats),
+		shipping:         analytics.ShippingProfile(stats),
+		danger:           danger,
+		securitySessions: securitySessions,
+		projects:         len(projects),
+		user:             user,
 	}
-
-	agg := aggregates{
-		profile:  analytics.Productivity(stats),
-		shipping: analytics.ShippingProfile(stats),
-		skills:   analytics.SkillInsights(stats),
-		danger:   danger,
-		tainted:  tainted,
-		taskMix:  mix,
-		user:     user,
-	}
-	agg.needsAttention = renderNeedsAttention(sessions, agg, now)
-	return agg
 }
 
 func toStat(s telemetry.Session) analytics.SessionStat {

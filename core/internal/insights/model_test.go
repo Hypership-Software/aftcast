@@ -45,8 +45,8 @@ func TestListFitsTwentyFourLineTerminalWithScrollNotes(t *testing.T) {
 	if lines := strings.Count(m.View(), "\n") + 1; lines > 24 {
 		t.Fatalf("list with scroll notes rendered %d lines into a 24-line terminal:\n%s", lines, m.View())
 	}
-	if !strings.Contains(m.View(), "more sessions above") || !strings.Contains(m.View(), "more sessions below") {
-		t.Fatalf("height-limited list omitted a scroll direction:\n%s", m.View())
+	if !strings.Contains(m.View(), "▸") || !strings.Contains(m.View(), "5h ago") {
+		t.Fatalf("height-limited list omitted the selected session:\n%s", m.View())
 	}
 	if !strings.Contains(m.View(), "empty session hidden") {
 		t.Fatalf("height-limited list omitted its hidden-session note:\n%s", m.View())
@@ -98,8 +98,8 @@ func TestComplexRecommendationListFitsTwentyFourLines(t *testing.T) {
 		t.Fatalf("complex list rendered %d visual rows into height %d at width %d:\n%s", rows, m.height, m.width, view)
 	}
 	for _, want := range []string{
-		"What the AI worked on", "feature", "bugfix", "docs", "Needs attention", "flagged command",
-		"What's moving your needle", "Try next", "Project", "more sessions above", "more sessions below",
+		"Shipped", "Work observed", "Corrections", "Security", "feature", "bugfix", "docs",
+		"What's moving your needle", "Try next", "Recent sessions", "Project",
 		"empty session hidden", "q quit",
 	} {
 		if !strings.Contains(view, want) {
@@ -158,7 +158,7 @@ func TestSingleLineTableBudgetKeepsCombinedStatus(t *testing.T) {
 	if rows := visualRowCount(view, m.width); rows > m.height {
 		t.Fatalf("single-line table budget rendered %d visual rows into height %d:\n%s", rows, m.height, view)
 	}
-	for _, want := range []string{"selected 5 of 9", "4 above", "4 below", "empty session hidden", "q quit"} {
+	for _, want := range []string{"▸", "4h ago", "empty session hidden", "q quit"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("single-line table budget omitted %q:\n%s", want, view)
 		}
@@ -170,23 +170,26 @@ func TestZeroRowStatusTracksKeyboardNavigation(t *testing.T) {
 	m := complexHeightModel()
 	m.cursor = 0
 	m = must(m.Update(tea.WindowSizeMsg{Width: 100, Height: 19}))
-	assertStatus := func(want string) {
+	assertSelected := func(want string) {
 		t.Helper()
-		if view := m.View(); !strings.Contains(view, want) {
-			t.Fatalf("status missing %q at cursor %d:\n%s", want, m.cursor, view)
+		for _, line := range strings.Split(m.View(), "\n") {
+			if strings.Contains(line, "▸") && strings.Contains(line, want) {
+				return
+			}
 		}
+		t.Fatalf("selected row missing %q at cursor %d:\n%s", want, m.cursor, m.View())
 	}
-	assertStatus("selected 1 of 9 · 0 above · 8 below")
+	assertSelected("just now")
 	for range 4 {
 		m = must(m.Update(key("j")))
 	}
-	assertStatus("selected 5 of 9 · 4 above · 4 below")
+	assertSelected("4h ago")
 	for range 4 {
 		m = must(m.Update(key("down")))
 	}
-	assertStatus("selected 9 of 9 · 8 above · 0 below")
+	assertSelected("8h ago")
 	m = must(m.Update(key("k")))
-	assertStatus("selected 8 of 9 · 7 above · 1 below")
+	assertSelected("7h ago")
 }
 
 func TestKnownAmpleHeightPreservesNormalView(t *testing.T) {
@@ -203,10 +206,21 @@ func TestKnownAmpleHeightPreservesNormalView(t *testing.T) {
 func TestUnknownHeightRetainsNormalList(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	view := complexHeightModel().View()
-	for _, want := range []string{"What the AI worked on", "Try next", "4h ago", "q quit"} {
+	for _, want := range []string{"Recent sessions", "Try next", "4h ago", "q quit"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("unknown-height list missing %q:\n%s", want, view)
 		}
+	}
+}
+
+func TestOverviewColumnsKeepSecurityOutOfTheMainTable(t *testing.T) {
+	m := sampleModel()
+	var titles []string
+	for _, col := range m.buildColumns() {
+		titles = append(titles, col.title)
+	}
+	if got := strings.Join(titles, "|"); got != "Project|When|Task|Result|Work" {
+		t.Fatalf("overview columns = %q", got)
 	}
 }
 
@@ -307,7 +321,7 @@ func sampleModel() model {
 	return build(sessions, Scope{}, provider, sampleNow)
 }
 
-func TestFlagsColumnFitsAllFlags(t *testing.T) {
+func TestOverviewSummarizesSecurityWithoutCrowdingSessionRows(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	s := telemetry.Session{SessionID: "cccc3333", Harness: "claudecode", TaskType: "testing",
 		Outcome: "success", CorrectionTurns: 1, ToolCalls: 179, FilesTouched: 44,
@@ -316,11 +330,14 @@ func TestFlagsColumnFitsAllFlags(t *testing.T) {
 	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
 	m := build([]telemetry.Session{s}, Scope{}, provider, sampleNow)
 	v := m.View()
-	// All three flags co-occur here; the Flags column must widen to fit rather
-	// than truncate the trailing "★ 4 skills".
-	for _, want := range []string{"⚠ untrusted input", "⚑ 11 flagged", "★ 4 skills"} {
+	for _, want := range []string{"Security", "1 session needs review", "11 flagged actions"} {
 		if !strings.Contains(v, want) {
-			t.Fatalf("flags column truncated %q:\n%s", want, v)
+			t.Fatalf("overview omitted security summary %q:\n%s", want, v)
+		}
+	}
+	for _, banned := range []string{"Flags", "⚠ untrusted input", "★ 4 skills"} {
+		if strings.Contains(v, banned) {
+			t.Fatalf("overview row retained security detail %q:\n%s", banned, v)
 		}
 	}
 }

@@ -1,11 +1,16 @@
 package analytics
 
-import "github.com/Hypership-Software/atlas/internal/schema"
+import (
+	"time"
+
+	"github.com/Hypership-Software/atlas/internal/schema"
+)
 
 type ShippedProfile struct {
-	Eligible int
-	Shipped  int
-	Rate     float64
+	Eligible      int
+	Shipped       int
+	Rate          float64
+	TrackingSince time.Time
 }
 
 func DeliveryEligible(s SessionStat) bool {
@@ -15,6 +20,11 @@ func DeliveryEligible(s SessionStat) bool {
 func ShippingProfile(sessions []SessionStat) ShippedProfile {
 	var out ShippedProfile
 	for _, s := range sessions {
+		if s.CaptureVersion >= schema.DeliverySignalVersion {
+			if started, err := time.Parse(time.RFC3339Nano, s.Started); err == nil && (out.TrackingSince.IsZero() || started.Before(out.TrackingSince)) {
+				out.TrackingSince = started
+			}
+		}
 		if !DeliveryEligible(s) {
 			continue
 		}

@@ -218,6 +218,9 @@ func TestProductivityAggregates(t *testing.T) {
 	if p.CleanCount != 1 {
 		t.Errorf("CleanCount = %d, want 1", p.CleanCount)
 	}
+	if p.Completed != 2 || p.TotalCorrections != 1 {
+		t.Errorf("Completed/TotalCorrections = %d/%d, want 2/1", p.Completed, p.TotalCorrections)
+	}
 }
 
 // --- SkillInsights ---

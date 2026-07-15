@@ -139,8 +139,8 @@ func (m model) rebuildRows() model {
 // active scope: the global view gets a leading Project column; Work and Flags
 // carry floors so they absorb (or give up) the terminal's spare width.
 func (m model) buildColumns() []tableColumn {
-	titles := []string{"When", "Task", "Outcome", "Work", "Flags"}
-	floors := []int{0, 0, 0, workColFloor, flagsColFloor}
+	titles := []string{"When", "Task", "Result", "Work"}
+	floors := []int{0, 0, 0, workColFloor}
 	if m.scopeGlobal {
 		titles = append([]string{"Project"}, titles...)
 		floors = append([]int{0}, floors...)
@@ -219,7 +219,6 @@ func sessionRow(s telemetry.Session, now time.Time) []string {
 		taskCell(s.TaskType),
 		outcomeCell(s),
 		workCell(s),
-		flagsCell(s),
 	}
 }
 
