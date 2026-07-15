@@ -159,9 +159,9 @@ func TestBuildTraceCollapsesGrepRunsCaseInsensitive(t *testing.T) {
 	}
 
 	t.Setenv("NO_COLOR", "1")
-	out := renderTrace(telemetry.Session{SessionID: "s"}, evs)
+	out := turnBreakdown(buildTrace(evs)[0])
 	if !strings.Contains(out, "3 searched") {
-		t.Errorf("collapsed Grep run must use a developer-facing label in the timeline breakdown:\n%s", out)
+		t.Errorf("collapsed Grep run must use a developer-facing label in the trace breakdown:\n%s", out)
 	}
 	if strings.Contains(out, "read") {
 		t.Errorf("collapsed Grep run mislabeled as read:\n%s", out)
