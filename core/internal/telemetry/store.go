@@ -20,30 +20,39 @@ import (
 // analytical columns (Outcome, CleanDelivery, CorrectionTurns, TaskType) are
 // populated separately.
 type Session struct {
-	SessionID       string
-	User            string
-	Org             string
-	Harness         string
-	Started         string
-	Ended           string
-	ExitReason      string
-	TurnCount       int
-	ToolCalls       int
-	DangerDetected  int
-	Taint           bool
-	Outcome         string
-	CleanDelivery   bool
-	CorrectionTurns int
-	TaskType        string
-	SkillsUsed      string
-	DurationMS      int64
-	FilesTouched    int
-	CaptureVersion  int
-	PlanStyle       string
-	FilesChanged    int
-	Shipped         bool
-	ProjectID       string
-	ProjectName     string
+	SessionID          string
+	User               string
+	Org                string
+	Harness            string
+	Started            string
+	Ended              string
+	ExitReason         string
+	TurnCount          int
+	ToolCalls          int
+	DangerDetected     int
+	Taint              bool
+	Outcome            string
+	CleanDelivery      bool
+	CorrectionTurns    int
+	TaskType           string
+	SkillsUsed         string
+	DurationMS         int64
+	FilesTouched       int
+	CaptureVersion     int
+	PlanStyle          string
+	FilesChanged       int
+	Shipped            bool
+	ProjectID          string
+	ProjectName        string
+	ChangedFiles       []string
+	LinesAdded         int
+	LinesRemoved       int
+	ChangeStatsCovered bool
+	ObservedToolMS     int64
+	PlanMS             int64
+	BuildMS            int64
+	ReviewMS           int64
+	WorkMixCovered     bool
 }
 
 type Store struct {
@@ -75,7 +84,16 @@ CREATE TABLE IF NOT EXISTS sessions (
 	capture_version  INTEGER,
 	plan_style       TEXT,
 	project_id       TEXT,
-	project_name     TEXT
+	project_name     TEXT,
+	changed_files    TEXT,
+	lines_added      INTEGER,
+	lines_removed    INTEGER,
+	change_stats_covered INTEGER,
+	observed_tool_ms INTEGER,
+	plan_ms          INTEGER,
+	build_ms         INTEGER,
+	review_ms        INTEGER,
+	work_mix_covered INTEGER
 );
 CREATE TABLE IF NOT EXISTS events (
 	seq         INTEGER PRIMARY KEY,
@@ -114,7 +132,9 @@ func (s *Store) Sessions() ([]Session, error) {
 	rows, err := s.db.Query(`SELECT session_id, user, org, harness, started, ended, exit_reason,
 		turn_count, tool_calls, danger_detected, taint,
 		outcome, clean_delivery, correction_turns, task_type, skills_used, duration_ms,
-		files_touched, files_changed, shipped, capture_version, plan_style, project_id, project_name
+		files_touched, files_changed, shipped, capture_version, plan_style, project_id, project_name,
+		changed_files, lines_added, lines_removed, change_stats_covered, observed_tool_ms,
+		plan_ms, build_ms, review_ms, work_mix_covered
 		FROM sessions ORDER BY session_id`)
 	if err != nil {
 		return nil, err
@@ -124,16 +144,24 @@ func (s *Store) Sessions() ([]Session, error) {
 	var out []Session
 	for rows.Next() {
 		var session Session
-		var taint, clean, shipped int
+		var taint, clean, shipped, changeCovered, mixCovered int
+		var changedFiles string
 		if err := rows.Scan(&session.SessionID, &session.User, &session.Org, &session.Harness, &session.Started, &session.Ended, &session.ExitReason,
 			&session.TurnCount, &session.ToolCalls, &session.DangerDetected, &taint,
 			&session.Outcome, &clean, &session.CorrectionTurns, &session.TaskType, &session.SkillsUsed, &session.DurationMS,
-			&session.FilesTouched, &session.FilesChanged, &shipped, &session.CaptureVersion, &session.PlanStyle, &session.ProjectID, &session.ProjectName); err != nil {
+			&session.FilesTouched, &session.FilesChanged, &shipped, &session.CaptureVersion, &session.PlanStyle, &session.ProjectID, &session.ProjectName,
+			&changedFiles, &session.LinesAdded, &session.LinesRemoved, &changeCovered, &session.ObservedToolMS,
+			&session.PlanMS, &session.BuildMS, &session.ReviewMS, &mixCovered); err != nil {
 			return nil, err
+		}
+		if err := json.Unmarshal([]byte(changedFiles), &session.ChangedFiles); err != nil && changedFiles != "" {
+			return nil, fmt.Errorf("telemetry: decode changed files: %w", err)
 		}
 		session.Taint = taint != 0
 		session.CleanDelivery = clean != 0
 		session.Shipped = shipped != 0
+		session.ChangeStatsCovered = changeCovered != 0
+		session.WorkMixCovered = mixCovered != 0
 		out = append(out, session)
 	}
 	return out, rows.Err()

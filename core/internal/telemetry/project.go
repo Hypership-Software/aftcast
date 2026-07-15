@@ -78,8 +78,10 @@ func (s *Store) Project(log *audit.Log) error {
 		(session_id, user, org, harness, started, ended, exit_reason,
 		 turn_count, tool_calls, danger_detected, taint, skills_used, duration_ms,
 		 files_touched, files_changed, shipped, capture_version, plan_style,
-		 outcome, clean_delivery, correction_turns, task_type, project_id, project_name)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		 outcome, clean_delivery, correction_turns, task_type, project_id, project_name,
+		 changed_files, lines_added, lines_removed, change_stats_covered, observed_tool_ms,
+		 plan_ms, build_ms, review_ms, work_mix_covered)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			user=excluded.user, org=excluded.org, harness=excluded.harness,
 			started=excluded.started, ended=excluded.ended, exit_reason=excluded.exit_reason,
@@ -91,18 +93,29 @@ func (s *Store) Project(log *audit.Log) error {
 			plan_style=excluded.plan_style,
 			outcome=excluded.outcome, clean_delivery=excluded.clean_delivery,
 			correction_turns=excluded.correction_turns, task_type=excluded.task_type,
-			project_id=excluded.project_id, project_name=excluded.project_name`)
+			project_id=excluded.project_id, project_name=excluded.project_name,
+			changed_files=excluded.changed_files, lines_added=excluded.lines_added,
+			lines_removed=excluded.lines_removed, change_stats_covered=excluded.change_stats_covered,
+			observed_tool_ms=excluded.observed_tool_ms, plan_ms=excluded.plan_ms,
+			build_ms=excluded.build_ms, review_ms=excluded.review_ms,
+			work_mix_covered=excluded.work_mix_covered`)
 	if err != nil {
 		return err
 	}
 	defer upsert.Close()
 	for _, sess := range folded {
+		changedFiles, err := json.Marshal(sess.ChangedFiles)
+		if err != nil {
+			return err
+		}
 		if _, err := upsert.Exec(sess.SessionID, sess.User, sess.Org, sess.Harness,
 			sess.Started, sess.Ended, sess.ExitReason,
 			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint),
 			sess.SkillsUsed, sess.DurationMS, sess.FilesTouched, sess.FilesChanged,
 			b2i(sess.Shipped), sess.CaptureVersion, sess.PlanStyle,
-			sess.Outcome, b2i(sess.CleanDelivery), sess.CorrectionTurns, sess.TaskType, sess.ProjectID, sess.ProjectName); err != nil {
+			sess.Outcome, b2i(sess.CleanDelivery), sess.CorrectionTurns, sess.TaskType, sess.ProjectID, sess.ProjectName,
+			string(changedFiles), sess.LinesAdded, sess.LinesRemoved, b2i(sess.ChangeStatsCovered), sess.ObservedToolMS,
+			sess.PlanMS, sess.BuildMS, sess.ReviewMS, b2i(sess.WorkMixCovered)); err != nil {
 			return err
 		}
 	}
@@ -207,9 +220,30 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		a.sess.CorrectionTurns = corrections
 		a.sess.TaskType = taskType
 		a.sess.PlanStyle = string(analytics.ObservedPlanStyle(a.events))
+		changes := analytics.ObservedChanges(a.events)
+		a.sess.ChangedFiles = changes.Paths()
+		a.sess.LinesAdded = changes.LinesAdded
+		a.sess.LinesRemoved = changes.LinesRemoved
+		a.sess.ChangeStatsCovered = changes.Covered
+		mix := analytics.ObservedWorkMix(a.events)
+		a.sess.ObservedToolMS = observedToolMS(a.events)
+		a.sess.PlanMS = mix.Plan.DurationMS
+		a.sess.BuildMS = mix.Build.DurationMS
+		a.sess.ReviewMS = mix.Review.DurationMS
+		a.sess.WorkMixCovered = mix.Covered
 		out = append(out, *a.sess)
 	}
 	return out
+}
+
+func observedToolMS(events []schema.TelemetryEvent) int64 {
+	var total int64
+	for _, event := range events {
+		if event.EventType == schema.EventPostTool && event.LatencyMS > 0 {
+			total += event.LatencyMS
+		}
+	}
+	return total
 }
 
 // inferredProjectName resolves a human label from files already observed in the
