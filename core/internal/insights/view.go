@@ -39,9 +39,9 @@ func renderHeader(agg aggregates) string {
 }
 
 func surfaceContext(agg aggregates, surface listSurface) string {
-	overview, security := "[Overview]", "Security"
+	overview, security := "[Projects]", "Security"
 	if surface == surfaceSecurity {
-		overview, security = "Overview", "[Security]"
+		overview, security = "Projects", "[Security]"
 	}
 	return headerContext(agg) + "    " + overview + " | " + security
 }
@@ -184,7 +184,7 @@ func renderSecurityList(agg aggregates, tableView string, findings int) string {
 			countNoun(agg.danger, "flagged action", "flagged actions")),
 		"",
 		body,
-		ui.Hint("↑↓ move · ↵ open · tab overview · g/p scope · ? help · q quit"),
+		ui.Hint("↑↓ move · ↵ open · tab projects · g/p scope · ? help · q quit"),
 	}, "\n")
 }
 
@@ -195,9 +195,9 @@ func renderHelp() string {
 	return strings.Join([]string{
 		ui.Bold("Keybindings — help"),
 		"",
-		"↑↓ (k/j) move · ↵ open · esc back · tab overview/security · s sort · h show/hide empty · g/p scope · r raw (detail) · ? help · q quit",
+		"↑↓ (k/j) move · ↵ open · esc back · tab projects/security · g/p scope · r raw (detail) · ? help · q quit",
 		"",
-		"⚠ untrusted input · ⚑ flagged actions · ★ skills",
+		"⚠ untrusted input · ⚑ flagged actions · ★ invoked skills",
 		"",
 		"Shipped = a successful git push in a delivery session",
 		"Delivery session = changed files or successfully pushed, captured with v2 telemetry",

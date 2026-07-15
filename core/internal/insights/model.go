@@ -20,6 +20,7 @@ type mode int
 
 const (
 	modeList mode = iota
+	modeProject
 	modeDetail
 	modeHelp
 )
@@ -62,28 +63,32 @@ type model struct {
 
 	// all is the active scope's (7-day-filtered) session set; it never
 	// reorders or drops rows on its own — hide/sort only ever read from it.
-	all         []telemetry.Session
-	sessions    []telemetry.Session // visible+sorted; m.sessions[i] is table row i.
-	agg         aggregates
-	coach       analytics.PlanAssociation
-	events      eventProvider
-	now         time.Time
-	showEmpty   bool
-	sortMode    sortMode
-	hiddenCount int
-	surface     listSurface
+	all             []telemetry.Session
+	sessions        []telemetry.Session // visible+sorted; m.sessions[i] is table row i.
+	agg             aggregates
+	coach           analytics.PlanAssociation
+	events          eventProvider
+	now             time.Time
+	showEmpty       bool
+	sortMode        sortMode
+	hiddenCount     int
+	surface         listSurface
+	projects        []projectSummary
+	projectCursor   int
+	selectedProject projectSummary
 
 	cursor      int // selected row into m.sessions
 	width       int // last known terminal width; 0 until the first WindowSizeMsg
 	height      int
 	heightKnown bool
 
-	mode       mode
-	preHelp    mode // where ? was pressed from, so esc/? returns there
-	detail     viewport.Model
-	detailSess telemetry.Session
-	detailEvs  []schema.TelemetryEvent
-	showRaw    bool
+	mode             mode
+	preHelp          mode // where ? was pressed from, so esc/? returns there
+	detail           viewport.Model
+	detailSess       telemetry.Session
+	detailEvs        []schema.TelemetryEvent
+	showRaw          bool
+	detailReturnMode mode
 }
 
 func build(sessions []telemetry.Session, scope Scope, events eventProvider, now time.Time) model {
@@ -107,6 +112,15 @@ func (m model) applyScope() model {
 	m.all = scopeSessions(m.global, m.scope.ProjectID, m.scopeGlobal)
 	m.agg = aggregate(m.all, m.now)
 	m.agg.scopeLabel = scopeLabel(m.scope, m.scopeGlobal)
+	m.projects = groupProjects(m.all, m.scope, m.now)
+	if !m.scopeGlobal {
+		m.mode = modeProject
+		m.surface = surfaceOverview
+		m.selectedProject = projectSummary{Name: m.scope.Name, ID: m.scope.ProjectID, Key: "id:" + m.scope.ProjectID, Aggregate: m.agg}
+		if len(m.projects) > 0 {
+			m.selectedProject = m.projects[0]
+		}
+	}
 	return m.rebuildRows()
 }
 
@@ -143,11 +157,20 @@ func (m model) rebuildRows() model {
 		m.cursor = 0
 		return m
 	}
-	visible := visibleSessions(m.all, m.showEmpty)
-	sortSessions(visible, m.sortMode)
-	m.sessions = visible
-	m.hiddenCount = len(m.all) - len(visible)
-	m.cursor = 0
+	if m.mode == modeProject {
+		m.sessions = append([]telemetry.Session(nil), m.selectedProject.Sessions...)
+		m.hiddenCount = 0
+		if m.cursor >= len(m.sessions) {
+			m.cursor = max(0, len(m.sessions)-1)
+		}
+		return m
+	}
+	m.projects = groupProjects(m.all, m.scope, m.now)
+	m.sessions = nil
+	m.hiddenCount = 0
+	if m.projectCursor >= len(m.projects) {
+		m.projectCursor = max(0, len(m.projects)-1)
+	}
 	return m
 }
 
@@ -158,7 +181,10 @@ func (m model) buildColumns() []tableColumn {
 	if m.surface == surfaceSecurity {
 		return m.buildSecurityColumns()
 	}
-	return m.buildOverviewColumns()
+	if m.mode == modeProject {
+		return buildProjectSessionColumns(m.sessions, m.now)
+	}
+	return buildProjectColumns(m.projects, m.now)
 }
 
 func (m model) buildOverviewColumns() []tableColumn {
@@ -349,6 +375,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateHelp(msg)
 		case modeDetail:
 			return m.updateDetail(msg)
+		case modeProject:
+			return m.updateProject(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -376,13 +404,21 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeHelp
 		return m, nil
 	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
+		if m.surface == surfaceSecurity {
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		} else if m.projectCursor > 0 {
+			m.projectCursor--
 		}
 		return m, nil
 	case "down", "j":
-		if m.cursor < len(m.sessions)-1 {
-			m.cursor++
+		if m.surface == surfaceSecurity {
+			if m.cursor < len(m.sessions)-1 {
+				m.cursor++
+			}
+		} else if m.projectCursor < len(m.projects)-1 {
+			m.projectCursor++
 		}
 		return m, nil
 	case "tab":
@@ -390,11 +426,15 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.surface = surfaceSecurity
 		} else {
 			m.surface = surfaceOverview
+			if !m.scopeGlobal {
+				m.mode = modeProject
+			}
 		}
 		return m.rebuildRows(), nil
 	case "g":
 		if !m.scopeGlobal {
 			m.scopeGlobal = true
+			m.mode = modeList
 			return m.applyScope(), nil
 		}
 		return m, nil
@@ -404,25 +444,65 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.applyScope(), nil
 		}
 		return m, nil
-	case "h":
+	case "enter":
 		if m.surface == surfaceSecurity {
+			if len(m.sessions) == 0 {
+				return m, nil
+			}
+			m.detailReturnMode = modeList
+			return m.openDetail(m.sessions[m.cursor])
+		}
+		if len(m.projects) == 0 {
 			return m, nil
 		}
-		m.showEmpty = !m.showEmpty
-		return m.rebuildRows(), nil
-	case "s":
-		if m.surface == surfaceSecurity {
-			return m, nil
+		return m.openProject(m.projects[m.projectCursor]), nil
+	}
+	return m, nil
+}
+
+func (m model) updateProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "?":
+		m.preHelp = modeProject
+		m.mode = modeHelp
+		return m, nil
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
 		}
-		m.sortMode = m.sortMode.next()
-		return m.rebuildRows(), nil
+		return m, nil
+	case "down", "j":
+		if m.cursor < len(m.sessions)-1 {
+			m.cursor++
+		}
+		return m, nil
 	case "enter":
 		if len(m.sessions) == 0 {
 			return m, nil
 		}
+		m.detailReturnMode = modeProject
 		return m.openDetail(m.sessions[m.cursor])
+	case "tab":
+		m.mode = modeList
+		m.surface = surfaceSecurity
+		return m.rebuildRows(), nil
+	case "esc", "g":
+		m.scopeGlobal = true
+		m.mode = modeList
+		m.surface = surfaceOverview
+		return m.applyScope(), nil
 	}
 	return m, nil
+}
+
+func (m model) openProject(project projectSummary) model {
+	m.mode = modeProject
+	m.selectedProject = project
+	m.sessions = append([]telemetry.Session(nil), project.Sessions...)
+	m.cursor = 0
+	return m
 }
 
 func (m model) openDetail(sess telemetry.Session) (tea.Model, tea.Cmd) {
@@ -451,7 +531,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeHelp
 		return m, nil
 	case "esc":
-		m.mode = modeList
+		m.mode = m.detailReturnMode
 		return m, nil
 	case "r":
 		m.showRaw = !m.showRaw
@@ -470,6 +550,8 @@ func (m model) View() string {
 		view = renderHelp()
 	} else if m.mode == modeDetail {
 		view = renderDetail(m.detail.View())
+	} else if m.mode == modeProject {
+		view = m.renderProjectView()
 	} else if m.surface == surfaceSecurity {
 		view = m.renderListView()
 	} else if len(m.all) == 0 {
@@ -496,48 +578,57 @@ func (m model) hasScopedHistory() bool {
 }
 
 func (m model) renderListView() string {
-	cols := m.buildColumns()
-	fullTable := renderSessionTable(cols, m.cursor, m.width, maxTableRows)
-	if note := hiddenNote(m.hiddenCount); note != "" {
+	if m.surface == surfaceSecurity {
+		return m.renderResponsiveTable(m.buildSecurityColumns(), m.cursor, len(m.sessions), 0, func(table string) string {
+			return renderSecurityList(m.agg, table, len(m.sessions))
+		})
+	}
+	return m.renderResponsiveTable(buildProjectColumns(m.projects, m.now), m.projectCursor, len(m.projects), 0, func(table string) string {
+		return renderProjects(m.agg, m.coach, table)
+	})
+}
+
+func (m model) renderProjectView() string {
+	return m.renderResponsiveTable(buildProjectSessionColumns(m.sessions, m.now), m.cursor, len(m.sessions), 0, func(table string) string {
+		return renderProjectWorkspace(m.selectedProject, table)
+	})
+}
+
+func (m model) renderResponsiveTable(cols []tableColumn, cursor, rowCount, hidden int, wrap func(string) string) string {
+	fullTable := renderSessionTable(cols, cursor, m.width, maxTableRows)
+	if note := hiddenNote(hidden); note != "" {
 		fullTable += "\n" + note
 	}
-	full := m.renderSurfaceList(fullTable)
+	full := wrap(fullTable)
 	if !m.heightKnown || viewFits(full, m.width, m.height) {
 		return full
 	}
-	maxRows := len(m.sessions)
+	maxRows := rowCount
 	if maxRows > maxTableRows {
 		maxRows = maxTableRows
 	}
 	var smallest string
 	for rows := maxRows; rows >= 0; rows-- {
-		tableView := renderCompactSessionTable(cols, m.cursor, m.width, rows, m.hiddenCount)
-		candidate := compactView(m.renderSurfaceList(tableView))
+		tableView := renderCompactSessionTable(cols, cursor, m.width, rows, hidden)
+		candidate := compactView(wrap(tableView))
 		smallest = candidate
 		if viewFits(candidate, m.width, m.height) {
 			return candidate
 		}
 	}
-	if status := renderCompactSessionStatus(cols, m.cursor, m.width, m.hiddenCount); status != "" {
-		candidate := compactView(m.renderSurfaceList(status))
+	if status := renderCompactSessionStatus(cols, cursor, m.width, hidden); status != "" {
+		candidate := compactView(wrap(status))
 		smallest = candidate
 		if viewFits(candidate, m.width, m.height) {
 			return candidate
 		}
 	}
-	candidate := compactView(m.renderSurfaceList(""))
+	candidate := compactView(wrap(""))
 	smallest = candidate
 	if viewFits(candidate, m.width, m.height) {
 		return candidate
 	}
 	return smallest
-}
-
-func (m model) renderSurfaceList(tableView string) string {
-	if m.surface == surfaceSecurity {
-		return renderSecurityList(m.agg, tableView, len(m.sessions))
-	}
-	return renderList(m.agg, m.coach, tableView)
 }
 
 func visualRows(view string, width int) int {
