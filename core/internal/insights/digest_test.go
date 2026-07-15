@@ -1,12 +1,152 @@
 package insights
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Hypership-Software/atlas/internal/schema"
 	"github.com/Hypership-Software/atlas/internal/telemetry"
 )
+
+func observedCall(id string, class schema.ToolClass, operation schema.Operation, latencyMS int64) []schema.TelemetryEvent {
+	return []schema.TelemetryEvent{
+		{V: schema.ObservationVersion, EventType: schema.EventPreTool, ToolUseID: id, ToolClass: class, Operation: operation},
+		{V: schema.ObservationVersion, EventType: schema.EventPostTool, ToolUseID: id, ToolOK: schema.OutcomeOK, LatencyMS: latencyMS},
+	}
+}
+
+func TestSessionDetailHeaderUsesObservedDeveloperMetrics(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	sess := telemetry.Session{
+		SessionID: "e4b91a20-rest", ProjectName: "agent-gate", TaskType: "feature", Outcome: "success", Shipped: true,
+		DurationMS: 6240000, FilesChanged: 17, LinesAdded: 312, LinesRemoved: 84, ChangeStatsCovered: true,
+		SkillsUsed: "strategic-review",
+	}
+	events := append(observedCall("plan", schema.ClassFileRead, schema.OperationRead, 47000),
+		observedCall("build", schema.ClassFileWrite, schema.OperationEdit, 60000)...)
+	out := renderTrace(sess, events)
+	for _, want := range []string{
+		"agent-gate · feature · succeeded · pushed",
+		"Session e4b91a20 · wall span 1h 44m · observed tool time 1m 47s",
+		"17 files changed · +312 / −84 observed · 1 invoked skill",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("session detail missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestInvokedSkillUsesExplicitCaptureLanguageForLegacySession(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	sess := telemetry.Session{
+		SessionID: "c8aec3ff", ProjectName: "agent-gate", TaskType: "feature", Outcome: "success",
+		DurationMS: 6240000, FilesChanged: 17, FilesTouched: 30, SkillsUsed: "strategic-review",
+	}
+	out := renderTrace(sess, nil)
+	for _, want := range []string{"17 files changed", "1 invoked skill", "invoked skill strategic-review"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("legacy detail missing %q:\n%s", want, out)
+		}
+	}
+	for _, banned := range []string{"+0 / −0", "Plan 0%", "Build 0%", "Review 0%", "Timeline"} {
+		if strings.Contains(out, banned) {
+			t.Fatalf("legacy detail invented %q:\n%s", banned, out)
+		}
+	}
+}
+
+func TestSessionWorkMixRendersDurationPercentageAndOperations(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	events := append(observedCall("read", schema.ClassFileRead, schema.OperationRead, 1000),
+		observedCall("edit", schema.ClassFileWrite, schema.OperationEdit, 3000)...)
+	events = append(events, observedCall("test", schema.ClassExec, schema.OperationTest, 1000)...)
+	out := renderTrace(telemetry.Session{SessionID: "mix", Outcome: "success"}, events)
+	for _, want := range []string{
+		"Work mix",
+		"Plan", "1s · 20% · read",
+		"Build", "3s · 60% · edit",
+		"Review", "1s · 20% · test",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("work mix missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "Timeline") {
+		t.Fatalf("developer detail retained turn timeline:\n%s", out)
+	}
+}
+
+func TestSessionFilesAggregateSuccessfulWritesAndUseRepositoryRelativePaths(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a := filepath.Join(root, "core", "a.go")
+	b := filepath.Join(root, "docs", "b.md")
+	for _, path := range []string{a, b} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("observed"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write := func(id, path string, added, removed int, outcome schema.ToolOutcome) []schema.TelemetryEvent {
+		return []schema.TelemetryEvent{
+			{V: schema.ObservationVersion, EventType: schema.EventPreTool, ToolUseID: id, ToolClass: schema.ClassFileWrite,
+				Operation: schema.OperationEdit, Files: []string{path}, ChangeStats: &schema.ChangeStats{LinesAdded: added, LinesRemoved: removed}},
+			{V: schema.ObservationVersion, EventType: schema.EventPostTool, ToolUseID: id, ToolOK: outcome, LatencyMS: 1},
+		}
+	}
+	events := write("a1", a, 10, 2, schema.OutcomeOK)
+	events = append(events, write("a2", a, 3, 1, schema.OutcomeOK)...)
+	events = append(events, write("failed", a, 90, 90, schema.OutcomeFailed)...)
+	events = append(events, write("b", b, 2, 4, schema.OutcomeOK)...)
+	out := renderTrace(telemetry.Session{SessionID: "files", Outcome: "success", FilesChanged: 2}, events)
+
+	for _, want := range []string{"Files changed", "core/a.go", "+13 / −3", "docs/b.md", "+2 / −4"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("file detail missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Index(out, "core/a.go") > strings.Index(out, "docs/b.md") {
+		t.Fatalf("files not sorted by observed change magnitude:\n%s", out)
+	}
+	for _, banned := range []string{root, "+103", "−93"} {
+		if strings.Contains(out, banned) {
+			t.Fatalf("file detail leaked or counted %q:\n%s", banned, out)
+		}
+	}
+}
+
+func TestSessionFilesShortenMissingAbsolutePathsAndKeepEveryFile(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	root := t.TempDir()
+	var events []schema.TelemetryEvent
+	for i := 0; i < 35; i++ {
+		path := filepath.Join(root, "private", "repo", fmt.Sprintf("file-%02d.go", i))
+		events = append(events,
+			schema.TelemetryEvent{V: schema.ObservationVersion, EventType: schema.EventPreTool, ToolUseID: fmt.Sprintf("w-%d", i),
+				ToolClass: schema.ClassFileWrite, Operation: schema.OperationEdit, Files: []string{path},
+				ChangeStats: &schema.ChangeStats{LinesAdded: 1}},
+			schema.TelemetryEvent{V: schema.ObservationVersion, EventType: schema.EventPostTool, ToolUseID: fmt.Sprintf("w-%d", i), ToolOK: schema.OutcomeOK},
+		)
+	}
+	out := renderChangedFiles(telemetry.Session{}, events)
+	for _, want := range []string{"…/private/repo/file-00.go", "…/private/repo/file-34.go"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("file list dropped %q:\n%s", want, out)
+		}
+	}
+	count := strings.Count(out, "file-")
+	if strings.Contains(out, root) || count != 35 {
+		t.Fatalf("file list leaked its root or dropped rows (count=%d):\n%s", count, out)
+	}
+}
 
 func TestDigestHighlightsShippedWithoutCommandContent(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
@@ -22,7 +162,7 @@ func TestDigestHighlightsShippedWithoutCommandContent(t *testing.T) {
 	post.DeliverySignal = schema.DeliveryGitPush
 	post.Command = "git push origin feature/coach"
 	out := renderTrace(session, []schema.TelemetryEvent{pre, post})
-	wantHighlight := highlightLine("↑", "shipped", "successful git push")
+	wantHighlight := highlightLine("↑", "pushed", "successful git push")
 	foundHighlight := false
 	for _, line := range strings.Split(out, "\n") {
 		if line == wantHighlight {
@@ -39,9 +179,8 @@ func TestDigestHighlightsShippedWithoutCommandContent(t *testing.T) {
 	}
 }
 
-// The digest must surface the signal an observer cares about — which skill ran,
-// where untrusted content entered, and which turn a flagged call happened in —
-// without listing every call.
+// The digest surfaces notable signals without pulling developers down into turn
+// mechanics. Turn-level evidence remains available in raw JSON.
 func TestDigestHighlightsSurfaceSignal(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	fetch := ev(schema.EventPreTool, schema.ClassNetFetch)
@@ -62,9 +201,8 @@ func TestDigestHighlightsSurfaceSignal(t *testing.T) {
 	for _, want := range []string{
 		"Highlights",
 		"brainstorming", // skill, namespace stripped
-		"untrusted  entered turn 1 via evil.example.com",
-		"⚑  flagged    1 — ran rm in turn 2",
-		"Timeline",
+		"untrusted  entered via evil.example.com",
+		"⚑  flagged    1 — ran rm",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("digest missing %q:\n%s", want, out)
@@ -73,10 +211,12 @@ func TestDigestHighlightsSurfaceSignal(t *testing.T) {
 	if strings.Contains(out, "superpowers:") {
 		t.Errorf("skill namespace prefix should be stripped:\n%s", out)
 	}
+	if strings.Contains(out, "turn 1") || strings.Contains(out, "turn 2") || strings.Contains(out, "Timeline") {
+		t.Errorf("default detail retained turn mechanics:\n%s", out)
+	}
 }
 
-// A clean, unremarkable session shows no Highlights block — just the verdict and
-// the timeline. The section must not appear as an empty "nothing to see here".
+// A clean, unremarkable session shows no empty Highlights block.
 func TestDigestOmitsHighlightsWhenClean(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	evs := []schema.TelemetryEvent{
@@ -88,8 +228,8 @@ func TestDigestOmitsHighlightsWhenClean(t *testing.T) {
 	if strings.Contains(out, "Highlights") {
 		t.Errorf("a clean session should have no Highlights block:\n%s", out)
 	}
-	if !strings.Contains(out, "Timeline") {
-		t.Errorf("timeline should always render for a session with turns:\n%s", out)
+	if !strings.Contains(out, "Work mix") || strings.Contains(out, "Timeline") {
+		t.Errorf("developer summary should replace the timeline:\n%s", out)
 	}
 }
 
@@ -114,10 +254,10 @@ func TestVerdictHeaderNamesRepositoryAndExplicitTimeUnits(t *testing.T) {
 	}
 	got := verdictHeader(sess, turns)
 	for _, want := range []string{
-		"agent-gate · feature · ✓ succeeded",
+		"agent-gate · feature · succeeded",
 		"wall span 1h 44m",
 		"observed tool time 1m 48s",
-		"119 calls · 17 changed · 30 touched · ★ 1 skill",
+		"17 files changed · 1 invoked skill",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q:\n%s", want, got)

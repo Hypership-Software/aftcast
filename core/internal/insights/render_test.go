@@ -262,8 +262,8 @@ func TestDetailBodyRawShowsSubagent(t *testing.T) {
 		ToolUseID: "t1", Domain: "example.com", Subagent: "researcher"}
 	post := schema.TelemetryEvent{SessionID: "s1", EventType: schema.EventPostTool, ToolUseID: "t1", ToolOK: schema.OutcomeOK}
 	events := []schema.TelemetryEvent{pre, post}
-	if !strings.Contains(detailBody(sess, events, false), "fetched") {
-		t.Fatalf("trace missing rendered verb")
+	if !strings.Contains(detailBody(sess, events, false), "untrusted") {
+		t.Fatalf("summary missing rendered signal")
 	}
 	raw := detailBody(sess, events, true)
 	if !strings.Contains(raw, "researcher") || !strings.Contains(raw, "subagent") {
@@ -278,7 +278,7 @@ func TestRenderTraceHasVerdictAndNoEmptyFields(t *testing.T) {
 	pre := schema.TelemetryEvent{EventType: schema.EventPreTool, ToolClass: schema.ClassExec, ToolUseID: "t1", Verbs: []string{"go"}}
 	post := schema.TelemetryEvent{EventType: schema.EventPostTool, ToolUseID: "t1", LatencyMS: 9109, ToolOK: schema.OutcomeOK}
 	out := renderTrace(sess, []schema.TelemetryEvent{pre, post})
-	for _, want := range []string{"atlas · testing · ✓ succeeded", "wall span 18m", "observed tool time 9s", "7 changed", "12 touched"} {
+	for _, want := range []string{"atlas · testing · succeeded", "wall span 18m", "observed tool time 9s", "7 files changed"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("verdict header missing %q:\n%s", want, out)
 		}
@@ -287,7 +287,10 @@ func TestRenderTraceHasVerdictAndNoEmptyFields(t *testing.T) {
 		t.Errorf("trace leaked raw debug fields:\n%s", out)
 	}
 	if !strings.Contains(out, "ran") || !strings.Contains(out, "9s") {
-		t.Errorf("trace missing paired call / duration:\n%s", out)
+		t.Errorf("summary missing slow-operation highlight:\n%s", out)
+	}
+	if strings.Contains(out, "12 touched") || strings.Contains(out, "165 calls") || strings.Contains(out, "Timeline") {
+		t.Errorf("summary retained implementation-level counts:\n%s", out)
 	}
 }
 

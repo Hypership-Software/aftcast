@@ -515,8 +515,8 @@ func TestEnterOpensDetailRawTogglesEscReturns(t *testing.T) {
 	if m.mode != modeDetail {
 		t.Fatalf("second enter did not switch to detail mode")
 	}
-	if !strings.Contains(m.View(), "fetched") {
-		t.Fatalf("detail view missing tool: %q", m.View())
+	if !strings.Contains(m.View(), "untrusted") || strings.Contains(m.View(), "Timeline") {
+		t.Fatalf("detail view missing summarized signal: %q", m.View())
 	}
 	m = must(m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}))
 	if !m.showRaw {
