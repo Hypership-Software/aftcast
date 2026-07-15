@@ -64,6 +64,16 @@ func TestDeliverySignalGitPushVariants(t *testing.T) {
 		{"abbreviated push option with flag-like value", `git push --pu -nd origin main`, schema.DeliveryGitPush},
 		{"refspec containing bundle letters", `git push origin topic:refs/heads/send`, schema.DeliveryGitPush},
 		{"option terminator protects repository", `git push -- -nd`, schema.DeliveryGitPush},
+		{"hidden dry run variable", `PUSH_ARGS=--dry-run; git push $PUSH_ARGS`, ""},
+		{"hidden quoted deletion refspec variable", `REF=:old; git push origin "$REF"`, ""},
+		{"command substitution", `git push origin "$(printf main)"`, ""},
+		{"wildcard glob", `git push origin refs/heads/*`, ""},
+		{"brace expansion", `git push origin {main,release}`, ""},
+		{"single quoted parameter literal", `git push origin '$REF'`, schema.DeliveryGitPush},
+		{"escaped parameter literal", `git push origin \$REF`, schema.DeliveryGitPush},
+		{"escaped command substitution literal", `git push origin \$\(literal\)`, schema.DeliveryGitPush},
+		{"escaped glob literal", `git push origin refs/heads/\*`, schema.DeliveryGitPush},
+		{"escaped brace literal", `git push origin \{main,release\}`, schema.DeliveryGitPush},
 	}
 
 	for _, tt := range tests {
