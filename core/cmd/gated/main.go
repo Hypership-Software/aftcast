@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/Hypership-Software/atlas/internal/hookcmd"
 	"github.com/Hypership-Software/atlas/internal/insights"
@@ -27,6 +28,7 @@ commands:
   status       daemon + hook health at a glance
   doctor       detailed wiring checks
   insights     browse captured sessions and analytics
+  coach        what keeps failing and is worth a permanent fix (coach export <id>)
   stop         stop the background daemon
   uninstall    remove hooks and stop the daemon
   daemon run   run the daemon in the foreground
@@ -87,6 +89,8 @@ func run(args []string) int {
 		return 1
 	case "insights":
 		return insightsCmd(args[1:])
+	case "coach":
+		return coachCmd(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s\n", args[0], helpText())
 		return 2
@@ -130,6 +134,33 @@ func insightsCmd(args []string) int {
 	}
 	if err := insights.Run(store, insights.Scope{ProjectID: id, Name: name, StartGlobal: global}); err != nil {
 		return fail("insights", err)
+	}
+	return 0
+}
+
+// coachCmd surfaces recurring friction worth a permanent fix; `export <id>`
+// writes one fingerprint's evidence bundle to stdout for an agent to encode.
+func coachCmd(args []string) int {
+	usage := func() int {
+		fmt.Fprintln(os.Stderr, "usage: gated coach [export <id>]")
+		return 2
+	}
+	if len(args) > 0 && (args[0] != "export" || len(args) != 2) {
+		return usage()
+	}
+	store, err := svc.OpenReadModel("")
+	if err != nil {
+		return fail("coach", err)
+	}
+	defer store.Close()
+	if len(args) == 0 {
+		if err := insights.CoachReport(store, os.Stdout, time.Now()); err != nil {
+			return fail("coach", err)
+		}
+		return 0
+	}
+	if err := insights.CoachExport(store, args[1], os.Stdout, time.Now()); err != nil {
+		return fail("coach", err)
 	}
 	return 0
 }
