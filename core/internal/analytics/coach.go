@@ -20,8 +20,17 @@ const (
 	CoachRecommend CoachStatus = "recommend"
 )
 
+type AssociationDirection string
+
+const (
+	AssociationNone     AssociationDirection = ""
+	AssociationPositive AssociationDirection = "positive"
+	AssociationNegative AssociationDirection = "negative"
+)
+
 type PlanAssociation struct {
 	Status         CoachStatus
+	Direction      AssociationDirection
 	Window         int
 	TaskType       string
 	Total          int
@@ -100,19 +109,22 @@ func associationFor(task string, c *coachCounts) PlanAssociation {
 		a.DirectRate = float64(a.DirectShipped) / float64(a.Direct)
 	}
 	a.Difference = a.PlannedRate - a.DirectRate
-	switch {
-	case a.Total < coachMinTotal || a.Planned < coachMinPerSide || a.Direct < coachMinPerSide:
+	if a.Total < coachMinTotal || a.Planned < coachMinPerSide || a.Direct < coachMinPerSide {
 		a.Status = CoachLearning
-	case associationDifferenceAtLeast(a, coachMinDifferenceNumerator, coachMinDifferenceDenominator):
+		return a
+	}
+	a.Status = CoachNoPattern
+	difference := associationDifference(a)
+	if new(big.Rat).Abs(difference).Cmp(big.NewRat(coachMinDifferenceNumerator, coachMinDifferenceDenominator)) < 0 {
+		return a
+	}
+	if difference.Sign() > 0 {
+		a.Direction = AssociationPositive
 		a.Status = CoachRecommend
-	default:
-		a.Status = CoachNoPattern
+	} else {
+		a.Direction = AssociationNegative
 	}
 	return a
-}
-
-func associationDifferenceAtLeast(a PlanAssociation, numerator, denominator int64) bool {
-	return associationDifference(a).Cmp(big.NewRat(numerator, denominator)) >= 0
 }
 
 func associationDifference(a PlanAssociation) *big.Rat {
@@ -122,13 +134,17 @@ func associationDifference(a PlanAssociation) *big.Rat {
 }
 
 func betterAssociation(a, b PlanAssociation) bool {
-	if coachRank(a.Status) != coachRank(b.Status) {
-		return coachRank(a.Status) > coachRank(b.Status)
+	aQualifies := a.Direction != AssociationNone
+	bQualifies := b.Direction != AssociationNone
+	if aQualifies != bQualifies {
+		return aQualifies
 	}
-	if a.Status == CoachRecommend {
-		if differenceOrder := compareAssociationDifferences(a, b); differenceOrder != 0 {
+	if aQualifies {
+		if differenceOrder := compareAssociationMagnitudes(a, b); differenceOrder != 0 {
 			return differenceOrder > 0
 		}
+	} else if coachRank(a.Status) != coachRank(b.Status) {
+		return coachRank(a.Status) > coachRank(b.Status)
 	}
 	if a.Total != b.Total {
 		return a.Total > b.Total
@@ -136,8 +152,10 @@ func betterAssociation(a, b PlanAssociation) bool {
 	return a.TaskType < b.TaskType
 }
 
-func compareAssociationDifferences(a, b PlanAssociation) int {
-	return associationDifference(a).Cmp(associationDifference(b))
+func compareAssociationMagnitudes(a, b PlanAssociation) int {
+	aDifference := new(big.Rat).Abs(associationDifference(a))
+	bDifference := new(big.Rat).Abs(associationDifference(b))
+	return aDifference.Cmp(bDifference)
 }
 
 func coachRank(status CoachStatus) int {

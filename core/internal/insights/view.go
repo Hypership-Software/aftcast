@@ -201,6 +201,13 @@ func renderCoach(a analytics.PlanAssociation) string {
 	if a.Window > 0 {
 		title += fmt.Sprintf(" · latest %d comparable sessions", a.Window)
 	}
+	if a.Direction == analytics.AssociationNegative {
+		return strings.Join([]string{
+			title,
+			fmt.Sprintf("  Plan-first was associated with fewer shipped sessions · %s work", taskCell(a.TaskType)),
+			fmt.Sprintf("  %.0f%% planned vs %.0f%% direct-to-edit · n=%d", a.PlannedRate*100, a.DirectRate*100, a.Total),
+		}, "\n")
+	}
 	switch a.Status {
 	case analytics.CoachRecommend:
 		return strings.Join([]string{
