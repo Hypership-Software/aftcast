@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/analytics"
-	"github.com/Hypership-Software/atlas/internal/schema"
-	"github.com/Hypership-Software/atlas/internal/telemetry"
+	"github.com/Hypership-Software/aftcast/internal/analytics"
+	"github.com/Hypership-Software/aftcast/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/telemetry"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -224,7 +224,7 @@ func TestOverviewColumnsKeepSecurityOutOfTheMainTable(t *testing.T) {
 
 func TestSecuritySurfaceSelectsOnlyFlaggedAndReturnsFromDetail(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	clean := telemetry.Session{SessionID: "clean", ProjectName: "atlas", ProjectID: "p1", Outcome: "success", ToolCalls: 3,
+	clean := telemetry.Session{SessionID: "clean", ProjectName: "aftcast", ProjectID: "p1", Outcome: "success", ToolCalls: 3,
 		Started: sampleNow.Add(-2 * time.Hour).Format(time.RFC3339Nano)}
 	flagged := telemetry.Session{SessionID: "flagged", ProjectName: "agent-gate", ProjectID: "p2", Outcome: "success", ToolCalls: 7, FilesChanged: 2,
 		Taint: true, DangerDetected: 2, Started: sampleNow.Add(-time.Hour).Format(time.RFC3339Nano)}
@@ -264,7 +264,7 @@ func TestSecuritySurfaceHonoursScopeAndHasHonestEmptyState(t *testing.T) {
 		{SessionID: "p2-taint", ProjectID: "p2", ToolCalls: 2, Taint: true},
 	}
 	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
-	m := build(sessions, Scope{ProjectID: "p1", Name: "atlas"}, provider, nil, sampleNow)
+	m := build(sessions, Scope{ProjectID: "p1", Name: "aftcast"}, provider, nil, sampleNow)
 	m = must(m.Update(tea.KeyMsg{Type: tea.KeyTab}))
 	if len(m.sessions) != 1 || m.sessions[0].SessionID != "p1-danger" {
 		t.Fatalf("scoped security rows = %#v", m.sessions)
@@ -353,7 +353,7 @@ func TestHistoricalCoachRendersWhenGlobalOperationalScopeIsEmpty(t *testing.T) {
 	if !strings.Contains(view, renderCoach(m.coach)) {
 		t.Fatalf("empty operational view omitted full-history coach:\n%s", view)
 	}
-	if !strings.Contains(view, "No Atlas activity in the last 7 days") || strings.Contains(view, "Nothing captured") {
+	if !strings.Contains(view, "No Aftcast activity in the last 7 days") || strings.Contains(view, "Nothing captured") {
 		t.Fatalf("historical empty view used dishonest onboarding copy:\n%s", view)
 	}
 }
@@ -366,8 +366,8 @@ func TestHistoricalProjectEmptyCopyDistinguishesSameProjectHistory(t *testing.T)
 		want       string
 		wantGlobal string
 	}{
-		{name: "same project", projectID: "project-one", want: "No Atlas activity for this project in the last 7 days.", wantGlobal: "No Atlas activity in the last 7 days."},
-		{name: "other project only", projectID: "project-two", want: "No Atlas activity for this project yet.", wantGlobal: "No Atlas activity in the last 7 days."},
+		{name: "same project", projectID: "project-one", want: "No Aftcast activity for this project in the last 7 days.", wantGlobal: "No Aftcast activity in the last 7 days."},
+		{name: "other project only", projectID: "project-two", want: "No Aftcast activity for this project yet.", wantGlobal: "No Aftcast activity in the last 7 days."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

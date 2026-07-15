@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/ipc"
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/ipc"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 type fakeEval struct {

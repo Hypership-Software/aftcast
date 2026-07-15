@@ -1,11 +1,11 @@
-// Package analytics computes Atlas's insight signals as pure functions over
+// Package analytics computes Aftcast's insight signals as pure functions over
 // telemetry — input is events (per session) or session summaries (cross-session),
 // output is values, no I/O. The correctness of the product's value proposition
 // lives here (ADR-011), so every function is exhaustively golden-testable and its
-// heuristics are transparent. Atlas observes; nothing here is a decision.
+// heuristics are transparent. Aftcast observes; nothing here is a decision.
 package analytics
 
-import "github.com/Hypership-Software/atlas/internal/schema"
+import "github.com/Hypership-Software/aftcast/internal/schema"
 
 // OutcomeClass is a session's derived result. Success/Failure are only asserted
 // from evidence; Unknown is a correct answer, never a fabricated success.

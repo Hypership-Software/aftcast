@@ -1,6 +1,6 @@
 package analytics
 
-import "github.com/Hypership-Software/atlas/internal/schema"
+import "github.com/Hypership-Software/aftcast/internal/schema"
 
 // completionVerbs are exec first-tokens that stand in for verified progress. The
 // persisted event carries only the verb (no argv — ADR keeps argv out of the log),

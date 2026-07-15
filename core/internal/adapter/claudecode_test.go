@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Hypership-Software/atlas/internal/project"
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/project"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 func cc(t *testing.T) Adapter {

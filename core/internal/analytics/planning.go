@@ -3,7 +3,7 @@ package analytics
 import (
 	"strings"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 type PlanStyle string

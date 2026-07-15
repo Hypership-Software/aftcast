@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/analytics"
-	"github.com/Hypership-Software/atlas/internal/telemetry"
-	"github.com/Hypership-Software/atlas/internal/ui"
+	"github.com/Hypership-Software/aftcast/internal/analytics"
+	"github.com/Hypership-Software/aftcast/internal/telemetry"
+	"github.com/Hypership-Software/aftcast/internal/ui"
 )
 
 func buildProjectColumns(projects []projectSummary, now time.Time) []tableColumn {

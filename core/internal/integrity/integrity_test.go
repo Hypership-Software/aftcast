@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 func writeFile(t *testing.T, path, content string) {

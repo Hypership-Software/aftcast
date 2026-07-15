@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 const (

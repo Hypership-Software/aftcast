@@ -8,10 +8,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/Hypership-Software/atlas/internal/analytics"
-	"github.com/Hypership-Software/atlas/internal/schema"
-	"github.com/Hypership-Software/atlas/internal/telemetry"
-	"github.com/Hypership-Software/atlas/internal/ui"
+	"github.com/Hypership-Software/aftcast/internal/analytics"
+	"github.com/Hypership-Software/aftcast/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/telemetry"
+	"github.com/Hypership-Software/aftcast/internal/ui"
 )
 
 // renderTrace is the developer-facing session summary. It leads with the work

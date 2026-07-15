@@ -3,7 +3,7 @@ package analytics
 import (
 	"sort"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 type FileChange struct {

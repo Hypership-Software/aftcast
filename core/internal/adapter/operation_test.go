@@ -3,7 +3,7 @@ package adapter
 import (
 	"testing"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 func TestObservedOperation(t *testing.T) {

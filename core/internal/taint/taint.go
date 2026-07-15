@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 // Ledger records which sessions are tainted.
@@ -60,7 +60,7 @@ func (l *Ledger) IsTainted(sessionID string) bool {
 }
 
 // Rebuild reconstructs taint state by replaying the event log (called on daemon
-// startup). Every taint-source action taints the session: Atlas observes, so the
+// startup). Every taint-source action taints the session: Aftcast observes, so the
 // action ran regardless of how its risk was classified.
 func (l *Ledger) Rebuild(events []schema.TelemetryEvent) {
 	l.mu.Lock()

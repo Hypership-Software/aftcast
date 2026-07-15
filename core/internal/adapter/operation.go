@@ -3,7 +3,7 @@ package adapter
 import (
 	"strings"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 func observedOperation(tool string, class schema.ToolClass, argv []string) schema.Operation {

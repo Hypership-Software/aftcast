@@ -3,11 +3,11 @@ package analytics
 import (
 	"sort"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 // DangerItem is a count of high-risk actions observed for one rule. Observed, not
-// blocked — Atlas classifies and records; it never denies (ADR-015).
+// blocked — Aftcast classifies and records; it never denies (ADR-015).
 type DangerItem struct {
 	RuleID string
 	Class  string

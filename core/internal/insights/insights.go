@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/telemetry"
+	"github.com/Hypership-Software/aftcast/internal/telemetry"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

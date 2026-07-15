@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
-	"github.com/Hypership-Software/atlas/internal/telemetry"
+	"github.com/Hypership-Software/aftcast/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/telemetry"
 )
 
 func observedCall(id string, class schema.ToolClass, operation schema.Operation, latencyMS int64) []schema.TelemetryEvent {

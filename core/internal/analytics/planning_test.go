@@ -3,7 +3,7 @@ package analytics
 import (
 	"testing"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 func planEvent(prompt string, event schema.EventType, class schema.ToolClass) schema.TelemetryEvent {

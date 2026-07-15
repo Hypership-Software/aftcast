@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/analytics"
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/analytics"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 func frictionCluster(class schema.ToolClass, tool string, verbs []string, exit, failures, sessions, days int) analytics.FrictionCluster {

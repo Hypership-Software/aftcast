@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Hypership-Software/atlas/internal/ui"
+	"github.com/Hypership-Software/aftcast/internal/ui"
 
 	"github.com/charmbracelet/x/ansi"
 )

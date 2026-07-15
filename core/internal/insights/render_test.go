@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/analytics"
-	"github.com/Hypership-Software/atlas/internal/schema"
-	"github.com/Hypership-Software/atlas/internal/telemetry"
+	"github.com/Hypership-Software/aftcast/internal/analytics"
+	"github.com/Hypership-Software/aftcast/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/telemetry"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -190,8 +190,8 @@ func TestAggregateMatchesProductivity(t *testing.T) {
 func TestRenderHeaderLeadsWithExactDeveloperOutcomes(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	sessions := []telemetry.Session{
-		{ProjectName: "atlas", CaptureVersion: 2, Started: "2026-07-15T09:00:00Z", FilesChanged: 2, Shipped: true, Outcome: "success", CleanDelivery: true},
-		{ProjectName: "atlas", CaptureVersion: 2, Started: "2026-07-15T10:00:00Z", FilesChanged: 1, Outcome: "success", CorrectionTurns: 1, Taint: true},
+		{ProjectName: "aftcast", CaptureVersion: 2, Started: "2026-07-15T09:00:00Z", FilesChanged: 2, Shipped: true, Outcome: "success", CleanDelivery: true},
+		{ProjectName: "aftcast", CaptureVersion: 2, Started: "2026-07-15T10:00:00Z", FilesChanged: 1, Outcome: "success", CorrectionTurns: 1, Taint: true},
 	}
 	h := renderHeader(aggregate(sessions, time.Now()))
 	for _, want := range []string{
@@ -238,9 +238,9 @@ func TestRenderScopedEmpty(t *testing.T) {
 		hasHistory bool
 		want       []string
 	}{
-		{name: "project has history", hasHistory: true, want: []string{"No Atlas activity for this project in the last 7 days.", "Press g to view all projects"}},
-		{name: "project has no history", want: []string{"No Atlas activity for this project yet.", "Press g to view all projects"}},
-		{name: "global has history", global: true, hasHistory: true, want: []string{"No Atlas activity in the last 7 days.", "? help"}},
+		{name: "project has history", hasHistory: true, want: []string{"No Aftcast activity for this project in the last 7 days.", "Press g to view all projects"}},
+		{name: "project has no history", want: []string{"No Aftcast activity for this project yet.", "Press g to view all projects"}},
+		{name: "global has history", global: true, hasHistory: true, want: []string{"No Aftcast activity in the last 7 days.", "? help"}},
 		{name: "global has no history", global: true, want: []string{"Nothing captured yet", "gated status"}},
 	}
 	for _, tt := range tests {
@@ -273,12 +273,12 @@ func TestDetailBodyRawShowsSubagent(t *testing.T) {
 
 func TestRenderTraceHasVerdictAndNoEmptyFields(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	sess := telemetry.Session{SessionID: "s", ProjectName: "atlas", TaskType: "testing", Outcome: "success",
+	sess := telemetry.Session{SessionID: "s", ProjectName: "aftcast", TaskType: "testing", Outcome: "success",
 		DurationMS: 1080000, ToolCalls: 165, FilesChanged: 7, FilesTouched: 12}
 	pre := schema.TelemetryEvent{EventType: schema.EventPreTool, ToolClass: schema.ClassExec, ToolUseID: "t1", Verbs: []string{"go"}}
 	post := schema.TelemetryEvent{EventType: schema.EventPostTool, ToolUseID: "t1", LatencyMS: 9109, ToolOK: schema.OutcomeOK}
 	out := renderTrace(sess, []schema.TelemetryEvent{pre, post})
-	for _, want := range []string{"atlas · testing · succeeded", "wall span 18m", "observed tool time 9s", "7 files changed"} {
+	for _, want := range []string{"aftcast · testing · succeeded", "wall span 18m", "observed tool time 9s", "7 files changed"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("verdict header missing %q:\n%s", want, out)
 		}

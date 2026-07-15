@@ -1,6 +1,6 @@
 package analytics
 
-import "github.com/Hypership-Software/atlas/internal/schema"
+import "github.com/Hypership-Software/aftcast/internal/schema"
 
 type observedCall struct {
 	Pre  schema.TelemetryEvent

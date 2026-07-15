@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
-	"github.com/Hypership-Software/atlas/internal/telemetry"
+	"github.com/Hypership-Software/aftcast/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/telemetry"
 )
 
 func ev(et schema.EventType, class schema.ToolClass) schema.TelemetryEvent {

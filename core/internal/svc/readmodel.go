@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/Hypership-Software/atlas/internal/audit"
-	"github.com/Hypership-Software/atlas/internal/telemetry"
+	"github.com/Hypership-Software/aftcast/internal/audit"
+	"github.com/Hypership-Software/aftcast/internal/telemetry"
 )
 
 // OpenReadModel resolves the gate home, opens the audit log, and folds it into a

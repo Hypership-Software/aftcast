@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
-	"github.com/Hypership-Software/atlas/internal/svc"
-	"github.com/Hypership-Software/atlas/internal/ui"
+	"github.com/Hypership-Software/aftcast/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/svc"
+	"github.com/Hypership-Software/aftcast/internal/ui"
 )
 
 // Daemon lifecycle and PATH-editing seams, injectable in tests so init/uninstall
@@ -63,11 +63,11 @@ func Init(opts Options, w io.Writer) error {
 	// the transient location init was invoked from. Best-effort: on failure, fall
 	// back to the source path and report the gap, still wiring the hooks.
 	if installed, replaced, ierr := installBinary(resolveHome(opts.Home), sourceBinary(opts.BinaryPath)); ierr != nil {
-		fmt.Fprintf(w, "note: could not install the Atlas binary (%v)\n", ierr)
+		fmt.Fprintf(w, "note: could not install the Aftcast binary (%v)\n", ierr)
 	} else {
 		opts.BinaryPath = installed
 		if replaced {
-			fmt.Fprintf(w, "installed the Atlas binary to %s\n", installed)
+			fmt.Fprintf(w, "installed the Aftcast binary to %s\n", installed)
 		}
 	}
 
@@ -88,13 +88,13 @@ func Init(opts Options, w io.Writer) error {
 	// observed immediately. Best-effort: if it can't start, still write the hooks
 	// and report the gap; they reach the daemon once it is up.
 	if info, started, eerr := ensureDaemon(svc.EnsureOptions{Home: resolveHome(opts.Home), Bin: opts.BinaryPath}); eerr != nil {
-		fmt.Fprintf(w, "note: could not start the Atlas daemon (%v)\n", eerr)
+		fmt.Fprintf(w, "note: could not start the Aftcast daemon (%v)\n", eerr)
 	} else {
 		cfg.HTTPURL = info.HTTPURL
 		if started {
-			fmt.Fprintf(w, "started the Atlas daemon in the background (port %d); stop it with `gated stop`\n", info.HTTPPort)
+			fmt.Fprintf(w, "started the Aftcast daemon in the background (port %d); stop it with `gated stop`\n", info.HTTPPort)
 		} else {
-			fmt.Fprintf(w, "Atlas daemon already running (port %d)\n", info.HTTPPort)
+			fmt.Fprintf(w, "Aftcast daemon already running (port %d)\n", info.HTTPPort)
 		}
 	}
 
@@ -139,9 +139,9 @@ func Uninstall(opts Options, w io.Writer) error {
 		return err
 	}
 	if stopped, serr := stopDaemon(resolveHome(opts.Home)); serr != nil {
-		fmt.Fprintf(w, "note: could not stop the Atlas daemon (%v)\n", serr)
+		fmt.Fprintf(w, "note: could not stop the Aftcast daemon (%v)\n", serr)
 	} else if stopped {
-		fmt.Fprintln(w, "stopped the Atlas daemon")
+		fmt.Fprintln(w, "stopped the Aftcast daemon")
 	}
 	binDir := filepath.Join(resolveHome(opts.Home), "bin")
 	if err := removePath(binDir); err != nil {
@@ -241,9 +241,9 @@ func Status(opts Options, w io.Writer) bool {
 	return up && wired && portMatch
 }
 
-// HooksWired reports whether Atlas's hooks are present in Claude Code settings,
+// HooksWired reports whether Aftcast's hooks are present in Claude Code settings,
 // without printing. The bare `gated` command uses it to show a "run gated init"
-// hint instead of an empty dashboard when Atlas was never set up.
+// hint instead of an empty dashboard when Aftcast was never set up.
 func HooksWired(opts Options) bool {
 	settingsPath, err := resolveSettingsPath(opts.SettingsPath)
 	if err != nil {
@@ -286,7 +286,7 @@ func hookConfig(opts Options) (HookConfig, error) {
 }
 
 // selfVerify posts a benign PreToolUse probe to the hook endpoint and confirms
-// the daemon answers 200, proving the settings URL reaches a live daemon. Atlas
+// the daemon answers 200, proving the settings URL reaches a live daemon. Aftcast
 // observes, so the response carries no decision — a clean 200 is the signal. The
 // probe records one event as an audit marker that init ran; its reserved
 // session_id keeps it out of the analytics read-model (schema.IsInternalSession).
