@@ -1,0 +1,14 @@
+{
+  "session_id": "edit-session",
+  "cwd": "C:\\repo",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "MultiEdit",
+  "tool_use_id": "edit-2",
+  "tool_input": {
+    "file_path": "C:\\repo\\main.go",
+    "edits": [
+      {"old_string": "one\n", "new_string": "two\n"},
+      {"old_string": "", "new_string": "three\n"}
+    ]
+  }
+}
