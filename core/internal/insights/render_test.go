@@ -16,7 +16,7 @@ func TestMetricLabelsAlignToFixedWidth(t *testing.T) {
 	// Colour-safe alignment: the styled meter label must occupy a constant
 	// display width regardless of length or ANSI styling, so the three meters
 	// line up. lipgloss.Width strips ANSI, so this holds under colour too.
-	for _, s := range []string{"Shipped", "Intervention", "Risk"} {
+	for _, s := range []string{"Shipped", "Work observed", "Corrections", "Security"} {
 		if w := lipgloss.Width(metricLabel(s)); w != metricLabelWidth {
 			t.Errorf("metricLabel(%q) display width = %d, want %d", s, w, metricLabelWidth)
 		}
@@ -60,12 +60,18 @@ func sampleAgg() aggregates {
 func TestOverviewIsPlainLanguage(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	out := renderList(sampleAgg(), analytics.PlanAssociation{}, "TABLE")
-	for _, banned := range []string{"corr/deliv", "clean_delivery", "taint", "danger ", "unknown", "Landed clean"} {
+	for _, banned := range []string{
+		"corr/deliv", "clean_delivery", "taint", "danger ", "unknown", "Landed clean",
+		"What the AI worked on", "Needs attention", "to inspect", "Intervention", "Risk",
+	} {
 		if strings.Contains(out, banned) {
 			t.Errorf("overview leaked code word %q:\n%s", banned, out)
 		}
 	}
-	for _, want := range []string{"Shipped", "Intervention", "untrusted input"} {
+	for _, want := range []string{
+		"Shipped", "Work observed", "Corrections", "Security",
+		"What's moving your needle", "Recent sessions", "TABLE",
+	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("overview missing plain-language %q:\n%s", want, out)
 		}
@@ -81,9 +87,9 @@ func TestRenderCoachStates(t *testing.T) {
 		banned []string
 	}{
 		{"zero", analytics.PlanAssociation{Status: analytics.CoachLearning},
-			[]string{"What's moving your needle", "Atlas is learning", "no comparable delivery sessions yet"}, []string{"Try next"}},
+			[]string{"What's moving your needle", "Learning your baseline", "0 of 20 comparable delivery sessions"}, []string{"Try next"}},
 		{"learning", analytics.PlanAssociation{Status: analytics.CoachLearning, Window: 12, TaskType: "feature", Total: 12, Planned: 4, Direct: 8},
-			[]string{"latest 12 comparable sessions", "Atlas is learning", "12 comparable", "plan-first 4", "direct-to-edit 8"}, []string{"Try next"}},
+			[]string{"latest 12 comparable sessions", "Learning your baseline", "12 of 20 comparable delivery sessions", "plan-first 4", "direct-to-edit 8"}, []string{"Try next"}},
 		{"no pattern", analytics.PlanAssociation{Status: analytics.CoachNoPattern, Window: 20, TaskType: "feature", Total: 20, Planned: 10, Direct: 10, PlannedRate: .6, DirectRate: .5},
 			[]string{"No reliable plan-first pattern yet", "60%", "50%"}, []string{"Try next"}},
 		{"negative observation", analytics.PlanAssociation{Status: analytics.CoachNoPattern, Direction: analytics.AssociationNegative, Window: 20, TaskType: "feature", Total: 20, Planned: 10, Direct: 10, PlannedRate: .4, DirectRate: .7},
@@ -156,8 +162,10 @@ func TestToStatSplitsSkills(t *testing.T) {
 
 func TestAggregateMatchesProductivity(t *testing.T) {
 	sessions := []telemetry.Session{
-		{SessionID: "s1", Outcome: "success", CleanDelivery: true, TaskType: "feature", DangerDetected: 1},
-		{SessionID: "s2", Outcome: "failure", CorrectionTurns: 2, TaskType: "bugfix", DangerDetected: 2},
+		{SessionID: "s1", ProjectName: "agent-gate", ProjectID: "p1", Outcome: "success", CleanDelivery: true, TaskType: "feature", DangerDetected: 1},
+		{SessionID: "s2", ProjectID: "p2", Outcome: "failure", CorrectionTurns: 2, TaskType: "bugfix", DangerDetected: 2},
+		{SessionID: "s3", Outcome: "unknown"},
+		{SessionID: "s4", Outcome: "unknown"},
 	}
 	agg := aggregate(sessions, time.Now())
 	stats := []analytics.SessionStat{toStat(sessions[0]), toStat(sessions[1])}
@@ -167,27 +175,51 @@ func TestAggregateMatchesProductivity(t *testing.T) {
 	if agg.danger != 3 {
 		t.Fatalf("danger tally = %d, want 3", agg.danger)
 	}
-	if len(agg.taskMix) != 2 {
-		t.Fatalf("task mix len = %d, want 2", len(agg.taskMix))
+	if agg.projects != 3 {
+		t.Fatalf("project count = %d, want named + id + one fallback", agg.projects)
 	}
 }
 
-func TestRenderHeaderLeadsWithShippedAndIntervention(t *testing.T) {
+func TestRenderHeaderLeadsWithExactDeveloperOutcomes(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	sessions := []telemetry.Session{
-		{CaptureVersion: 2, FilesChanged: 2, Shipped: true, Outcome: "success", CleanDelivery: true},
-		{CaptureVersion: 2, FilesChanged: 1, Outcome: "success", CorrectionTurns: 1},
+		{ProjectName: "atlas", CaptureVersion: 2, Started: "2026-07-15T09:00:00Z", FilesChanged: 2, Shipped: true, Outcome: "success", CleanDelivery: true},
+		{ProjectName: "atlas", CaptureVersion: 2, Started: "2026-07-15T10:00:00Z", FilesChanged: 1, Outcome: "success", CorrectionTurns: 1, Taint: true},
 	}
 	h := renderHeader(aggregate(sessions, time.Now()))
-	for _, want := range []string{"last 7 days", "Shipped", "1 of 2 delivery sessions", "50%", "Intervention", "0.5 human fixes / completed session", "Risk"} {
+	for _, want := range []string{
+		"last 7 days", "Shipped", "1 of 2 delivery sessions · 50%",
+		"Work observed", "2 sessions across 1 project",
+		"Corrections", "1 human correction across 2 completed sessions",
+		"Security", "1 session needs review · 0 flagged actions",
+	} {
 		if !strings.Contains(h, want) {
 			t.Fatalf("header missing %q:\n%s", want, h)
 		}
 	}
-	for _, banned := range []string{"Landed clean", "no rework needed"} {
+	for _, banned := range []string{"Landed clean", "no rework needed", "Intervention", "Risk", "human fixes / completed"} {
 		if strings.Contains(h, banned) {
 			t.Fatalf("header retained %q:\n%s", banned, h)
 		}
+	}
+}
+
+func TestRenderShippedStatesExplainCaptureReadiness(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	for _, tt := range []struct {
+		name string
+		p    analytics.ShippedProfile
+		want string
+	}{
+		{"eligible", analytics.ShippedProfile{Eligible: 3, Shipped: 2, Rate: 2.0 / 3.0}, "2 of 3 delivery sessions · 67%"},
+		{"tracking", analytics.ShippedProfile{TrackingSince: time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC)}, "Tracking since 15 Jul · waiting for first delivery session"},
+		{"not tracking", analytics.ShippedProfile{}, "Starts with your next captured session"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := renderShipped(tt.p); !strings.Contains(got, tt.want) {
+				t.Fatalf("renderShipped = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -213,34 +245,6 @@ func TestRenderScopedEmpty(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestRenderNeedsAttentionCapAndOrder(t *testing.T) {
-	now := time.Date(2026, 7, 13, 15, 0, 0, 0, time.UTC)
-	mk := func(id string, hoursAgo int) telemetry.Session {
-		return telemetry.Session{SessionID: id, ToolCalls: 5, Taint: true,
-			Started: now.Add(time.Duration(-hoursAgo) * time.Hour).Format(time.RFC3339Nano)}
-	}
-	sessions := []telemetry.Session{mk("old", 5), mk("newest", 1), mk("mid2", 3), mk("mid1", 2)}
-	lines := renderNeedsAttention(sessions, aggregates{}, now)
-	if len(lines) != 3 {
-		t.Fatalf("want 3 lines (capped at 3), got %d: %v", len(lines), lines)
-	}
-	if !strings.Contains(lines[0], "1h ago") {
-		t.Errorf("most-recent-first: line[0] = %q, want the 1h-ago session", lines[0])
-	}
-	for _, l := range lines {
-		if strings.Contains(l, "5h ago") {
-			t.Errorf("oldest flagged session should be dropped by the cap, but appears: %q", l)
-		}
-	}
-}
-
-func TestAttentionBlockFallbackWhenEmpty(t *testing.T) {
-	t.Setenv("NO_COLOR", "1")
-	if got := renderAttentionBlock(nil); !strings.Contains(got, "nothing needs attention") {
-		t.Fatalf("empty attention block should show fallback, got %q", got)
 	}
 }
 
