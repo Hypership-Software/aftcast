@@ -5,7 +5,6 @@ package install
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -70,12 +69,7 @@ func shellProfile() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, name := range []string{".zshrc", ".bashrc", ".profile"} {
-		if p := filepath.Join(home, name); fileExists(p) {
-			return p, nil
-		}
-	}
-	return filepath.Join(home, ".profile"), nil
+	return shellProfilePath(home, os.Getenv("SHELL"), fileExists), nil
 }
 
 func fileExists(p string) bool {
