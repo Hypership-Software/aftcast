@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/Hypership-Software/atlas/internal/analytics"
@@ -356,8 +357,11 @@ func TestSessions_ScansProjectID(t *testing.T) {
 		(session_id, user, org, harness, started, ended, exit_reason,
 		 turn_count, tool_calls, danger_detected, taint, outcome, clean_delivery,
 		 correction_turns, task_type, skills_used, duration_ms, files_touched,
-		 files_changed, shipped, capture_version, plan_style, project_id, project_name)
-		VALUES ('s1','','','','','','',0,5,0,0,'',0,0,'','',0,0,0,0,0,'','proj123','my-repo')`); err != nil {
+		 files_changed, shipped, capture_version, plan_style, project_id, project_name,
+		 changed_files, lines_added, lines_removed, change_stats_covered, observed_tool_ms,
+		 plan_ms, build_ms, review_ms, work_mix_covered)
+		VALUES ('s1','','','','','','',0,5,0,0,'',0,0,'','',0,0,0,0,0,'','proj123','my-repo',
+		 '["a.go"]',3,1,1,50,10,20,20,1)`); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.Sessions()
@@ -366,5 +370,71 @@ func TestSessions_ScansProjectID(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].ProjectID != "proj123" || got[0].ProjectName != "my-repo" {
 		t.Fatalf("project identity = (%q, %q), want (proj123, my-repo)", got[0].ProjectID, got[0].ProjectName)
+	}
+	if !reflect.DeepEqual(got[0].ChangedFiles, []string{"a.go"}) || got[0].LinesAdded != 3 || got[0].LinesRemoved != 1 ||
+		!got[0].ChangeStatsCovered || got[0].ObservedToolMS != 50 || got[0].PlanMS != 10 || got[0].BuildMS != 20 ||
+		got[0].ReviewMS != 20 || !got[0].WorkMixCovered {
+		t.Fatalf("observation fields = %+v", got[0])
+	}
+}
+
+func TestProjectFoldsObservedChangesAndWorkMix(t *testing.T) {
+	pre := func(id string, class schema.ToolClass, operation schema.Operation, file string, stats *schema.ChangeStats, sec int) schema.TelemetryEvent {
+		event := schema.TelemetryEvent{
+			V: schema.ObservationVersion, SessionID: "enriched", User: "kyle", Harness: "claudecode",
+			EventType: schema.EventPreTool, ToolUseID: id, ToolClass: class, Operation: operation, ChangeStats: stats, TS: ts(sec),
+		}
+		if file != "" {
+			event.Files = []string{file}
+		}
+		return event
+	}
+	post := func(id string, outcome schema.ToolOutcome, latency int64, sec int) schema.TelemetryEvent {
+		return schema.TelemetryEvent{
+			V: schema.ObservationVersion, SessionID: "enriched", EventType: schema.EventPostTool,
+			ToolUseID: id, ToolOK: outcome, LatencyMS: latency, TS: ts(sec),
+		}
+	}
+	events := []schema.TelemetryEvent{
+		{V: schema.ObservationVersion, SessionID: "enriched", EventType: schema.EventUserPrompt, TS: ts(0)},
+		pre("read", schema.ClassFileRead, schema.OperationRead, "", nil, 1), post("read", schema.OutcomeOK, 100, 2),
+		pre("write1", schema.ClassFileWrite, schema.OperationEdit, "a.go", &schema.ChangeStats{LinesAdded: 5, LinesRemoved: 2}, 3), post("write1", schema.OutcomeOK, 200, 4),
+		pre("write2", schema.ClassFileWrite, schema.OperationEdit, "a.go", &schema.ChangeStats{LinesAdded: 1, LinesRemoved: 1}, 5), post("write2", schema.OutcomeOK, 300, 6),
+		pre("test", schema.ClassExec, schema.OperationTest, "", nil, 7), post("test", schema.OutcomeOK, 400, 8),
+		pre("failed", schema.ClassFileWrite, schema.OperationEdit, "failed.go", &schema.ChangeStats{LinesAdded: 9, LinesRemoved: 9}, 9), post("failed", schema.OutcomeFailed, 500, 10),
+	}
+	log := buildLog(t, events)
+	defer log.Close()
+	store := openStore(t)
+	if err := store.Project(log); err != nil {
+		t.Fatal(err)
+	}
+	got := sessionsByID(t, store)["enriched"]
+	if !reflect.DeepEqual(got.ChangedFiles, []string{"a.go"}) {
+		t.Fatalf("changed files = %v", got.ChangedFiles)
+	}
+	if got.LinesAdded != 6 || got.LinesRemoved != 3 || !got.ChangeStatsCovered {
+		t.Fatalf("change summary = %+v", got)
+	}
+	if got.ObservedToolMS != 1500 || got.PlanMS != 100 || got.BuildMS != 500 || got.ReviewMS != 400 || !got.WorkMixCovered {
+		t.Fatalf("work summary = %+v", got)
+	}
+}
+
+func TestProjectKeepsLegacyEnrichmentUnknown(t *testing.T) {
+	events := []schema.TelemetryEvent{
+		{V: schema.DeliverySignalVersion, SessionID: "legacy", EventType: schema.EventUserPrompt, TS: ts(0)},
+		{V: schema.DeliverySignalVersion, SessionID: "legacy", EventType: schema.EventPreTool, ToolUseID: "w", ToolClass: schema.ClassFileWrite, Files: []string{"legacy.go"}, TS: ts(1)},
+		{V: schema.DeliverySignalVersion, SessionID: "legacy", EventType: schema.EventPostTool, ToolUseID: "w", ToolOK: schema.OutcomeOK, LatencyMS: 10, TS: ts(2)},
+	}
+	log := buildLog(t, events)
+	defer log.Close()
+	store := openStore(t)
+	if err := store.Project(log); err != nil {
+		t.Fatal(err)
+	}
+	got := sessionsByID(t, store)["legacy"]
+	if got.ChangeStatsCovered || got.WorkMixCovered || !reflect.DeepEqual(got.ChangedFiles, []string{"legacy.go"}) || got.ObservedToolMS != 10 {
+		t.Fatalf("legacy summary = %+v", got)
 	}
 }
