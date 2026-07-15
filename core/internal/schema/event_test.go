@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -50,8 +52,28 @@ func TestTelemetryEventDeliverySignalWireContract(t *testing.T) {
 	}
 }
 
-func TestDeliverySignalVersionIsV2(t *testing.T) {
-	if SchemaVersion != 2 || DeliverySignalVersion != 2 {
-		t.Fatalf("schema=%d delivery=%d, want both 2", SchemaVersion, DeliverySignalVersion)
+func TestObservationFieldsAreOptionalAndZeroStatsRemainPresent(t *testing.T) {
+	with := TelemetryEvent{V: ObservationVersion, Operation: OperationEdit, ChangeStats: &ChangeStats{}}
+	raw, err := json.Marshal(with)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte(`"operation":"edit"`)) ||
+		!bytes.Contains(raw, []byte(`"change_stats":{"lines_added":0,"lines_removed":0}`)) {
+		t.Fatalf("enriched event = %s", raw)
+	}
+
+	legacy, err := json.Marshal(TelemetryEvent{V: DeliverySignalVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(legacy, []byte("operation")) || bytes.Contains(legacy, []byte("change_stats")) {
+		t.Fatalf("legacy event widened: %s", legacy)
+	}
+}
+
+func TestObservationVersionDoesNotMoveDeliveryVersion(t *testing.T) {
+	if SchemaVersion != 3 || ObservationVersion != 3 || DeliverySignalVersion != 2 {
+		t.Fatalf("schema=%d observation=%d delivery=%d", SchemaVersion, ObservationVersion, DeliverySignalVersion)
 	}
 }

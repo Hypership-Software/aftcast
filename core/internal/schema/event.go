@@ -32,13 +32,15 @@ type TelemetryEvent struct {
 	DeliverySignal DeliverySignal `json:"delivery_signal,omitempty"`
 	// BashExitCode is parsed from a PostToolUseFailure. Added later per the
 	// append-only rule; omitempty so it's absent on non-failing/non-exec events.
-	BashExitCode int      `json:"bash_exit_code,omitempty"`
-	LatencyMS    int64    `json:"latency_ms,omitempty"`
-	Files        []string `json:"files,omitempty"`
-	Verbs        []string `json:"verbs,omitempty"`
-	Domain       string   `json:"domain,omitempty"`
-	Taint        bool     `json:"taint"`
-	Skill        string   `json:"skill,omitempty"`
+	BashExitCode int          `json:"bash_exit_code,omitempty"`
+	LatencyMS    int64        `json:"latency_ms,omitempty"`
+	Files        []string     `json:"files,omitempty"`
+	Verbs        []string     `json:"verbs,omitempty"`
+	Operation    Operation    `json:"operation,omitempty"`
+	ChangeStats  *ChangeStats `json:"change_stats,omitempty"`
+	Domain       string       `json:"domain,omitempty"`
+	Taint        bool         `json:"taint"`
+	Skill        string       `json:"skill,omitempty"`
 	// Command is the slash-command or MCP-prompt name from a UserPromptExpansion
 	// hook; ExpansionType is "slash_command" or "mcp_prompt". Metadata only — the
 	// command's args and expanded prompt are content and are never captured
