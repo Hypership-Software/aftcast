@@ -1,0 +1,12 @@
+{
+  "session_id": "edit-session",
+  "cwd": "C:\\repo",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Edit",
+  "tool_use_id": "edit-1",
+  "tool_input": {
+    "file_path": "C:\\repo\\main.go",
+    "old_string": "keep\nDO-NOT-PERSIST-OLD\n",
+    "new_string": "keep\nDO-NOT-PERSIST-NEW\nextra\n"
+  }
+}

@@ -88,6 +88,10 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 		ev.ToolClass = class
 		command = extract(&desc, class, h)
 		ev.Files, ev.Verbs, ev.Domain, ev.Skill = desc.Files, desc.Verbs, desc.Domain, desc.Skill
+		ev.Operation = observedOperation(h.ToolName, class, desc.Argv)
+		if ev.EventType == schema.EventPreTool && class == schema.ClassFileWrite {
+			ev.ChangeStats = changeStats(h)
+		}
 	}
 
 	if ev.EventType == schema.EventPromptExpansion {
