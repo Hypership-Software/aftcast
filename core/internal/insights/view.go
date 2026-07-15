@@ -29,13 +29,21 @@ func metricLabel(s string) string {
 
 func renderHeader(agg aggregates) string {
 	return strings.Join([]string{
-		headerContext(agg),
+		surfaceContext(agg, surfaceOverview),
 		"",
 		renderShipped(agg.shipping),
 		renderWorkObserved(agg),
 		renderCorrections(agg.profile),
 		renderSecurity(agg),
 	}, "\n")
+}
+
+func surfaceContext(agg aggregates, surface listSurface) string {
+	overview, security := "[Overview]", "Security"
+	if surface == surfaceSecurity {
+		overview, security = "Overview", "[Security]"
+	}
+	return headerContext(agg) + "    " + overview + " | " + security
 }
 
 func headerContext(agg aggregates) string {
@@ -86,7 +94,7 @@ func renderSecurity(agg aggregates) string {
 	if agg.securitySessions == 1 {
 		verb = "needs"
 	}
-	return fmt.Sprintf("%s %s %s review · %s", metricLabel("Security"),
+	return fmt.Sprintf("%s %s %s review · %s   Tab to review", metricLabel("Security"),
 		countNoun(agg.securitySessions, "session", "sessions"), verb, countNoun(agg.danger, "flagged action", "flagged actions"))
 }
 
@@ -159,7 +167,24 @@ func renderList(agg aggregates, coach analytics.PlanAssociation, tableView strin
 		"",
 		ui.Bold("Recent sessions"),
 		tableView,
-		ui.Hint("↑↓ (k/j) move · ↵ open · s sort · h show/hide empty · g/p scope · ? help · q quit"),
+		ui.Hint("↑↓ move · ↵ open · tab security · s sort · h empty · g/p scope · ? help · q quit"),
+	}, "\n")
+}
+
+func renderSecurityList(agg aggregates, tableView string, findings int) string {
+	body := tableView
+	if findings == 0 {
+		body = "Nothing needs review in this scope."
+	}
+	return strings.Join([]string{
+		surfaceContext(agg, surfaceSecurity),
+		"",
+		ui.Bold("Security review"),
+		fmt.Sprintf("%s with security signals · %s", countNoun(agg.securitySessions, "session", "sessions"),
+			countNoun(agg.danger, "flagged action", "flagged actions")),
+		"",
+		body,
+		ui.Hint("↑↓ move · ↵ open · tab overview · g/p scope · ? help · q quit"),
 	}, "\n")
 }
 
@@ -170,7 +195,7 @@ func renderHelp() string {
 	return strings.Join([]string{
 		ui.Bold("Keybindings — help"),
 		"",
-		"↑↓ (k/j) move · ↵ open · esc back · s sort · h show/hide empty · g/p scope · r raw (detail) · ? help · q quit",
+		"↑↓ (k/j) move · ↵ open · esc back · tab overview/security · s sort · h show/hide empty · g/p scope · r raw (detail) · ? help · q quit",
 		"",
 		"⚠ untrusted input · ⚑ flagged actions · ★ skills",
 		"",

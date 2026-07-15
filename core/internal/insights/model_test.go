@@ -224,6 +224,112 @@ func TestOverviewColumnsKeepSecurityOutOfTheMainTable(t *testing.T) {
 	}
 }
 
+func TestSecuritySurfaceSelectsOnlyFlaggedAndReturnsFromDetail(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	clean := telemetry.Session{SessionID: "clean", ProjectName: "atlas", ProjectID: "p1", Outcome: "success", ToolCalls: 3,
+		Started: sampleNow.Add(-2 * time.Hour).Format(time.RFC3339Nano)}
+	flagged := telemetry.Session{SessionID: "flagged", ProjectName: "agent-gate", ProjectID: "p2", Outcome: "success", ToolCalls: 7, FilesChanged: 2,
+		Taint: true, DangerDetected: 2, Started: sampleNow.Add(-time.Hour).Format(time.RFC3339Nano)}
+	provider := func(id string) ([]schema.TelemetryEvent, error) {
+		return []schema.TelemetryEvent{{SessionID: id, EventType: schema.EventUserPrompt}}, nil
+	}
+	m := build([]telemetry.Session{clean, flagged}, Scope{}, provider, sampleNow)
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyTab}))
+	if m.surface != surfaceSecurity || len(m.sessions) != 1 || m.sessions[0].SessionID != "flagged" {
+		t.Fatalf("security surface selected %#v", m.sessions)
+	}
+	for _, want := range []string{"[Security]", "Security review", "agent-gate", "untrusted input + 2 flagged actions", "2 changed · 7 calls"} {
+		if !strings.Contains(m.View(), want) {
+			t.Fatalf("security view missing %q:\n%s", want, m.View())
+		}
+	}
+
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyEnter}))
+	if m.mode != modeDetail || m.detailSess.SessionID != "flagged" {
+		t.Fatalf("security Enter opened %q in mode %v", m.detailSess.SessionID, m.mode)
+	}
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyEsc}))
+	if m.mode != modeList || m.surface != surfaceSecurity {
+		t.Fatalf("Esc lost originating surface: mode=%v surface=%v", m.mode, m.surface)
+	}
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyTab}))
+	if m.surface != surfaceOverview || len(m.sessions) != 2 {
+		t.Fatalf("Tab did not restore Overview: surface=%v sessions=%d", m.surface, len(m.sessions))
+	}
+}
+
+func TestSecuritySurfaceHonoursScopeAndHasHonestEmptyState(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	sessions := []telemetry.Session{
+		{SessionID: "p1-clean", ProjectID: "p1", ToolCalls: 2},
+		{SessionID: "p1-danger", ProjectID: "p1", ToolCalls: 2, DangerDetected: 1},
+		{SessionID: "p2-taint", ProjectID: "p2", ToolCalls: 2, Taint: true},
+	}
+	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
+	m := build(sessions, Scope{ProjectID: "p1", Name: "atlas"}, provider, sampleNow)
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyTab}))
+	if len(m.sessions) != 1 || m.sessions[0].SessionID != "p1-danger" {
+		t.Fatalf("scoped security rows = %#v", m.sessions)
+	}
+	if !strings.Contains(m.View(), "1 flagged action") || strings.Contains(m.View(), "untrusted input") {
+		t.Fatalf("danger-only signal copy is wrong:\n%s", m.View())
+	}
+
+	empty := build([]telemetry.Session{{SessionID: "clean", ToolCalls: 1}}, Scope{}, provider, sampleNow)
+	empty = must(empty.Update(tea.KeyMsg{Type: tea.KeyTab}))
+	if got := empty.View(); !strings.Contains(got, "Nothing needs review in this scope.") {
+		t.Fatalf("security empty state = %q", got)
+	}
+
+	noHistory := build(nil, Scope{}, provider, sampleNow)
+	noHistory = must(noHistory.Update(tea.KeyMsg{Type: tea.KeyTab}))
+	if got := noHistory.View(); !strings.Contains(got, "Nothing needs review in this scope.") {
+		t.Fatalf("no-history security empty state = %q", got)
+	}
+}
+
+func TestSecurityColumnsAndRecentSortAreStable(t *testing.T) {
+	sessions := []telemetry.Session{
+		{SessionID: "older", ToolCalls: 2, Taint: true, Started: sampleNow.Add(-2 * time.Hour).Format(time.RFC3339Nano)},
+		{SessionID: "newer", ToolCalls: 2, DangerDetected: 1, Started: sampleNow.Add(-time.Hour).Format(time.RFC3339Nano)},
+	}
+	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyTab}))
+	var titles []string
+	for _, col := range m.buildColumns() {
+		titles = append(titles, col.title)
+	}
+	if got := strings.Join(titles, "|"); got != "Project|When|Result|Signal|Work" {
+		t.Fatalf("security columns = %q", got)
+	}
+	if m.sessions[0].SessionID != "newer" {
+		t.Fatalf("security rows not recent-first: %#v", m.sessions)
+	}
+}
+
+func TestSecuritySurfaceFitsEightyByTwentyFour(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	var sessions []telemetry.Session
+	for i := 0; i < 20; i++ {
+		sessions = append(sessions, telemetry.Session{
+			SessionID: fmt.Sprintf("flagged-%02d", i), ProjectName: "agent-gate", Outcome: "success",
+			ToolCalls: 10 + i, FilesChanged: i, Taint: i%2 == 0, DangerDetected: 1,
+			Started: sampleNow.Add(-time.Duration(i) * time.Hour).Format(time.RFC3339Nano),
+		})
+	}
+	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m = must(m.Update(tea.KeyMsg{Type: tea.KeyTab}))
+	m = must(m.Update(tea.WindowSizeMsg{Width: 80, Height: 24}))
+	if rows := visualRowCount(m.View(), 80); rows > 24 {
+		t.Fatalf("security rendered %d rows:\n%s", rows, m.View())
+	}
+	for _, want := range []string{"Security review", "Signal", "more sessions below", "tab overview"} {
+		if !strings.Contains(strings.ToLower(m.View()), strings.ToLower(want)) {
+			t.Fatalf("security view missing %q:\n%s", want, m.View())
+		}
+	}
+}
+
 func historicalCoachSessions(now time.Time) []telemetry.Session {
 	var sessions []telemetry.Session
 	for i := 0; i < 20; i++ {

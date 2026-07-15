@@ -131,6 +131,13 @@ func TestHelpIncludesExactCoachDefinitions(t *testing.T) {
 	}
 }
 
+func TestHelpIncludesSurfaceNavigation(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	if got := renderHelp(); !strings.Contains(strings.ToLower(got), "tab overview/security") {
+		t.Fatalf("help omitted surface navigation:\n%s", got)
+	}
+}
+
 func TestVerdictOutcomePrefersShippedOverContradictoryOutcome(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	got := verdictOutcome(telemetry.Session{Shipped: true, Outcome: "failure", CorrectionTurns: 3})
