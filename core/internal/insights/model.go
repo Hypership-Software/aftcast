@@ -24,6 +24,13 @@ const (
 	modeHelp
 )
 
+type listSurface int
+
+const (
+	surfaceOverview listSurface = iota
+	surfaceSecurity
+)
+
 // eventProvider loads a session's events on drill-down. Injected so the model is
 // testable without a store.
 type eventProvider func(sessionID string) ([]schema.TelemetryEvent, error)
@@ -64,6 +71,7 @@ type model struct {
 	showEmpty   bool
 	sortMode    sortMode
 	hiddenCount int
+	surface     listSurface
 
 	cursor      int // selected row into m.sessions
 	width       int // last known terminal width; 0 until the first WindowSizeMsg
@@ -127,6 +135,14 @@ func scopeLabel(scope Scope, global bool) string {
 // session to open, so any hide/sort change rebuilds this slice and re-anchors the
 // cursor together.
 func (m model) rebuildRows() model {
+	if m.surface == surfaceSecurity {
+		visible := securitySessions(m.all)
+		sortSessions(visible, sortRecent)
+		m.sessions = visible
+		m.hiddenCount = 0
+		m.cursor = 0
+		return m
+	}
 	visible := visibleSessions(m.all, m.showEmpty)
 	sortSessions(visible, m.sortMode)
 	m.sessions = visible
@@ -139,6 +155,13 @@ func (m model) rebuildRows() model {
 // active scope: the global view gets a leading Project column; Work and Flags
 // carry floors so they absorb (or give up) the terminal's spare width.
 func (m model) buildColumns() []tableColumn {
+	if m.surface == surfaceSecurity {
+		return m.buildSecurityColumns()
+	}
+	return m.buildOverviewColumns()
+}
+
+func (m model) buildOverviewColumns() []tableColumn {
 	titles := []string{"When", "Task", "Result", "Work"}
 	floors := []int{0, 0, 0, workColFloor}
 	if m.scopeGlobal {
@@ -153,6 +176,28 @@ func (m model) buildColumns() []tableColumn {
 		row := sessionRow(s, m.now)
 		if m.scopeGlobal {
 			row = append([]string{m.projectCell(s)}, row...)
+		}
+		for i := range cols {
+			cols[i].cells[r] = row[i]
+		}
+	}
+	return cols
+}
+
+func (m model) buildSecurityColumns() []tableColumn {
+	titles := []string{"Project", "When", "Result", "Signal", "Work"}
+	floors := []int{0, 0, 0, flagsColFloor, workColFloor}
+	cols := make([]tableColumn, len(titles))
+	for i := range titles {
+		cols[i] = tableColumn{title: titles[i], floor: floors[i], cells: make([]string, len(m.sessions))}
+	}
+	for r, session := range m.sessions {
+		row := []string{
+			m.projectCell(session),
+			humanize(session.Started, m.now),
+			outcomeCell(session),
+			securitySignalCell(session),
+			workCell(session),
 		}
 		for i := range cols {
 			cols[i].cells[r] = row[i]
@@ -182,6 +227,16 @@ func visibleSessions(sessions []telemetry.Session, showEmpty bool) []telemetry.S
 	for _, s := range sessions {
 		if showEmpty || s.ToolCalls != 0 {
 			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func securitySessions(sessions []telemetry.Session) []telemetry.Session {
+	out := make([]telemetry.Session, 0, len(sessions))
+	for _, session := range sessions {
+		if session.Taint || session.DangerDetected > 0 {
+			out = append(out, session)
 		}
 	}
 	return out
@@ -261,6 +316,20 @@ func flagsCell(s telemetry.Session) string {
 	return strings.Join(parts, " ")
 }
 
+func securitySignalCell(s telemetry.Session) string {
+	actions := countNoun(s.DangerDetected, "flagged action", "flagged actions")
+	switch {
+	case s.Taint && s.DangerDetected > 0:
+		return "untrusted input + " + actions
+	case s.Taint:
+		return "untrusted input"
+	case s.DangerDetected > 0:
+		return actions
+	default:
+		return ""
+	}
+}
+
 func (m model) Init() tea.Cmd { return nil }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -316,6 +385,13 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor++
 		}
 		return m, nil
+	case "tab":
+		if m.surface == surfaceOverview {
+			m.surface = surfaceSecurity
+		} else {
+			m.surface = surfaceOverview
+		}
+		return m.rebuildRows(), nil
 	case "g":
 		if !m.scopeGlobal {
 			m.scopeGlobal = true
@@ -329,9 +405,15 @@ func (m model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "h":
+		if m.surface == surfaceSecurity {
+			return m, nil
+		}
 		m.showEmpty = !m.showEmpty
 		return m.rebuildRows(), nil
 	case "s":
+		if m.surface == surfaceSecurity {
+			return m, nil
+		}
 		m.sortMode = m.sortMode.next()
 		return m.rebuildRows(), nil
 	case "enter":
@@ -388,6 +470,8 @@ func (m model) View() string {
 		view = renderHelp()
 	} else if m.mode == modeDetail {
 		view = renderDetail(m.detail.View())
+	} else if m.surface == surfaceSecurity {
+		view = m.renderListView()
 	} else if len(m.all) == 0 {
 		view = renderEmptyList(m.coach, renderScopedEmpty(m.scopeGlobal, m.hasScopedHistory()))
 	} else {
@@ -417,7 +501,7 @@ func (m model) renderListView() string {
 	if note := hiddenNote(m.hiddenCount); note != "" {
 		fullTable += "\n" + note
 	}
-	full := renderList(m.agg, m.coach, fullTable)
+	full := m.renderSurfaceList(fullTable)
 	if !m.heightKnown || viewFits(full, m.width, m.height) {
 		return full
 	}
@@ -428,25 +512,32 @@ func (m model) renderListView() string {
 	var smallest string
 	for rows := maxRows; rows >= 0; rows-- {
 		tableView := renderCompactSessionTable(cols, m.cursor, m.width, rows, m.hiddenCount)
-		candidate := compactView(renderList(m.agg, m.coach, tableView))
+		candidate := compactView(m.renderSurfaceList(tableView))
 		smallest = candidate
 		if viewFits(candidate, m.width, m.height) {
 			return candidate
 		}
 	}
 	if status := renderCompactSessionStatus(cols, m.cursor, m.width, m.hiddenCount); status != "" {
-		candidate := compactView(renderList(m.agg, m.coach, status))
+		candidate := compactView(m.renderSurfaceList(status))
 		smallest = candidate
 		if viewFits(candidate, m.width, m.height) {
 			return candidate
 		}
 	}
-	candidate := compactView(renderList(m.agg, m.coach, ""))
+	candidate := compactView(m.renderSurfaceList(""))
 	smallest = candidate
 	if viewFits(candidate, m.width, m.height) {
 		return candidate
 	}
 	return smallest
+}
+
+func (m model) renderSurfaceList(tableView string) string {
+	if m.surface == surfaceSecurity {
+		return renderSecurityList(m.agg, tableView, len(m.sessions))
+	}
+	return renderList(m.agg, m.coach, tableView)
 }
 
 func visualRows(view string, width int) int {
