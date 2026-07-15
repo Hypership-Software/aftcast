@@ -148,6 +148,26 @@ func TestSessionFilesShortenMissingAbsolutePathsAndKeepEveryFile(t *testing.T) {
 	}
 }
 
+func TestSessionHighlightsPrecedeFilesChanged(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	events := []schema.TelemetryEvent{
+		{
+			V: schema.ObservationVersion, EventType: schema.EventPreTool, ToolUseID: "write", ToolClass: schema.ClassFileWrite,
+			Operation: schema.OperationEdit, Files: []string{"core/main.go"}, ChangeStats: &schema.ChangeStats{LinesAdded: 3, LinesRemoved: 1},
+		},
+		{V: schema.ObservationVersion, EventType: schema.EventPostTool, ToolUseID: "write", ToolOK: schema.OutcomeOK},
+	}
+	out := renderTrace(telemetry.Session{SessionID: "ordered", Outcome: "success", FilesChanged: 1, SkillsUsed: "strategic-review"}, events)
+	highlights := strings.Index(out, "Highlights")
+	files := strings.Index(out, "Files changed")
+	if highlights < 0 || files < 0 {
+		t.Fatalf("detail missing required sections:\n%s", out)
+	}
+	if highlights > files {
+		t.Fatalf("Highlights must precede Files changed:\n%s", out)
+	}
+}
+
 func TestDigestHighlightsShippedWithoutCommandContent(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	session := telemetry.Session{SessionID: "ship1", TaskType: "feature", Shipped: true, ToolCalls: 1}

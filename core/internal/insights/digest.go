@@ -21,11 +21,11 @@ func renderTrace(sess telemetry.Session, evs []schema.TelemetryEvent) string {
 	turns := buildTrace(evs)
 	sections := []string{verdictHeader(sess, turns)}
 	sections = append(sections, ui.Bold("Work mix")+"\n"+renderSessionWorkMix(evs))
-	if files := renderChangedFiles(sess, evs); files != "" {
-		sections = append(sections, ui.Bold("Files changed")+"\n"+files)
-	}
 	if hs := sessionHighlightLines(sess, turns); len(hs) > 0 {
 		sections = append(sections, ui.Bold("Highlights")+"\n"+strings.Join(hs, "\n"))
+	}
+	if files := renderChangedFiles(sess, evs); files != "" {
+		sections = append(sections, ui.Bold("Files changed")+"\n"+files)
 	}
 	return strings.Join(sections, "\n\n")
 }
