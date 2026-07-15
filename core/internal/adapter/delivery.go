@@ -32,10 +32,13 @@ func successfulDeliverySignal(tool, command string) schema.DeliverySignal {
 
 	found := false
 	for _, segment := range segments[start:] {
-		if alwaysFails(segment) {
+		if alwaysFails(segment.argv) {
 			return ""
 		}
-		if isGitPush(segment) {
+		if isGitPush(segment.argv) {
+			if hasDynamicShellSyntax(segment.raw) {
+				return ""
+			}
 			found = true
 		}
 	}
@@ -54,20 +57,68 @@ func isPOSIXShell(tool string) bool {
 	}
 }
 
-func parseShellCommand(command string) ([][]string, []string, bool) {
+type shellSegment struct {
+	raw  string
+	argv []string
+}
+
+func parseShellCommand(command string) ([]shellSegment, []string, bool) {
 	rawSegments, operators, ok := splitShellCommand(command)
 	if !ok {
 		return nil, nil, false
 	}
-	segments := make([][]string, 0, len(rawSegments))
+	segments := make([]shellSegment, 0, len(rawSegments))
 	for _, raw := range rawSegments {
 		argv, err := shlex.Split(raw)
 		if err != nil || len(argv) == 0 {
 			return nil, nil, false
 		}
-		segments = append(segments, argv)
+		segments = append(segments, shellSegment{raw: raw, argv: argv})
 	}
 	return segments, operators, true
+}
+
+func hasDynamicShellSyntax(raw string) bool {
+	var quote byte
+	escaped := false
+	for i := 0; i < len(raw); i++ {
+		ch := raw[i]
+		if escaped {
+			escaped = false
+			continue
+		}
+		if quote == '\'' {
+			if ch == '\'' {
+				quote = 0
+			}
+			continue
+		}
+		if ch == '\\' {
+			escaped = true
+			continue
+		}
+		if ch == '\'' {
+			if quote == 0 {
+				quote = '\''
+			}
+			continue
+		}
+		if ch == '"' {
+			if quote == '"' {
+				quote = 0
+			} else if quote == 0 {
+				quote = '"'
+			}
+			continue
+		}
+		if ch == '$' || ch == '`' {
+			return true
+		}
+		if quote == 0 && strings.ContainsRune("*?[{}", rune(ch)) {
+			return true
+		}
+	}
+	return false
 }
 
 func splitShellCommand(command string) ([]string, []string, bool) {
