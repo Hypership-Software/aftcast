@@ -33,7 +33,7 @@ func humanizeDuration(ms int64) string {
 	if ms < 1000 {
 		return "<1s"
 	}
-	seconds := ms / 1000
+	seconds := (ms + 500) / 1000
 	if seconds < 60 {
 		return fmt.Sprintf("%ds", seconds)
 	}

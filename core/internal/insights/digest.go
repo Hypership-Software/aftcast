@@ -259,7 +259,16 @@ func turnBreakdown(t traceTurn) string {
 		counts[raw] += n
 		accounted += n
 	}
-	sort.SliceStable(order, func(i, j int) bool { return counts[order[i]] > counts[order[j]] })
+	sort.SliceStable(order, func(i, j int) bool {
+		if counts[order[i]] != counts[order[j]] {
+			return counts[order[i]] > counts[order[j]]
+		}
+		left, right := bucketLabel(order[i]), bucketLabel(order[j])
+		if left != right {
+			return left < right
+		}
+		return order[i] < order[j]
+	})
 	omitted := 0
 	if len(order) > maxBreakdownParts {
 		for _, raw := range order[maxBreakdownParts:] {
