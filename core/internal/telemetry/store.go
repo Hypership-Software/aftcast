@@ -167,6 +167,33 @@ func (s *Store) Sessions() ([]Session, error) {
 	return out, rows.Err()
 }
 
+// FailedCalls returns every failed post-tool event across all sessions in seq
+// order — the input to friction clustering. Filtering happens after decode
+// because the events table stores whole events, not columns.
+func (s *Store) FailedCalls() ([]schema.TelemetryEvent, error) {
+	rows, err := s.db.Query(`SELECT raw FROM events WHERE event_type = ? ORDER BY seq`, string(schema.EventPostTool))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []schema.TelemetryEvent
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		var e schema.TelemetryEvent
+		if err := json.Unmarshal([]byte(raw), &e); err != nil {
+			return nil, fmt.Errorf("telemetry: decode event: %w", err)
+		}
+		if e.ToolOK == schema.OutcomeFailed {
+			out = append(out, e)
+		}
+	}
+	return out, rows.Err()
+}
+
 // EventsForSession returns a session's events in seq order, decoded from the
 // events table's raw column (the marshaled TelemetryEvent Project stored).
 func (s *Store) EventsForSession(id string) ([]schema.TelemetryEvent, error) {
