@@ -6,7 +6,7 @@ package schema
 // SchemaVersion is stamped into every Descriptor and TelemetryEvent so the log
 // can be read forward across format additions.
 const (
-	SchemaVersion         = 2
+	SchemaVersion         = 3
 	DeliverySignalVersion = 2
 )
 
