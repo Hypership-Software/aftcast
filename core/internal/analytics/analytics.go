@@ -29,8 +29,8 @@ const (
 	TaskExploration = "exploration"
 )
 
-// SessionStat is the per-session summary the cross-session functions
-// (Productivity, SkillInsights) consume. The read-model maps its rows onto this;
+// SessionStat is the per-session summary cross-session analytics consume.
+// The read-model maps its rows onto this;
 // keeping it here leaves analytics dependent on schema alone (no import cycle).
 type SessionStat struct {
 	Started         string

@@ -37,8 +37,15 @@ func TestPlanFirstAssociationRecommendsAtFifteenPointPositiveDifference(t *testi
 
 func TestPlanFirstAssociationRecommendsAtExactRationalThreshold(t *testing.T) {
 	got := PlanFirstAssociation(coachCohort(TaskFeature, 10, 6, 20, 9))
-	if got.Status != CoachRecommend {
+	if got.Status != CoachRecommend || got.Direction != AssociationPositive {
 		t.Fatalf("association = %+v, want recommendation at exact 6/10 - 9/20 threshold", got)
+	}
+}
+
+func TestPlanFirstAssociationSurfacesExactNegativeThresholdAsObservation(t *testing.T) {
+	got := PlanFirstAssociation(coachCohort(TaskFeature, 20, 9, 10, 6))
+	if got.Status != CoachNoPattern || got.Direction != AssociationNegative {
+		t.Fatalf("association = %+v, want negative observation at exact 9/20 - 6/10 threshold", got)
 	}
 }
 
@@ -61,6 +68,54 @@ func TestPlanFirstAssociationSelectsLargestQualifyingDifference(t *testing.T) {
 	if got.TaskType != TaskFeature {
 		t.Fatalf("selected %q, want feature: %+v", got.TaskType, got)
 	}
+}
+
+func TestPlanFirstAssociationSelectsLargestAbsoluteQualifyingDifference(t *testing.T) {
+	tests := []struct {
+		name     string
+		sessions []SessionStat
+		wantTask string
+		want     AssociationDirection
+	}{
+		{
+			name:     "stronger negative over weaker positive",
+			sessions: append(coachCohort(TaskDocs, 10, 6, 20, 9), coachCohort(TaskFeature, 10, 2, 10, 7)...),
+			wantTask: TaskFeature,
+			want:     AssociationNegative,
+		},
+		{
+			name:     "stronger positive over weaker negative",
+			sessions: append(coachCohort(TaskDocs, 20, 9, 10, 6), coachCohort(TaskFeature, 10, 8, 10, 3)...),
+			wantTask: TaskFeature,
+			want:     AssociationPositive,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := PlanFirstAssociation(tt.sessions)
+			if got.TaskType != tt.wantTask || got.Direction != tt.want {
+				t.Fatalf("association = %+v, want %s %s", got, tt.wantTask, tt.want)
+			}
+		})
+	}
+}
+
+func TestPlanFirstAssociationBreaksAbsoluteDifferenceTiesDeterministically(t *testing.T) {
+	t.Run("total", func(t *testing.T) {
+		sessions := append(coachCohort(TaskDocs, 20, 8, 20, 14), coachCohort(TaskFeature, 10, 7, 10, 4)...)
+		got := PlanFirstAssociation(sessions)
+		if got.TaskType != TaskDocs || got.Direction != AssociationNegative {
+			t.Fatalf("association = %+v, want larger negative docs cohort", got)
+		}
+	})
+
+	t.Run("task_type", func(t *testing.T) {
+		sessions := append(coachCohort(TaskFeature, 10, 7, 10, 4), coachCohort(TaskDocs, 10, 4, 10, 7)...)
+		got := PlanFirstAssociation(sessions)
+		if got.TaskType != TaskDocs || got.Direction != AssociationNegative {
+			t.Fatalf("association = %+v, want lexicographically first negative docs cohort", got)
+		}
+	})
 }
 
 func TestPlanFirstAssociationFilteredEmptyIsLearning(t *testing.T) {

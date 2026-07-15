@@ -86,6 +86,8 @@ func TestRenderCoachStates(t *testing.T) {
 			[]string{"latest 12 comparable sessions", "Atlas is learning", "12 comparable", "plan-first 4", "direct-to-edit 8"}, []string{"Try next"}},
 		{"no pattern", analytics.PlanAssociation{Status: analytics.CoachNoPattern, Window: 20, TaskType: "feature", Total: 20, Planned: 10, Direct: 10, PlannedRate: .6, DirectRate: .5},
 			[]string{"No reliable plan-first pattern yet", "60%", "50%"}, []string{"Try next"}},
+		{"negative observation", analytics.PlanAssociation{Status: analytics.CoachNoPattern, Direction: analytics.AssociationNegative, Window: 20, TaskType: "feature", Total: 20, Planned: 10, Direct: 10, PlannedRate: .4, DirectRate: .7},
+			[]string{"associated with fewer shipped sessions", "feature work", "40%", "70%", "n=20"}, []string{"No reliable plan-first pattern yet", "Try next", "Plan before editing"}},
 		{"recommend", analytics.PlanAssociation{Status: analytics.CoachRecommend, Window: 24, TaskType: "feature", Total: 24, Planned: 10, Direct: 14, PlannedRate: .8, DirectRate: .55},
 			[]string{"latest 24 comparable sessions", "associated with more shipped sessions", "80%", "55%", "Try next", "Plan before editing"}, nil},
 	}
