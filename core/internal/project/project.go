@@ -25,6 +25,20 @@ func Identify(startDir string) (root, id string) {
 	return root, shortHash(projectKey(root, isRepo))
 }
 
+// Repository resolves startDir only when it belongs to a Git repository. It is
+// used by local, rebuildable projections that may show a repository's basename;
+// callers must not persist root or derive wire data from it.
+func Repository(startDir string) (root, id string, ok bool) {
+	if startDir == "" {
+		return "", "", false
+	}
+	root, isRepo := findRoot(startDir)
+	if !isRepo {
+		return "", "", false
+	}
+	return root, shortHash(projectKey(root, true)), true
+}
+
 func findRoot(startDir string) (root string, isRepo bool) {
 	dir := startDir
 	for {

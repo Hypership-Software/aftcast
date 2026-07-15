@@ -165,14 +165,13 @@ func (m model) buildColumns() []tableColumn {
 // shows its real (live-derived) name, other projects their short id, and
 // pre-field sessions "unknown". Never a path — only the opaque id or the live name.
 func (m model) projectCell(s telemetry.Session) string {
-	switch {
-	case s.ProjectID == "":
-		return "unknown"
-	case s.ProjectID == m.scope.ProjectID && m.scope.Name != "":
-		return m.scope.Name
-	default:
-		return shortID(s.ProjectID)
+	if s.ProjectName != "" {
+		return s.ProjectName
 	}
+	if s.ProjectID == m.scope.ProjectID && m.scope.Name != "" {
+		return m.scope.Name
+	}
+	return "other project"
 }
 
 // visibleSessions filters out 0-call sessions unless showEmpty is set. It

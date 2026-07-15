@@ -113,3 +113,21 @@ func TestIdentify_ConfigWithoutOriginFallsBackToPath(t *testing.T) {
 		t.Errorf("no-origin config id = %q, want canonical path hash", id)
 	}
 }
+
+func TestRepositoryRejectsNonRepoAndResolvesRepo(t *testing.T) {
+	nonRepo := t.TempDir()
+	if root, id, ok := Repository(nonRepo); ok || root != "" || id != "" {
+		t.Fatalf("Repository(non-repo) = (%q, %q, %v), want empty", root, id, ok)
+	}
+
+	repo := t.TempDir()
+	writeGitConfig(t, repo, "git@github.com:acme/app.git")
+	sub := filepath.Join(repo, "pkg")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, id, ok := Repository(sub)
+	if !ok || root != repo || id != shortHash("github.com/acme/app") {
+		t.Fatalf("Repository(repo child) = (%q, %q, %v)", root, id, ok)
+	}
+}

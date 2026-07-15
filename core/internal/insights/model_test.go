@@ -510,13 +510,16 @@ func TestProjectScopeToggle(t *testing.T) {
 func TestProjectCell(t *testing.T) {
 	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
 	m := build(nil, Scope{ProjectID: "p1abcdef", Name: "myproj"}, provider, sampleNow)
+	if got := m.projectCell(telemetry.Session{ProjectID: "otherhash1234", ProjectName: "agent-gate"}); got != "agent-gate" {
+		t.Errorf("resolved project cell = %q, want agent-gate", got)
+	}
 	if got := m.projectCell(telemetry.Session{ProjectID: "p1abcdef"}); got != "myproj" {
 		t.Errorf("current project cell = %q, want myproj", got)
 	}
-	if got := m.projectCell(telemetry.Session{ProjectID: "otherhash1234"}); got != shortID("otherhash1234") {
-		t.Errorf("other project cell = %q, want short hash", got)
+	if got := m.projectCell(telemetry.Session{ProjectID: "otherhash1234"}); got != "other project" {
+		t.Errorf("other project cell = %q, want other project", got)
 	}
-	if got := m.projectCell(telemetry.Session{ProjectID: ""}); got != "unknown" {
-		t.Errorf("empty project cell = %q, want unknown", got)
+	if got := m.projectCell(telemetry.Session{ProjectID: ""}); got != "other project" {
+		t.Errorf("empty project cell = %q, want other project", got)
 	}
 }
