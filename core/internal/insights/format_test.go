@@ -28,9 +28,12 @@ func TestHumanizeDuration(t *testing.T) {
 		5:       "<1s",
 		999:     "<1s",
 		1000:    "1s",
+		4999:    "5s",
 		9109:    "9s",
 		65000:   "1m 5s",
+		102999:  "1m 43s",
 		103190:  "1m 43s",
+		107999:  "1m 48s",
 		6240000: "1h 44m",
 	}
 	for in, want := range cases {

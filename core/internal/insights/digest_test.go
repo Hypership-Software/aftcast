@@ -163,7 +163,7 @@ func TestTurnBreakdownAccountsForEveryCallAndTranslatesTools(t *testing.T) {
 		t.Fatalf("breakdown = %q", got)
 	}
 
-	got = turnBreakdown(traceTurn{Calls: 2, Rows: []traceRow{{Verb: "AskUserQuestion"}, {Verb: "skill", Skill: true}}})
+	got = turnBreakdown(traceTurn{Calls: 2, Rows: []traceRow{{Verb: "skill", Skill: true}, {Verb: "AskUserQuestion"}}})
 	if got != "1 asked · 1 skill" {
 		t.Fatalf("translated breakdown = %q", got)
 	}
