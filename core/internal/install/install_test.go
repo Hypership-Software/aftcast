@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Hypership-Software/atlas/internal/svc"
+	"github.com/Hypership-Software/aftcast/internal/svc"
 )
 
 // Force plain output so assertions match regardless of whether the test runner's
@@ -105,7 +105,7 @@ func TestInitStartsDaemonAndPointsHooksAtBoundPort(t *testing.T) {
 	if !strings.Contains(string(got), "http://127.0.0.1:47105/hook") {
 		t.Errorf("hooks not pointed at the daemon's actually-bound port:\n%s", got)
 	}
-	if !strings.Contains(out.String(), "started the Atlas daemon") {
+	if !strings.Contains(out.String(), "started the Aftcast daemon") {
 		t.Errorf("Init did not report starting the daemon:\n%s", out.String())
 	}
 }

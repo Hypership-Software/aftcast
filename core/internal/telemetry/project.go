@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/analytics"
-	"github.com/Hypership-Software/atlas/internal/audit"
-	"github.com/Hypership-Software/atlas/internal/project"
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/analytics"
+	"github.com/Hypership-Software/aftcast/internal/audit"
+	"github.com/Hypership-Software/aftcast/internal/project"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 // Project folds the audit log into the read-model, upserting session summaries

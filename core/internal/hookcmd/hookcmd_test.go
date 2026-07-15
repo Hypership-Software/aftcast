@@ -10,15 +10,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/daemon"
-	"github.com/Hypership-Software/atlas/internal/ipc"
-	"github.com/Hypership-Software/atlas/internal/schema"
-	"github.com/Hypership-Software/atlas/internal/svc"
+	"github.com/Hypership-Software/aftcast/internal/daemon"
+	"github.com/Hypership-Software/aftcast/internal/ipc"
+	"github.com/Hypership-Software/aftcast/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/svc"
 )
 
 const sessionStart = `{"session_id":"s","cwd":"/p","hook_event_name":"SessionStart","source":"startup"}`
 
-// SessionStart is the once-per-session moment Atlas brings the daemon up (so the
+// SessionStart is the once-per-session moment Aftcast brings the daemon up (so the
 // session's tool-call hooks reach a live endpoint). It must not fire for
 // per-tool-call events, which would add a daemon-start attempt to every call.
 func TestRunEnsuresDaemonOnSessionStart(t *testing.T) {
@@ -103,7 +103,7 @@ func TestRunObservesAndEmitsNoDecision(t *testing.T) {
 		t.Fatalf("exit %d, want 0 (observation never disrupts), stderr=%s", code, errb.String())
 	}
 	if strings.Contains(out.String(), "permissionDecision") {
-		t.Fatalf("shim emitted a hook decision; Atlas observes only: %s", out.String())
+		t.Fatalf("shim emitted a hook decision; Aftcast observes only: %s", out.String())
 	}
 	evs := rec.all()
 	if len(evs) != 1 {
@@ -114,7 +114,7 @@ func TestRunObservesAndEmitsNoDecision(t *testing.T) {
 	}
 }
 
-// With the daemon down, a pre_tool event is spooled and exits 0 (Atlas does not
+// With the daemon down, a pre_tool event is spooled and exits 0 (Aftcast does not
 // gate).
 func TestRunPreToolSpoolsWhenDaemonDown(t *testing.T) {
 	t.Setenv("GATED_IPC_ID", "hookcmd-down-pre")

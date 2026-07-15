@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/audit"
-	"github.com/Hypership-Software/atlas/internal/schema"
-	"github.com/Hypership-Software/atlas/internal/telemetry"
+	"github.com/Hypership-Software/aftcast/internal/audit"
+	"github.com/Hypership-Software/aftcast/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/telemetry"
 )
 
 var coachNow = time.Date(2026, 7, 15, 18, 0, 0, 0, time.UTC)

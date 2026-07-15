@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 var testKey = []byte("test-hmac-key-0123456789")

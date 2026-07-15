@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/audit"
-	"github.com/Hypership-Software/atlas/internal/daemon"
-	"github.com/Hypership-Software/atlas/internal/ipc"
-	"github.com/Hypership-Software/atlas/internal/schema"
-	"github.com/Hypership-Software/atlas/internal/svc"
+	"github.com/Hypership-Software/aftcast/internal/audit"
+	"github.com/Hypership-Software/aftcast/internal/daemon"
+	"github.com/Hypership-Software/aftcast/internal/ipc"
+	"github.com/Hypership-Software/aftcast/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/svc"
 )
 
 // startDaemon runs svc.Run in the background (isolated endpoint, integrity ticker
@@ -110,7 +110,7 @@ func TestRunObservesOverHTTP(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", resp.StatusCode, body)
 	}
 	if strings.Contains(string(body), "permissionDecision") {
-		t.Fatalf("hook returned a decision; Atlas observes only: %s", body)
+		t.Fatalf("hook returned a decision; Aftcast observes only: %s", body)
 	}
 
 	cancel()

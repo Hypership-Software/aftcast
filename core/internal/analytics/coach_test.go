@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 func coachCohort(task string, planned, plannedShipped, direct, directShipped int) []SessionStat {

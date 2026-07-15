@@ -1,4 +1,4 @@
-// Package schema defines the canonical data contracts shared across Atlas. The
+// Package schema defines the canonical data contracts shared across Aftcast. The
 // enum wire values here are part of the SIEM + org-rollup contract and must never
 // change.
 package schema
@@ -14,9 +14,9 @@ type DeliverySignal string
 
 const DeliveryGitPush DeliverySignal = "git_push"
 
-// Risk is the three-valued classification Atlas assigns each tool call: danger (a
+// Risk is the three-valued classification Aftcast assigns each tool call: danger (a
 // forbid matched), safe (a permit matched), or unknown (no match). It is a label,
-// not a decision — Atlas observes, it never blocks.
+// not a decision — Aftcast observes, it never blocks.
 type Risk string
 
 const (
@@ -69,7 +69,7 @@ const (
 // audit log, not an agent session, so the read-model excludes it from analytics.
 const SelfCheckSessionID = "gated-init-selfcheck"
 
-// IsInternalSession reports whether a session_id is an Atlas-generated marker
+// IsInternalSession reports whether a session_id is an Aftcast-generated marker
 // rather than a real agent session — such events belong in the audit log but not
 // in the analytics read-model.
 func IsInternalSession(id string) bool {

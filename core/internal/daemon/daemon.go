@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"net"
 
-	"github.com/Hypership-Software/atlas/internal/ipc"
+	"github.com/Hypership-Software/aftcast/internal/ipc"
 )
 
 // Serve accepts control-plane connections, one framed Request/Response exchange
-// each, until ctx is cancelled. Atlas observes rather than gates, so a dropped
+// each, until ctx is cancelled. Aftcast observes rather than gates, so a dropped
 // connection is not a failure to guard against — on any protocol error we just
 // close the connection.
 func Serve(ctx context.Context, ln net.Listener, h *Handler) error {

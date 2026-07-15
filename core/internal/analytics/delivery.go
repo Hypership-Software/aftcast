@@ -1,6 +1,6 @@
 package analytics
 
-import "github.com/Hypership-Software/atlas/internal/schema"
+import "github.com/Hypership-Software/aftcast/internal/schema"
 
 // CleanDelivery reports whether the agent reached a successful outcome without the
 // human having to step back in to recover from a failure, and counts those

@@ -13,11 +13,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/adapter"
-	"github.com/Hypership-Software/atlas/internal/daemon"
-	"github.com/Hypership-Software/atlas/internal/ipc"
-	"github.com/Hypership-Software/atlas/internal/schema"
-	"github.com/Hypership-Software/atlas/internal/svc"
+	"github.com/Hypership-Software/aftcast/internal/adapter"
+	"github.com/Hypership-Software/aftcast/internal/daemon"
+	"github.com/Hypership-Software/aftcast/internal/ipc"
+	"github.com/Hypership-Software/aftcast/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/svc"
 )
 
 const (
@@ -68,7 +68,7 @@ func Run(harness string, stdin io.Reader, stdout, stderr io.Writer) int {
 }
 
 // deliver sends the event to the daemon. The reply is a classification we don't
-// act on (Atlas does not gate), so the ack is read and discarded.
+// act on (Aftcast does not gate), so the ack is read and discarded.
 func deliver(req daemon.Request) error {
 	conn, err := ipc.Dial(dialTimeout)
 	if err != nil {

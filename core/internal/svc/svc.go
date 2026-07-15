@@ -2,7 +2,7 @@
 // classifier, taint ledger, HMAC audit log, integrity checker) into a resident
 // daemon and serves the two local transports (control-plane stream + localhost
 // HTTP hook listener). Every hook is recorded and classified; the daemon returns
-// no decision, so Atlas observes without blocking.
+// no decision, so Aftcast observes without blocking.
 //
 // It runs in the foreground (`gated daemon run`); OS-service auto-start and a
 // periodic read-model projection tick are deferred (the HMAC log is the source of
@@ -25,14 +25,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/adapter"
-	"github.com/Hypership-Software/atlas/internal/audit"
-	"github.com/Hypership-Software/atlas/internal/daemon"
-	"github.com/Hypership-Software/atlas/internal/integrity"
-	"github.com/Hypership-Software/atlas/internal/ipc"
-	"github.com/Hypership-Software/atlas/internal/policy"
-	"github.com/Hypership-Software/atlas/internal/schema"
-	"github.com/Hypership-Software/atlas/internal/taint"
+	"github.com/Hypership-Software/aftcast/internal/adapter"
+	"github.com/Hypership-Software/aftcast/internal/audit"
+	"github.com/Hypership-Software/aftcast/internal/daemon"
+	"github.com/Hypership-Software/aftcast/internal/integrity"
+	"github.com/Hypership-Software/aftcast/internal/ipc"
+	"github.com/Hypership-Software/aftcast/internal/policy"
+	"github.com/Hypership-Software/aftcast/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/taint"
 )
 
 const (
@@ -104,7 +104,7 @@ func Run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("acquire instance lock: %w", err)
 	}
 	if !ok {
-		logf("another Atlas daemon is already running for %s; exiting", home)
+		logf("another Aftcast daemon is already running for %s; exiting", home)
 		return nil
 	}
 	defer release()
@@ -321,7 +321,7 @@ func hookHandler(h *daemon.Handler, adp adapter.Adapter, logf func(string, ...an
 		if _, err := h.Handle(daemon.Request{Event: ev, Descriptor: desc}); err != nil {
 			logf("hook: handle: %v", err)
 		}
-		// Atlas observes; it never returns a decision. 200 with no body lets Claude
+		// Aftcast observes; it never returns a decision. 200 with no body lets Claude
 		// Code proceed under its own permission flow.
 		w.WriteHeader(http.StatusOK)
 	}

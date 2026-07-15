@@ -3,7 +3,7 @@ package policy
 import (
 	"testing"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 	"github.com/cedar-policy/cedar-go"
 )
 

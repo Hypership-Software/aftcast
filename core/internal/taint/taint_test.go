@@ -3,7 +3,7 @@ package taint
 import (
 	"testing"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 func fetch(session, domain string) schema.Descriptor {
@@ -64,7 +64,7 @@ func TestRebuildFromLogReconstructsTaint(t *testing.T) {
 	events := []schema.TelemetryEvent{
 		{SessionID: "s1", ToolClass: schema.ClassNetFetch, Domain: "evil.example.com", Risk: schema.RiskSafe},
 		{SessionID: "s2", ToolClass: schema.ClassNetFetch, Domain: "internal.example.com", Risk: schema.RiskSafe},
-		// a fetch classified dangerous still ran (Atlas observes), so it taints
+		// a fetch classified dangerous still ran (Aftcast observes), so it taints
 		{SessionID: "s3", ToolClass: schema.ClassNetFetch, Domain: "evil.example.com", Risk: schema.RiskDanger},
 	}
 	l.Rebuild(events)

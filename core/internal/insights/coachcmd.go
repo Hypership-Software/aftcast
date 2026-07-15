@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/analytics"
-	"github.com/Hypership-Software/atlas/internal/telemetry"
-	"github.com/Hypership-Software/atlas/internal/ui"
+	"github.com/Hypership-Software/aftcast/internal/analytics"
+	"github.com/Hypership-Software/aftcast/internal/telemetry"
+	"github.com/Hypership-Software/aftcast/internal/ui"
 )
 
 // CoachReport prints what keeps failing and is worth a permanent fix — the
@@ -21,7 +21,7 @@ func CoachReport(store *telemetry.Store, w io.Writer, now time.Time) error {
 	worth := analytics.WorthFixing(clusters)
 	if len(worth) == 0 {
 		fmt.Fprintln(w, "Nothing has crossed the worth-a-permanent-fix line this week.")
-		fmt.Fprintln(w, ui.Hint("Atlas raises a hand when the same kind of failure shows up in 3+ sessions on 2+ days."))
+		fmt.Fprintln(w, ui.Hint("Aftcast raises a hand when the same kind of failure shows up in 3+ sessions on 2+ days."))
 		return nil
 	}
 	fmt.Fprintln(w, "Worth a permanent fix · across your projects · last 7 days")
@@ -65,7 +65,7 @@ func writeBundle(w io.Writer, c analytics.FrictionCluster) {
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "Your agents %s %d times across %s %s.\n", describeFriction(c), c.Failures,
 		countNoun(len(c.Sessions), "session", "sessions"), bundleDates(c))
-	fmt.Fprintln(w, "Atlas records what happened, not what was typed: this bundle contains")
+	fmt.Fprintln(w, "Aftcast records what happened, not what was typed: this bundle contains")
 	fmt.Fprintln(w, "counts, dates, and session references only. No commands were captured.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "## The sessions")

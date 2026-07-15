@@ -1,4 +1,4 @@
-module github.com/Hypership-Software/atlas
+module github.com/Hypership-Software/aftcast
 
 go 1.25.0
 

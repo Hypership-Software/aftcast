@@ -3,7 +3,7 @@
 // harnesses a drop-in with no daemon changes.
 package adapter
 
-import "github.com/Hypership-Software/atlas/internal/schema"
+import "github.com/Hypership-Software/aftcast/internal/schema"
 
 type Adapter interface {
 	// Normalize turns a raw hook payload into a Descriptor (for tool events) and a

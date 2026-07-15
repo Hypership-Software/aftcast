@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Hypership-Software/atlas/internal/svc"
+	"github.com/Hypership-Software/aftcast/internal/svc"
 )
 
 func TestInstallBinaryCopiesIntoHomeBin(t *testing.T) {

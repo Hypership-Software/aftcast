@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 type traceRow struct {
@@ -175,7 +175,7 @@ func isUntrustedClass(c schema.ToolClass) bool {
 }
 
 // isLowSignal decides collapse eligibility. A danger/failed/untrusted row is
-// never low-signal: collapsing it would erase the ⚑/✗/⚠ signal Atlas exists to
+// never low-signal: collapsing it would erase the ⚑/✗/⚠ signal Aftcast exists to
 // surface, so it stays its own expanded row and breaks any surrounding run.
 func isLowSignal(r traceRow) bool {
 	if r.Danger || r.Failed || r.Untrusted {

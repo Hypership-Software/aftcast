@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/svc"
+	"github.com/Hypership-Software/aftcast/internal/svc"
 )
 
 // TestRunSecondInstanceForSameHomeExitsClean: two daemons for one home would both

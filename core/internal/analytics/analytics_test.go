@@ -3,7 +3,7 @@ package analytics
 import (
 	"testing"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 // --- event builders (post_tool carries tool_ok + verbs/files, matching the adapter) ---

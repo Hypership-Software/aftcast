@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Hypership-Software/atlas/internal/analytics"
-	"github.com/Hypership-Software/atlas/internal/schema"
-	"github.com/Hypership-Software/atlas/internal/telemetry"
-	"github.com/Hypership-Software/atlas/internal/ui"
+	"github.com/Hypership-Software/aftcast/internal/analytics"
+	"github.com/Hypership-Software/aftcast/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/telemetry"
+	"github.com/Hypership-Software/aftcast/internal/ui"
 )
 
 func shortID(id string) string {
@@ -56,7 +56,7 @@ func headerContext(agg aggregates) string {
 		parts = append(parts, agg.user)
 	}
 	parts = append(parts, label, "last 7 days")
-	return "Atlas — " + strings.Join(parts, " · ")
+	return "Aftcast — " + strings.Join(parts, " · ")
 }
 
 func renderShipped(p analytics.ShippedProfile) string {
@@ -100,15 +100,15 @@ func renderSecurity(agg aggregates) string {
 
 func renderScopedEmpty(global, hasHistory bool) string {
 	if !global && hasHistory {
-		return "No Atlas activity for this project in the last 7 days.\n" +
+		return "No Aftcast activity for this project in the last 7 days.\n" +
 			ui.Hint("Press g to view all projects · q to quit")
 	}
 	if !global {
-		return "No Atlas activity for this project yet.\n" +
+		return "No Aftcast activity for this project yet.\n" +
 			ui.Hint("Press g to view all projects · q to quit")
 	}
 	if global && hasHistory {
-		return "No Atlas activity in the last 7 days.\n" +
+		return "No Aftcast activity in the last 7 days.\n" +
 			ui.Hint("? help · q quit")
 	}
 	return "Nothing captured yet — start a Claude Code session in a wired project.\n" +

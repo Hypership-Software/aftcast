@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 func failedCall(session, project, ts string, class schema.ToolClass, tool string, verbs []string, exit int) schema.TelemetryEvent {

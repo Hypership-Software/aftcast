@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/schema"
+	"github.com/Hypership-Software/aftcast/internal/schema"
 )
 
 func TestShippingProfileEligibilityAndRate(t *testing.T) {

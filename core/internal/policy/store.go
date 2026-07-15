@@ -13,7 +13,7 @@ import (
 	"path"
 	"sort"
 
-	"github.com/Hypership-Software/atlas/assets"
+	"github.com/Hypership-Software/aftcast/assets"
 	"github.com/cedar-policy/cedar-go"
 )
 

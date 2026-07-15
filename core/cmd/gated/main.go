@@ -9,13 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Hypership-Software/atlas/internal/hookcmd"
-	"github.com/Hypership-Software/atlas/internal/insights"
-	"github.com/Hypership-Software/atlas/internal/install"
-	"github.com/Hypership-Software/atlas/internal/meta"
-	"github.com/Hypership-Software/atlas/internal/project"
-	"github.com/Hypership-Software/atlas/internal/svc"
-	"github.com/Hypership-Software/atlas/internal/ui"
+	"github.com/Hypership-Software/aftcast/internal/hookcmd"
+	"github.com/Hypership-Software/aftcast/internal/insights"
+	"github.com/Hypership-Software/aftcast/internal/install"
+	"github.com/Hypership-Software/aftcast/internal/meta"
+	"github.com/Hypership-Software/aftcast/internal/project"
+	"github.com/Hypership-Software/aftcast/internal/svc"
+	"github.com/Hypership-Software/aftcast/internal/ui"
 )
 
 func helpText() string {
@@ -77,9 +77,9 @@ func run(args []string) int {
 			return fail("stop", err)
 		}
 		if stopped {
-			fmt.Fprintln(os.Stdout, ui.OK("stopped the Atlas daemon"))
+			fmt.Fprintln(os.Stdout, ui.OK("stopped the Aftcast daemon"))
 		} else {
-			fmt.Fprintln(os.Stdout, ui.Hint("no Atlas daemon was running"))
+			fmt.Fprintln(os.Stdout, ui.Hint("no Aftcast daemon was running"))
 		}
 		return 0
 	case "doctor":
@@ -110,7 +110,7 @@ func insightsCmd(args []string) int {
 		}
 	}
 	wired := install.HooksWired(install.Options{})
-	notSetUp := ui.Hint("Atlas isn't set up yet — run `gated init`.")
+	notSetUp := ui.Hint("Aftcast isn't set up yet — run `gated init`.")
 	store, err := svc.OpenReadModel("")
 	if err != nil {
 		if !wired {

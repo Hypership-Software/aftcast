@@ -1,9 +1,9 @@
 // Package daemon defines the shim<->daemon protocol and the Handler that observes
-// one tool call: classify risk, record. Atlas never blocks; the classification is
+// one tool call: classify risk, record. Aftcast never blocks; the classification is
 // telemetry.
 package daemon
 
-import "github.com/Hypership-Software/atlas/internal/schema"
+import "github.com/Hypership-Software/aftcast/internal/schema"
 
 // Request is one telemetry message from a harness. Descriptor is populated for
 // tool events (pre_tool); Event carries the record for every event type.
@@ -13,7 +13,7 @@ type Request struct {
 }
 
 // Response reports the risk classification. It is informational — a caller may
-// surface it but is never expected to act on it (Atlas observes, does not block).
+// surface it but is never expected to act on it (Aftcast observes, does not block).
 type Response struct {
 	Risk   schema.Risk `json:"risk"`
 	RuleID string      `json:"rule_id"`
@@ -41,7 +41,7 @@ type Deps struct {
 	Record Recorder
 }
 
-// Handler classifies and records one Request. The action always proceeds — Atlas
+// Handler classifies and records one Request. The action always proceeds — Aftcast
 // observes, it does not gate.
 type Handler struct{ deps Deps }
 
@@ -65,7 +65,7 @@ func (h *Handler) Handle(req Request) (Response, error) {
 	h.deps.Taint.Apply(&d)
 	risk, ruleID := h.deps.Eval.Eval(d)
 
-	// The action runs regardless (Atlas does not block). A taint-source action
+	// The action runs regardless (Aftcast does not block). A taint-source action
 	// taints the session as a risk signal for the actions that follow.
 	h.deps.Taint.MarkFromResult(d.SessionID, d)
 
