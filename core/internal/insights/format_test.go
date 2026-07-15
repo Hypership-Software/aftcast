@@ -23,7 +23,16 @@ func TestHumanize(t *testing.T) {
 }
 
 func TestHumanizeDuration(t *testing.T) {
-	cases := map[int64]string{0: "", 250: "0.2s", 9109: "9.1s", 65000: "1m", 1080000: "18m"}
+	cases := map[int64]string{
+		0:       "",
+		5:       "<1s",
+		999:     "<1s",
+		1000:    "1s",
+		9109:    "9s",
+		65000:   "1m 5s",
+		103190:  "1m 43s",
+		6240000: "1h 44m",
+	}
 	for in, want := range cases {
 		if got := humanizeDuration(in); got != want {
 			t.Errorf("humanizeDuration(%d) = %q, want %q", in, got, want)

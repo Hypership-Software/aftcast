@@ -24,7 +24,6 @@ type traceRow struct {
 
 type traceTurn struct {
 	Index int
-	Phase string
 	Calls int
 	DurMS int64
 	Rows  []traceRow
@@ -49,7 +48,6 @@ func buildTrace(evs []schema.TelemetryEvent) []traceTurn {
 		rows = collapseRuns(rows)
 		turns = append(turns, traceTurn{
 			Index: i + 1,
-			Phase: classifyPhase(rows, i == len(segs)-1, calls),
 			Calls: calls,
 			DurMS: sumDur(rows),
 			Rows:  rows,
@@ -216,29 +214,6 @@ func collapseRuns(rows []traceRow) []traceRow {
 		i = j
 	}
 	return out
-}
-
-func classifyPhase(rows []traceRow, isLast bool, calls int) string {
-	hasEditOrRun := false
-	hasReadOrSkill := false
-	for _, r := range rows {
-		switch r.Verb {
-		case "edited", "ran":
-			hasEditOrRun = true
-		case "read", "skill":
-			hasReadOrSkill = true
-		}
-	}
-	switch {
-	case hasReadOrSkill && !hasEditOrRun:
-		return "planning"
-	case isLast && calls <= 4:
-		return "wrap-up"
-	case hasEditOrRun:
-		return "execution"
-	default:
-		return ""
-	}
 }
 
 func sumDur(rows []traceRow) int64 {

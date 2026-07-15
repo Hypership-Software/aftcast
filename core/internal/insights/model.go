@@ -235,10 +235,8 @@ func outcomeCell(s telemetry.Session) string {
 	switch {
 	case s.Shipped:
 		return ui.OK("↑ shipped")
-	case s.CleanDelivery:
-		return ui.OK("✓ no intervention")
-	case class == analytics.Success && s.CorrectionTurns > 0:
-		return ui.Warn(fmt.Sprintf("✓ %d fix", s.CorrectionTurns))
+	case class == analytics.Success:
+		return ui.OK("✓ succeeded")
 	case class == analytics.Failure:
 		return ui.Bad("✗ failed")
 	default:
@@ -247,7 +245,7 @@ func outcomeCell(s telemetry.Session) string {
 }
 
 func workCell(s telemetry.Session) string {
-	return fmt.Sprintf("%d calls · %d files", s.ToolCalls, s.FilesTouched)
+	return fmt.Sprintf("%d changed · %s", s.FilesChanged, countNoun(s.ToolCalls, "call", "calls"))
 }
 
 func flagsCell(s telemetry.Session) string {
@@ -259,7 +257,7 @@ func flagsCell(s telemetry.Session) string {
 		parts = append(parts, ui.Bad(fmt.Sprintf("⚑ %d flagged", s.DangerDetected)))
 	}
 	if n := len(splitSkills(s.SkillsUsed)); n > 0 {
-		parts = append(parts, fmt.Sprintf("★ %d skills", n))
+		parts = append(parts, "★ "+countNoun(n, "skill", "skills"))
 	}
 	return strings.Join(parts, " ")
 }

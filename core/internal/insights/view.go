@@ -292,8 +292,6 @@ func verdictOutcome(sess telemetry.Session) string {
 	switch {
 	case sess.Shipped:
 		return ui.OK("↑ shipped")
-	case class == analytics.Success && sess.CorrectionTurns > 0:
-		return ui.Warn(fmt.Sprintf("✓ succeeded (%d fix)", sess.CorrectionTurns))
 	case class == analytics.Success:
 		return ui.OK("✓ succeeded")
 	case class == analytics.Failure:

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/Hypership-Software/atlas/internal/analytics"
 	"github.com/Hypership-Software/atlas/internal/schema"
 	"github.com/Hypership-Software/atlas/internal/telemetry"
 	"github.com/Hypership-Software/atlas/internal/ui"
@@ -20,7 +21,7 @@ import (
 func renderTrace(sess telemetry.Session, evs []schema.TelemetryEvent) string {
 	turns := buildTrace(evs)
 	var b strings.Builder
-	b.WriteString(verdictHeader(sess))
+	b.WriteString(verdictHeader(sess, turns))
 	if hs := highlightLines(sess, turns); len(hs) > 0 {
 		b.WriteString("\n\n" + ui.Bold("Highlights") + "\n" + strings.Join(hs, "\n"))
 	}
@@ -33,18 +34,46 @@ func renderTrace(sess telemetry.Session, evs []schema.TelemetryEvent) string {
 // verdictHeader is the Sentry-style two-line summary: identity + outcome + time
 // on top, the counts and flag glyphs beneath. Fields that are empty (no
 // duration, no flags) are dropped rather than left as dangling separators.
-func verdictHeader(sess telemetry.Session) string {
-	top := []string{taskCell(sess.TaskType), verdictOutcome(sess)}
-	if d := humanizeDuration(sess.DurationMS); d != "" {
-		top = append(top, d)
+func verdictHeader(sess telemetry.Session, turns []traceTurn) string {
+	projectName := sess.ProjectName
+	if projectName == "" {
+		projectName = "other project"
 	}
-	line1 := "Session " + ui.Hint(shortID(sess.SessionID)) + " · " + strings.Join(top, " · ")
+	line1 := strings.Join([]string{projectName, taskCell(sess.TaskType), verdictOutcome(sess)}, " · ")
 
-	line2 := fmt.Sprintf("%d calls · %d files", sess.ToolCalls, sess.FilesTouched)
-	if f := flagsCell(sess); f != "" {
-		line2 += " · " + f
+	timing := []string{"Session " + ui.Hint(shortID(sess.SessionID))}
+	if d := humanizeDuration(sess.DurationMS); d != "" {
+		timing = append(timing, "wall span "+d)
 	}
-	return line1 + "\n" + line2
+	if d := humanizeDuration(observedToolTime(turns)); d != "" {
+		timing = append(timing, "observed tool time "+d)
+	}
+
+	counts := []string{
+		countNoun(sess.ToolCalls, "call", "calls"),
+		fmt.Sprintf("%d changed", sess.FilesChanged),
+		fmt.Sprintf("%d touched", sess.FilesTouched),
+	}
+	if n := len(splitSkills(sess.SkillsUsed)); n > 0 {
+		counts = append(counts, "★ "+countNoun(n, "skill", "skills"))
+	}
+	return line1 + "\n" + strings.Join(timing, " · ") + "\n" + strings.Join(counts, " · ")
+}
+
+func observedToolTime(turns []traceTurn) int64 {
+	var total int64
+	for _, turn := range turns {
+		total += turn.DurMS
+	}
+	return total
+}
+
+func countNoun(n int, singular, plural string) string {
+	word := plural
+	if n == 1 {
+		word = singular
+	}
+	return fmt.Sprintf("%d %s", n, word)
 }
 
 const highlightLabelWidth = 10
@@ -99,7 +128,11 @@ func highlightLines(sess telemetry.Session, turns []traceTurn) []string {
 			fmt.Sprintf("%d — %s in turn %d", len(flagged), describeRow(flagged[0].row), flagged[0].turn)))
 	}
 	if len(fails) > 0 {
-		lines = append(lines, highlightLine(ui.Bad("✗"), "failures", failureText(fails, sess.ToolCalls)))
+		glyph, label := ui.Bad("✗"), "failures"
+		if analytics.OutcomeClass(sess.Outcome) == analytics.Success {
+			glyph, label = ui.OK("↻"), "recovery"
+		}
+		lines = append(lines, highlightLine(glyph, label, failureText(fails, sess)))
 	}
 	if slowest.row.DurMS >= slowThresholdMS {
 		lines = append(lines, highlightLine(ui.Hint("⏱"), "slowest",
@@ -110,20 +143,16 @@ func highlightLines(sess telemetry.Session, turns []traceTurn) []string {
 
 const slowThresholdMS = 5000
 
-func failureText(fails []rowRef, total int) string {
-	text := fmt.Sprintf("%d of %d calls failed", len(fails), total)
-	verbs := map[string]struct{}{}
-	for _, f := range fails {
-		if f.row.Verb != "" {
-			verbs[strings.TrimSpace(f.row.Verb+" "+f.row.Detail)] = struct{}{}
-		}
+func failureText(fails []rowRef, sess telemetry.Session) string {
+	text := countNoun(len(fails), "failed attempt", "failed attempts")
+	switch {
+	case analytics.OutcomeClass(sess.Outcome) == analytics.Failure:
+		return text + " · session failed"
+	case sess.CorrectionTurns > 0:
+		return text + " · " + countNoun(sess.CorrectionTurns, "human correction", "human corrections")
+	default:
+		return text + " · agent recovered"
 	}
-	if len(verbs) == 1 {
-		for v := range verbs {
-			text += " — " + v
-		}
-	}
-	return text
 }
 
 // describeSource names where untrusted content entered, e.g. "via context7 (mcp)"
@@ -163,25 +192,30 @@ func prettySkills(skills []string) []string {
 	return out
 }
 
-// timelineLines renders one aligned line per turn: its index, phase, call count
-// and duration, then a dimmed activity breakdown. Call counts are right-aligned
+// timelineLines renders one aligned line per turn: its index, call count and
+// duration, then a dimmed activity breakdown. Call counts are right-aligned
 // and the stats column padded to a common width so the breakdowns line up — this
 // is the backbone the Highlights hang off, each naming the turn a reader jumps to.
 func timelineLines(turns []traceTurn) []string {
-	phaseW, callW, statW := 0, 1, 0
+	callW, statW := 1, 0
 	stats := make([]string, len(turns))
 	for _, t := range turns {
-		if w := len(t.Phase); w > phaseW {
-			phaseW = w
-		}
 		if w := len(fmt.Sprintf("%d", t.Calls)); w > callW {
 			callW = w
 		}
 	}
 	for i, t := range turns {
-		s := fmt.Sprintf("%*d calls", callW, t.Calls)
-		if d := humanizeDuration(t.DurMS); d != "" {
-			s += " · " + d
+		s := "no tool calls"
+		if t.Calls > 0 {
+			s = fmt.Sprintf("%*d", callW, t.Calls) + " "
+			if t.Calls == 1 {
+				s += "call"
+			} else {
+				s += "calls"
+			}
+			if d := humanizeDuration(t.DurMS); d != "" {
+				s += " · " + d
+			}
 		}
 		stats[i] = s
 		if w := utf8.RuneCountInString(s); w > statW {
@@ -190,7 +224,7 @@ func timelineLines(turns []traceTurn) []string {
 	}
 	lines := make([]string, 0, len(turns))
 	for i, t := range turns {
-		line := fmt.Sprintf("  %-7s  %-*s  ", fmt.Sprintf("turn %d", t.Index), phaseW, t.Phase)
+		line := fmt.Sprintf("  %-7s  ", fmt.Sprintf("turn %d", t.Index))
 		if bd := turnBreakdown(t); bd != "" {
 			line += fmt.Sprintf("%-*s   %s", statW, stats[i], ui.Hint(bd))
 		} else {
@@ -204,41 +238,68 @@ func timelineLines(turns []traceTurn) []string {
 const maxBreakdownParts = 4
 
 // turnBreakdown summarizes a turn's calls by activity, e.g. "18 edited · 61 ran ·
-// 34 read · 12 subagents", keeping the busiest few categories. Skill rows are
-// omitted (they live in Highlights) and collapsed runs count their folded rows.
+// 34 read · 12 subagents", keeping the busiest few categories. Collapsed runs
+// count their folded rows and omitted activity is explicit.
 func turnBreakdown(t traceTurn) string {
 	counts := map[string]int{}
 	var order []string
+	accounted := 0
 	for _, r := range t.Rows {
-		if r.Verb == "" || r.Skill {
+		if r.Verb == "" {
 			continue
 		}
 		n := 1
 		if r.CollapsedN > 0 {
 			n = r.CollapsedN
 		}
-		label := bucketLabel(r.Verb)
-		if _, ok := counts[label]; !ok {
-			order = append(order, label)
+		raw := strings.ToLower(strings.TrimSpace(r.Verb))
+		if _, ok := counts[raw]; !ok {
+			order = append(order, raw)
 		}
-		counts[label] += n
+		counts[raw] += n
+		accounted += n
 	}
 	sort.SliceStable(order, func(i, j int) bool { return counts[order[i]] > counts[order[j]] })
+	omitted := 0
 	if len(order) > maxBreakdownParts {
+		for _, raw := range order[maxBreakdownParts:] {
+			omitted += counts[raw]
+		}
 		order = order[:maxBreakdownParts]
 	}
+	if t.Calls > accounted {
+		omitted += t.Calls - accounted
+	}
 	parts := make([]string, len(order))
-	for i, l := range order {
-		parts[i] = fmt.Sprintf("%d %s", counts[l], l)
+	for i, raw := range order {
+		parts[i] = breakdownCount(counts[raw], bucketLabel(raw))
+	}
+	if omitted > 0 {
+		parts = append(parts, fmt.Sprintf("+%d other", omitted))
 	}
 	return strings.Join(parts, " · ")
 }
 
 func bucketLabel(verb string) string {
-	switch verb {
+	switch strings.ToLower(verb) {
+	case "askuserquestion":
+		return "asked"
+	case "grep", "glob":
+		return "searched"
 	case "subagent":
-		return "subagents"
+		return "subagent"
 	default:
 		return strings.ToLower(verb)
+	}
+}
+
+func breakdownCount(n int, label string) string {
+	switch label {
+	case "skill":
+		return countNoun(n, "skill", "skills")
+	case "subagent":
+		return countNoun(n, "subagent", "subagents")
+	default:
+		return fmt.Sprintf("%d %s", n, label)
 	}
 }

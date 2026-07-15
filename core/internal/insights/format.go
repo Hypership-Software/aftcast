@@ -27,12 +27,28 @@ func humanize(tsStr string, now time.Time) string {
 }
 
 func humanizeDuration(ms int64) string {
-	switch {
-	case ms <= 0:
+	if ms <= 0 {
 		return ""
-	case ms < 60000:
-		return fmt.Sprintf("%.1fs", float64(ms)/1000)
-	default:
-		return fmt.Sprintf("%dm", ms/60000)
 	}
+	if ms < 1000 {
+		return "<1s"
+	}
+	seconds := ms / 1000
+	if seconds < 60 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	minutes := seconds / 60
+	seconds %= 60
+	if minutes < 60 {
+		if seconds == 0 {
+			return fmt.Sprintf("%dm", minutes)
+		}
+		return fmt.Sprintf("%dm %ds", minutes, seconds)
+	}
+	hours := minutes / 60
+	minutes %= 60
+	if minutes == 0 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	return fmt.Sprintf("%dh %dm", hours, minutes)
 }
