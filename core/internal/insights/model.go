@@ -67,6 +67,7 @@ type model struct {
 	sessions        []telemetry.Session // visible+sorted; m.sessions[i] is table row i.
 	agg             aggregates
 	coach           analytics.PlanAssociation
+	friction        []analytics.FrictionCluster
 	events          eventProvider
 	now             time.Time
 	showEmpty       bool
@@ -91,7 +92,7 @@ type model struct {
 	detailReturnMode mode
 }
 
-func build(sessions []telemetry.Session, scope Scope, events eventProvider, now time.Time) model {
+func build(sessions []telemetry.Session, scope Scope, events eventProvider, failures []schema.TelemetryEvent, now time.Time) model {
 	m := model{
 		history: sessions,
 		global:  recentSessions(sessions, now),
@@ -102,6 +103,7 @@ func build(sessions []telemetry.Session, scope Scope, events eventProvider, now 
 		detail:  viewport.New(80, 20),
 	}
 	m.coach = analytics.PlanFirstAssociation(coachWindow(m.history))
+	m.friction = analytics.WorthFixing(analytics.FrictionClusters(frictionWindow(failures, now)))
 	m.scopeGlobal = scope.StartGlobal || scope.ProjectID == ""
 	return m.applyScope()
 }
@@ -584,7 +586,7 @@ func (m model) renderListView() string {
 		})
 	}
 	return m.renderResponsiveTable(buildProjectColumns(m.projects, m.now), m.projectCursor, len(m.projects), 0, func(table string) string {
-		return renderProjects(m.agg, m.coach, table)
+		return renderProjects(m.agg, m.coach, m.friction, table)
 	})
 }
 

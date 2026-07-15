@@ -38,7 +38,7 @@ func TestListFitsTwentyFourLineTerminalWithScrollNotes(t *testing.T) {
 			Started:     sampleNow.Add(-time.Duration(i) * time.Hour).Format(time.RFC3339Nano),
 		}
 	}
-	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, nil, sampleNow)
 	m.coach = analytics.PlanAssociation{Status: analytics.CoachRecommend, TaskType: "feature", Total: 24,
 		Planned: 10, Direct: 14, PlannedRate: .8, DirectRate: .55}
 	m.projectCursor = 5
@@ -70,7 +70,7 @@ func complexHeightModel() model {
 		}
 		sessions[i] = session
 	}
-	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, nil, sampleNow)
 	m.coach = analytics.PlanAssociation{Status: analytics.CoachRecommend, Window: 24, TaskType: "feature", Total: 24,
 		Planned: 10, Direct: 14, PlannedRate: .8, DirectRate: .55}
 	m.projectCursor = 4
@@ -231,7 +231,7 @@ func TestSecuritySurfaceSelectsOnlyFlaggedAndReturnsFromDetail(t *testing.T) {
 	provider := func(id string) ([]schema.TelemetryEvent, error) {
 		return []schema.TelemetryEvent{{SessionID: id, EventType: schema.EventUserPrompt}}, nil
 	}
-	m := build([]telemetry.Session{clean, flagged}, Scope{}, provider, sampleNow)
+	m := build([]telemetry.Session{clean, flagged}, Scope{}, provider, nil, sampleNow)
 	m = must(m.Update(tea.KeyMsg{Type: tea.KeyTab}))
 	if m.surface != surfaceSecurity || len(m.sessions) != 1 || m.sessions[0].SessionID != "flagged" {
 		t.Fatalf("security surface selected %#v", m.sessions)
@@ -264,7 +264,7 @@ func TestSecuritySurfaceHonoursScopeAndHasHonestEmptyState(t *testing.T) {
 		{SessionID: "p2-taint", ProjectID: "p2", ToolCalls: 2, Taint: true},
 	}
 	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
-	m := build(sessions, Scope{ProjectID: "p1", Name: "atlas"}, provider, sampleNow)
+	m := build(sessions, Scope{ProjectID: "p1", Name: "atlas"}, provider, nil, sampleNow)
 	m = must(m.Update(tea.KeyMsg{Type: tea.KeyTab}))
 	if len(m.sessions) != 1 || m.sessions[0].SessionID != "p1-danger" {
 		t.Fatalf("scoped security rows = %#v", m.sessions)
@@ -273,13 +273,13 @@ func TestSecuritySurfaceHonoursScopeAndHasHonestEmptyState(t *testing.T) {
 		t.Fatalf("danger-only signal copy is wrong:\n%s", m.View())
 	}
 
-	empty := build([]telemetry.Session{{SessionID: "clean", ToolCalls: 1}}, Scope{}, provider, sampleNow)
+	empty := build([]telemetry.Session{{SessionID: "clean", ToolCalls: 1}}, Scope{}, provider, nil, sampleNow)
 	empty = must(empty.Update(tea.KeyMsg{Type: tea.KeyTab}))
 	if got := empty.View(); !strings.Contains(got, "Nothing needs review in this scope.") {
 		t.Fatalf("security empty state = %q", got)
 	}
 
-	noHistory := build(nil, Scope{}, provider, sampleNow)
+	noHistory := build(nil, Scope{}, provider, nil, sampleNow)
 	noHistory = must(noHistory.Update(tea.KeyMsg{Type: tea.KeyTab}))
 	if got := noHistory.View(); !strings.Contains(got, "Nothing needs review in this scope.") {
 		t.Fatalf("no-history security empty state = %q", got)
@@ -291,7 +291,7 @@ func TestSecurityColumnsAndRecentSortAreStable(t *testing.T) {
 		{SessionID: "older", ToolCalls: 2, Taint: true, Started: sampleNow.Add(-2 * time.Hour).Format(time.RFC3339Nano)},
 		{SessionID: "newer", ToolCalls: 2, DangerDetected: 1, Started: sampleNow.Add(-time.Hour).Format(time.RFC3339Nano)},
 	}
-	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, nil, sampleNow)
 	m = must(m.Update(tea.KeyMsg{Type: tea.KeyTab}))
 	var titles []string
 	for _, col := range m.buildColumns() {
@@ -315,7 +315,7 @@ func TestSecuritySurfaceFitsEightyByTwentyFour(t *testing.T) {
 			Started: sampleNow.Add(-time.Duration(i) * time.Hour).Format(time.RFC3339Nano),
 		})
 	}
-	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m := build(sessions, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, nil, sampleNow)
 	m = must(m.Update(tea.KeyMsg{Type: tea.KeyTab}))
 	m = must(m.Update(tea.WindowSizeMsg{Width: 80, Height: 24}))
 	if rows := visualRowCount(m.View(), 80); rows > 24 {
@@ -348,7 +348,7 @@ func historicalCoachSessions(now time.Time) []telemetry.Session {
 
 func TestHistoricalCoachRendersWhenGlobalOperationalScopeIsEmpty(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	m := build(historicalCoachSessions(sampleNow), Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m := build(historicalCoachSessions(sampleNow), Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, nil, sampleNow)
 	view := m.View()
 	if !strings.Contains(view, renderCoach(m.coach)) {
 		t.Fatalf("empty operational view omitted full-history coach:\n%s", view)
@@ -371,7 +371,7 @@ func TestHistoricalProjectEmptyCopyDistinguishesSameProjectHistory(t *testing.T)
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := build(historicalCoachSessions(sampleNow), Scope{ProjectID: tt.projectID, Name: tt.projectID}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+			m := build(historicalCoachSessions(sampleNow), Scope{ProjectID: tt.projectID, Name: tt.projectID}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, nil, sampleNow)
 			wantCoach := renderCoach(m.coach)
 			if view := m.View(); !strings.Contains(view, tt.projectID+" · last 7 days") || !strings.Contains(view, "Starts with your next captured session") || strings.Contains(view, wantCoach) {
 				t.Fatalf("project empty workspace is wrong:\n%s", view)
@@ -393,7 +393,7 @@ func TestCoachRemainsVisibleAcrossPopulatedAndEmptyScopeToggles(t *testing.T) {
 	sessions := historicalCoachSessions(sampleNow)
 	sessions = append(sessions, telemetry.Session{SessionID: "recent-other", ProjectID: "project-two", TaskType: "docs",
 		ToolCalls: 2, Started: sampleNow.Add(-time.Hour).Format(time.RFC3339Nano)})
-	m := build(sessions, Scope{ProjectID: "project-one", Name: "project-one"}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m := build(sessions, Scope{ProjectID: "project-one", Name: "project-one"}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, nil, sampleNow)
 	wantCoach := renderCoach(m.coach)
 	if strings.Contains(m.View(), wantCoach) || !strings.Contains(m.View(), "project-one · last 7 days") {
 		t.Fatalf("project workspace should not repeat global coach:\n%s", m.View())
@@ -422,7 +422,7 @@ func sampleModel() model {
 			{SessionID: id, EventType: schema.EventPostTool, ToolUseID: "t1", ToolOK: schema.OutcomeOK},
 		}, nil
 	}
-	return build(sessions, Scope{}, provider, sampleNow)
+	return build(sessions, Scope{}, provider, nil, sampleNow)
 }
 
 func TestOverviewSummarizesSecurityWithoutCrowdingSessionRows(t *testing.T) {
@@ -432,7 +432,7 @@ func TestOverviewSummarizesSecurityWithoutCrowdingSessionRows(t *testing.T) {
 		Taint: true, DangerDetected: 11, SkillsUsed: "a,b,c,d",
 		Started: sampleNow.Add(-20 * time.Hour).Format(time.RFC3339Nano)}
 	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
-	m := build([]telemetry.Session{s}, Scope{}, provider, sampleNow)
+	m := build([]telemetry.Session{s}, Scope{}, provider, nil, sampleNow)
 	v := m.View()
 	for _, want := range []string{"Security", "1 session needs review", "11 flagged actions"} {
 		if !strings.Contains(v, want) {
@@ -547,7 +547,7 @@ func TestQuitKey(t *testing.T) {
 
 func TestEmptyState(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	m := build(nil, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m := build(nil, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, nil, sampleNow)
 	if !strings.Contains(m.View(), "Nothing captured") {
 		t.Fatalf("empty model should show empty state: %q", m.View())
 	}
@@ -555,7 +555,7 @@ func TestEmptyState(t *testing.T) {
 
 func TestHelpOverlayToggles(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	m := build(nil, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m := build(nil, Scope{}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, nil, sampleNow)
 	m = must(m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}))
 	if !strings.Contains(m.View(), "help") {
 		t.Error("? did not open help overlay")
@@ -629,7 +629,7 @@ func TestProjectScopeToggle(t *testing.T) {
 		{SessionID: "b", ProjectID: "p2", ToolCalls: 4},
 	}
 	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
-	m := build(sessions, Scope{ProjectID: "p1", Name: "proj-one"}, provider, sampleNow)
+	m := build(sessions, Scope{ProjectID: "p1", Name: "proj-one"}, provider, nil, sampleNow)
 	if len(m.all) != 1 || m.all[0].SessionID != "a" {
 		t.Fatalf("project scope should show only p1, got %d", len(m.all))
 	}
@@ -651,7 +651,7 @@ func TestProjectScopeToggle(t *testing.T) {
 
 func TestProjectCell(t *testing.T) {
 	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
-	m := build(nil, Scope{ProjectID: "p1abcdef", Name: "myproj"}, provider, sampleNow)
+	m := build(nil, Scope{ProjectID: "p1abcdef", Name: "myproj"}, provider, nil, sampleNow)
 	if got := m.projectCell(telemetry.Session{ProjectID: "otherhash1234", ProjectName: "agent-gate"}); got != "agent-gate" {
 		t.Errorf("resolved project cell = %q, want agent-gate", got)
 	}
@@ -674,7 +674,7 @@ func TestProjectNavigationOpensRepositoryBeforeSessionAndRestoresSelection(t *te
 		{SessionID: "k1", ProjectID: "p2", ProjectName: "kuper", ToolCalls: 2, Started: sampleNow.Add(-3 * time.Hour).Format(time.RFC3339Nano)},
 	}
 	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
-	m := build(sessions, Scope{ProjectID: "p1", Name: "agent-gate", StartGlobal: true}, provider, sampleNow)
+	m := build(sessions, Scope{ProjectID: "p1", Name: "agent-gate", StartGlobal: true}, provider, nil, sampleNow)
 	if m.mode != modeList || len(m.projects) != 2 {
 		t.Fatalf("global start = mode %v projects %d", m.mode, len(m.projects))
 	}
@@ -702,7 +702,7 @@ func TestCurrentProjectStartsInWorkspaceAndGReturnsToProjects(t *testing.T) {
 		{SessionID: "a", ProjectID: "p1", ProjectName: "agent-gate", ToolCalls: 2, Started: sampleNow.Format(time.RFC3339Nano)},
 		{SessionID: "k", ProjectID: "p2", ProjectName: "kuper", ToolCalls: 2, Started: sampleNow.Add(-time.Hour).Format(time.RFC3339Nano)},
 	}
-	m := build(sessions, Scope{ProjectID: "p1", Name: "agent-gate"}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m := build(sessions, Scope{ProjectID: "p1", Name: "agent-gate"}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, nil, sampleNow)
 	if m.mode != modeProject || m.selectedProject.Name != "agent-gate" || len(m.sessions) != 1 {
 		t.Fatalf("project start = mode %v project %+v sessions %d", m.mode, m.selectedProject, len(m.sessions))
 	}
@@ -718,7 +718,7 @@ func TestCurrentProjectStartsInWorkspaceAndGReturnsToProjects(t *testing.T) {
 
 func TestSecurityDetailReturnsToSecuritySurface(t *testing.T) {
 	sessions := []telemetry.Session{{SessionID: "risk", ProjectID: "p1", ProjectName: "agent-gate", ToolCalls: 2, Taint: true}}
-	m := build(sessions, Scope{StartGlobal: true}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, sampleNow)
+	m := build(sessions, Scope{StartGlobal: true}, func(string) ([]schema.TelemetryEvent, error) { return nil, nil }, nil, sampleNow)
 	m = must(m.Update(key("tab")))
 	if m.surface != surfaceSecurity || len(m.sessions) != 1 {
 		t.Fatalf("security = surface %v sessions %d", m.surface, len(m.sessions))
