@@ -37,6 +37,21 @@ func TestPowerShellCommandVerb(t *testing.T) {
 	}
 }
 
+// Hook payloads carry the capturing machine's path separators; parsing them
+// must give the same answer on every GOOS (CI runs this on linux and darwin,
+// where filepath.ToSlash would be a no-op on backslash paths).
+func TestPathParsingIsHostOSIndependent(t *testing.T) {
+	if got := commandVerb([]string{`C:\Program Files\Git\bin\git.exe`, "push"}); got != "git" {
+		t.Fatalf("commandVerb windows path = %q, want git", got)
+	}
+	if got := commandVerb([]string{"/usr/bin/git", "push"}); got != "git" {
+		t.Fatalf("commandVerb posix path = %q, want git", got)
+	}
+	if got := programName(`C:\Tools\Git.EXE`); got != "git" {
+		t.Fatalf("programName windows path = %q, want git", got)
+	}
+}
+
 func TestNormalizePowerShellVerbIsNotPOSIXGarbage(t *testing.T) {
 	raw, err := json.Marshal(map[string]any{
 		"session_id":      "ps-session",

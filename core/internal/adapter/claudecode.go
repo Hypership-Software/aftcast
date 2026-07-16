@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"path"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -226,10 +224,19 @@ func commandVerb(toks []string) string {
 		if envAssignRe.MatchString(tok) {
 			continue
 		}
-		base := path.Base(filepath.ToSlash(tok))
-		return strings.TrimSuffix(base, ".exe")
+		return strings.TrimSuffix(pathBase(tok), ".exe")
 	}
 	return ""
+}
+
+// pathBase returns the last path element for either separator. Hook payloads
+// carry the capturing machine's separators, so parsing must not vary with the
+// OS the parser happens to run on (filepath.ToSlash is a no-op off Windows).
+func pathBase(tok string) string {
+	if i := strings.LastIndexAny(tok, `/\`); i >= 0 {
+		return tok[i+1:]
+	}
+	return tok
 }
 
 func splitMCP(tool string) (server, name string) {

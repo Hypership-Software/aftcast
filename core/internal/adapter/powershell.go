@@ -1,8 +1,6 @@
 package adapter
 
 import (
-	"path"
-	"path/filepath"
 	"strings"
 )
 
@@ -53,7 +51,7 @@ func powerShellLineVerb(line string) string {
 		case isPowerShellKeyword(tok):
 			continue
 		default:
-			base := strings.TrimSuffix(path.Base(filepath.ToSlash(tok)), ".exe")
+			base := strings.TrimSuffix(pathBase(tok), ".exe")
 			if base != "" && base != "." {
 				return base
 			}

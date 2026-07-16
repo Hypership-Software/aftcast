@@ -2,8 +2,6 @@ package adapter
 
 import (
 	"errors"
-	"path"
-	"path/filepath"
 	"strings"
 
 	"github.com/Hypership-Software/aftcast/internal/schema"
@@ -424,6 +422,5 @@ func isAcceptedLongOption(name, full string, minimum int) bool {
 }
 
 func programName(tok string) string {
-	base := path.Base(filepath.ToSlash(tok))
-	return strings.TrimSuffix(strings.ToLower(base), ".exe")
+	return strings.TrimSuffix(strings.ToLower(pathBase(tok)), ".exe")
 }
