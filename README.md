@@ -11,22 +11,32 @@ persisted. The local record contains operational metadata such as timings,
 repository-relative paths, invoked skills, risk classifications, and numeric
 line-change counts.
 
-## Install from source
+## Install
 
-Release artifacts are not yet published; building from source is the supported
-path. You need Git, Go 1.25+, and Claude Code.
+macOS / Linux:
 
 ```bash
-git clone https://github.com/Hypership-Software/aftcast.git
-cd aftcast
-mkdir -p dist
-cd core
-CGO_ENABLED=0 go build -trimpath -o ../dist/aftcast ./cmd/aftcast
-cd ..
-./dist/aftcast init
+curl -fsSL https://raw.githubusercontent.com/Hypership-Software/aftcast/main/install.sh | sh
 ```
 
-`aftcast init` prints each action it takes and verifies the local hook endpoint.
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/Hypership-Software/aftcast/main/install.ps1 | iex
+```
+
+One line does everything: it downloads the [latest release](https://github.com/Hypership-Software/aftcast/releases)
+binary for your platform, verifies its checksum, and runs `aftcast init` —
+which installs to `~/.aftcast/bin`, adds that to PATH, starts the daemon, and
+wires the Claude Code hooks. `init` prints each action it takes and verifies
+the local hook endpoint.
+
+To pin a release instead of latest:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Hypership-Software/aftcast/main/install.sh | AFTCAST_VERSION=v0.1.0 sh
+```
+
 Open a new terminal after it finishes (or reload your shell), then verify:
 
 ```bash
@@ -91,6 +101,21 @@ This is the open-source core of Aftcast (Apache-2.0), mirrored from a private
 monorepo where development happens. `core/` is the Go binary — adapters, audit
 log, telemetry read-model, analytics, and the terminal UI. History is mirrored;
 issues are welcome here.
+
+## Install from source
+
+If there is no release binary for your platform (or you prefer to build your
+own), you need Git, Go 1.25+, and Claude Code:
+
+```bash
+git clone https://github.com/Hypership-Software/aftcast.git
+cd aftcast/core
+CGO_ENABLED=0 go build -trimpath -o aftcast ./cmd/aftcast
+./aftcast init
+```
+
+`init` copies the binary into `~/.aftcast/bin`, so the build artifact can be
+deleted afterwards.
 
 ## Development
 
