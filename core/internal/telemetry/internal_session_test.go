@@ -173,8 +173,35 @@ func TestFoldSessionsInfersLocalProjectName(t *testing.T) {
 	if got["tie"].ProjectName != wantTie {
 		t.Fatalf("tie ProjectName = %q, want lexicographic %q", got["tie"].ProjectName, wantTie)
 	}
-	if got["mismatch"].ProjectName != "" || got["deleted"].ProjectName != "" {
-		t.Fatalf("unproven names must stay empty: mismatch=%q deleted=%q", got["mismatch"].ProjectName, got["deleted"].ProjectName)
+	// A session id that no observed repository proves falls back to where the
+	// files demonstrably live — a remote rename kills the old id forever, and
+	// orphaning that history into "other project" is worse than trusting the
+	// session's own file evidence.
+	if got["mismatch"].ProjectName != filepath.Base(repoB) {
+		t.Fatalf("mismatch ProjectName = %q, want file-evidence fallback %q", got["mismatch"].ProjectName, filepath.Base(repoB))
+	}
+	if got["deleted"].ProjectName != "" {
+		t.Fatalf("deleted ProjectName = %q, want empty — no repository on disk proves anything", got["deleted"].ProjectName)
+	}
+}
+
+func TestFoldSessionsProjectNameSurvivesRemoteRename(t *testing.T) {
+	repo := makeTestRepo(t, "atlas", "git@github.com:acme/atlas-old.git")
+	_, oldID := project.Identify(repo)
+
+	config := "[remote \"origin\"]\n\turl = git@github.com:acme/aftcast-new.git\n"
+	if err := os.WriteFile(filepath.Join(repo, ".git", "config"), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, newID := project.Identify(repo); newID == oldID {
+		t.Fatalf("fixture broken: rename must change the project id")
+	}
+
+	got := foldSessions([]schema.TelemetryEvent{
+		fileEvent("renamed", oldID, filepath.Join(repo, "main.go")),
+	})
+	if len(got) != 1 || got[0].ProjectName != filepath.Base(repo) {
+		t.Fatalf("renamed-remote session ProjectName = %q, want %q", got[0].ProjectName, filepath.Base(repo))
 	}
 }
 

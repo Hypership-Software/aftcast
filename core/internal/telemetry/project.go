@@ -247,9 +247,21 @@ func observedToolMS(events []schema.TelemetryEvent) int64 {
 }
 
 // inferredProjectName resolves a human label from files already observed in the
-// local audit log. A v2 project id must match the repository proof; legacy rows
-// use the most frequently observed repository, with a stable tie-break.
+// local audit log. An exact id match against the repository proof wins; when no
+// observed repository proves the session's id — a renamed remote kills the old
+// id forever — the majority of the session's own file evidence names it instead.
+// Legacy id-less rows use the same majority rule, with a stable tie-break.
 func inferredProjectName(projectID string, files map[string]struct{}) string {
+	if name := majorityRepositoryName(projectID, files); name != "" {
+		return name
+	}
+	if projectID == "" {
+		return ""
+	}
+	return majorityRepositoryName("", files)
+}
+
+func majorityRepositoryName(projectID string, files map[string]struct{}) string {
 	counts := make(map[string]int)
 	for file := range files {
 		root, id, ok := project.Repository(filepath.Dir(file))
