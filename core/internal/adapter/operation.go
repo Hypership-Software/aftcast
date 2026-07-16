@@ -37,6 +37,62 @@ func observedOperation(tool string, class schema.ToolClass, argv []string) schem
 }
 
 func execOperation(argv []string) schema.Operation {
+	best := schema.OperationExecute
+	for _, segment := range splitArgvSegments(argv) {
+		if op := segmentOperation(segment); operationRank(op) > operationRank(best) {
+			best = op
+		}
+	}
+	return best
+}
+
+func splitArgvSegments(argv []string) [][]string {
+	var segments [][]string
+	var current []string
+	flush := func() {
+		if len(current) > 0 {
+			segments = append(segments, current)
+			current = nil
+		}
+	}
+	for _, tok := range argv {
+		switch tok {
+		case "&&", "||", "|", ";", "&":
+			flush()
+			continue
+		}
+		if trimmed := strings.TrimRight(tok, ";"); trimmed != tok {
+			if trimmed != "" {
+				current = append(current, trimmed)
+			}
+			flush()
+			continue
+		}
+		current = append(current, tok)
+	}
+	flush()
+	return segments
+}
+
+// operationRank orders exec operations by how much a mixed command reveals
+// about the work: a chained `cd core && go test ./...` is a test run, not a
+// directory change.
+func operationRank(op schema.Operation) int {
+	switch op {
+	case schema.OperationTest:
+		return 4
+	case schema.OperationLint:
+		return 3
+	case schema.OperationFormat:
+		return 2
+	case schema.OperationInspect:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func segmentOperation(argv []string) schema.Operation {
 	for len(argv) > 0 && envAssignRe.MatchString(argv[0]) {
 		argv = argv[1:]
 	}
