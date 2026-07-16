@@ -1,16 +1,6 @@
 <div align="center">
 
-```txt
- █████  ███████ ████████  ██████  █████  ███████ ████████
-██   ██ ██         ██    ██      ██   ██ ██         ██
-███████ █████      ██    ██      ███████ ███████    ██
-██   ██ ██         ██    ██      ██   ██      ██    ██
-██   ██ ██         ██     ██████ ██   ██ ███████    ██
-```
-
-**See what your agents actually do.**
-
-**Local observability for AI coding agents.**
+<img src="assets/banner.png" alt="Aftcast — see what your agents actually do. Local observability for AI coding agents.">
 
 [![npm version](https://img.shields.io/npm/v/aftcast?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/aftcast)
 [![npm downloads](https://img.shields.io/npm/dm/aftcast?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/aftcast)
