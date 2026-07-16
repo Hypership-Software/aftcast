@@ -95,6 +95,26 @@ Never recorded: prompts, file contents, command text, code, or credentials.
 Nothing is exported and nothing phones home; the record lives entirely in
 `~/.aftcast` on your machine.
 
+## Where the data lives
+
+Everything Aftcast stores is a plain file under `~/.aftcast` — there is no
+database server:
+
+| Path | What it is |
+|---|---|
+| `log/events.jsonl` | The record itself — append-only JSON Lines, one metadata event per line. Each line is HMAC-chained to the one before it, so any edit, deletion, or reorder is detectable. This is the single source of truth. |
+| `log/checkpoints.jsonl` | Periodic anchors of the hash chain (every 100 events). |
+| `audit.key` | The local key the chain is computed with. |
+| `spool/` | Short-lived buffer for hook events that arrive while the daemon is down; drained into the log when it starts. |
+| `policies/` | Risk-classification policy files; the built-in starter set ships embedded in the binary, this is where yours go. |
+| `bin/`, `daemon.json`, `daemon.log` | The installed binary and daemon state. |
+
+Is it a database? Not on disk. Aftcast uses embedded SQLite (pure Go, no
+server) as a read model, but only in memory: every `aftcast` launch rebuilds
+it fresh from the log, so there is no database file to manage, migrate, or
+corrupt. The JSONL log is the whole record — inspect it with any text tool,
+back it up by copying the directory.
+
 ## About this repository
 
 This is the open-source core of Aftcast (Apache-2.0), mirrored from a private
