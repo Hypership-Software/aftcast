@@ -180,3 +180,7 @@ uses the pure-Go `modernc.org/sqlite` driver.
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Hypership-Software/aftcast&type=date&legend=top-left)](https://www.star-history.com/?repos=Hypership-Software%2Faftcast&type=date&legend=top-left)
+
+## License
+
+Apache-2.0 © 2026 [Hypership Ltd](https://hypership.tech). See [LICENSE](LICENSE) and [NOTICE](NOTICE).

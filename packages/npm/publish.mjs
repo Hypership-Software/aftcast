@@ -45,6 +45,13 @@ if (!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version)) {
 }
 const dist = path.resolve(distArg);
 const metaSrc = path.join(path.dirname(fileURLToPath(import.meta.url)), 'aftcast');
+const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+function copyLegalFiles(dir) {
+  for (const f of ['LICENSE', 'NOTICE']) {
+    fs.copyFileSync(path.join(repoRoot, f), path.join(dir, f));
+  }
+}
 
 function npm(cwd, ...npmArgs) {
   const r = spawnSync('npm', npmArgs, {
@@ -79,11 +86,13 @@ function stagePlatform(target) {
     description: `Aftcast prebuilt binary for ${target.os}/${target.cpu}. Install the 'aftcast' package instead of this one.`,
     os: [target.os],
     cpu: [target.cpu],
-    files: ['bin'],
+    files: ['bin', 'NOTICE'],
     license: 'Apache-2.0',
+    author: 'Hypership Ltd (https://hypership.tech)',
     repository: { type: 'git', url: 'git+https://github.com/Hypership-Software/aftcast.git' },
   };
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
+  copyLegalFiles(dir);
   return { name, dir };
 }
 
@@ -96,6 +105,7 @@ function stageMeta(platforms) {
   pkg.version = version;
   pkg.optionalDependencies = Object.fromEntries(platforms.map((p) => [p.name, version]));
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
+  copyLegalFiles(dir);
   return { name: 'aftcast', dir };
 }
 
