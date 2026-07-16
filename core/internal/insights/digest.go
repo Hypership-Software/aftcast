@@ -19,7 +19,7 @@ import (
 // event sequence behind `r` as raw JSON.
 func renderTrace(sess telemetry.Session, evs []schema.TelemetryEvent) string {
 	turns := buildTrace(evs)
-	sections := []string{verdictHeader(sess, turns)}
+	sections := []string{verdictHeader(sess, turns, analytics.ObservedTimeline(evs))}
 	sections = append(sections, ui.Bold("Work mix")+"\n"+renderSessionWorkMix(evs))
 	if hs := sessionHighlightLines(sess, turns); len(hs) > 0 {
 		sections = append(sections, ui.Bold("Highlights")+"\n"+strings.Join(hs, "\n"))
@@ -32,7 +32,7 @@ func renderTrace(sess telemetry.Session, evs []schema.TelemetryEvent) string {
 
 // verdictHeader deliberately omits tool-call and turn counts. Those are capture
 // implementation details; developers need elapsed time and the code changed.
-func verdictHeader(sess telemetry.Session, turns []traceTurn) string {
+func verdictHeader(sess telemetry.Session, turns []traceTurn, timeline analytics.Timeline) string {
 	projectName := sess.ProjectName
 	if projectName == "" {
 		projectName = "other project"
@@ -46,6 +46,11 @@ func verdictHeader(sess telemetry.Session, turns []traceTurn) string {
 	timing := []string{"Session " + ui.Hint(shortID(sess.SessionID))}
 	if d := humanizeDuration(sess.DurationMS); d != "" {
 		timing = append(timing, "wall span "+d)
+	}
+	if timeline.WaitingMS > 0 && timeline.ActiveMS > 0 {
+		timing = append(timing,
+			"active "+humanizeDuration(timeline.ActiveMS),
+			"waiting on you "+humanizeDuration(timeline.WaitingMS))
 	}
 	toolMS := observedToolTime(turns)
 	if toolMS == 0 {

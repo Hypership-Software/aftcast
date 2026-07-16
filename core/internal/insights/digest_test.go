@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Hypership-Software/aftcast/internal/analytics"
 	"github.com/Hypership-Software/aftcast/internal/schema"
 	"github.com/Hypership-Software/aftcast/internal/telemetry"
 )
@@ -33,6 +34,25 @@ func TestSessionDetailHeaderUsesObservedDeveloperMetrics(t *testing.T) {
 		"Session e4b91a20 · wall span 1h 44m · observed tool time 1m 47s",
 		"17 files changed · +312 / −84 observed · 1 invoked skill",
 	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("session detail missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestSessionDetailAttributesWallSpanWhenUserWaitDominates(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	sess := telemetry.Session{SessionID: "gap-session", ProjectName: "agent-gate", Outcome: "success", DurationMS: 1890000}
+	events := []schema.TelemetryEvent{
+		{EventType: schema.EventUserPrompt, TS: "2026-07-16T08:00:00Z"},
+		{EventType: schema.EventPreTool, TS: "2026-07-16T08:00:30Z", ToolUseID: "a", ToolClass: schema.ClassFileRead, Operation: schema.OperationRead},
+		{EventType: schema.EventPostTool, TS: "2026-07-16T08:00:40Z", ToolUseID: "a", ToolOK: schema.OutcomeOK, LatencyMS: 10000},
+		{EventType: schema.EventStop, TS: "2026-07-16T08:01:00Z"},
+		{EventType: schema.EventUserPrompt, TS: "2026-07-16T08:31:00Z"},
+		{EventType: schema.EventStop, TS: "2026-07-16T08:31:30Z"},
+	}
+	out := renderTrace(sess, events)
+	for _, want := range []string{"active 1m 30s", "waiting on you 30m"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("session detail missing %q:\n%s", want, out)
 		}
@@ -272,7 +292,7 @@ func TestVerdictHeaderNamesRepositoryAndExplicitTimeUnits(t *testing.T) {
 		{Index: 3, Calls: 2, DurMS: 5},
 		{Index: 4, Calls: 8, DurMS: 5000},
 	}
-	got := verdictHeader(sess, turns)
+	got := verdictHeader(sess, turns, analytics.Timeline{})
 	for _, want := range []string{
 		"agent-gate · feature · succeeded",
 		"wall span 1h 44m",
