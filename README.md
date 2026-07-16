@@ -25,6 +25,12 @@ Windows (PowerShell):
 irm https://raw.githubusercontent.com/Hypership-Software/aftcast/main/install.ps1 | iex
 ```
 
+Or with npm — if you run Claude Code, you already have it:
+
+```bash
+npx aftcast@latest init
+```
+
 One line does everything: it downloads the [latest release](https://github.com/Hypership-Software/aftcast/releases)
 binary for your platform, verifies its checksum, and runs `aftcast init` —
 which installs to `~/.aftcast/bin`, adds that to PATH, starts the daemon, and

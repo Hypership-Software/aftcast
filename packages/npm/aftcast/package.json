@@ -1,0 +1,28 @@
+{
+  "name": "aftcast",
+  "version": "0.0.0-dev",
+  "description": "Local observability for AI coding agents - a tamper-evident record of every tool call, with insights and coaching. Installs the aftcast binary for your platform.",
+  "bin": {
+    "aftcast": "bin/aftcast.js"
+  },
+  "files": [
+    "bin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hypership-Software/aftcast.git"
+  },
+  "homepage": "https://github.com/Hypership-Software/aftcast#readme",
+  "keywords": [
+    "claude-code",
+    "ai-agents",
+    "observability",
+    "audit",
+    "telemetry"
+  ],
+  "optionalDependencies": {}
+}
