@@ -56,16 +56,19 @@ function npm(cwd, ...npmArgs) {
 }
 
 async function alreadyPublished(name) {
-  const res = await fetch(`https://registry.npmjs.org/${name}/${version}`);
+  const res = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}/${version}`);
   return res.status === 200;
 }
 
+// Platform packages are scoped: unscoped <name>-win32-x64 style names from a
+// young account trip npm's spam detection (observed live on the first v0.1.0
+// publish attempt); a scope is an owned namespace, so the heuristics don't apply.
 function stagePlatform(target) {
-  const name = `aftcast-${target.os}-${target.cpu}`;
+  const name = `@aftcast/${target.os}-${target.cpu}`;
   const binName = target.goos === 'windows' ? 'aftcast.exe' : 'aftcast';
   const srcBin = path.join(dist, `${target.goos}-${target.goarch}`, binName);
   if (!fs.existsSync(srcBin)) return null;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `${name}-`));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `aftcast-${target.os}-${target.cpu}-`));
   fs.mkdirSync(path.join(dir, 'bin'));
   fs.copyFileSync(srcBin, path.join(dir, 'bin', binName));
   fs.chmodSync(path.join(dir, 'bin', binName), 0o755);
@@ -114,7 +117,7 @@ for (const { name, dir } of [...platforms, stageMeta(platforms)]) {
   } else if (await alreadyPublished(name)) {
     console.log(`skipped ${name}@${version} (already on the registry)`);
   } else {
-    npm(dir, 'publish');
+    npm(dir, 'publish', '--access', 'public');
     console.log(`published ${name}@${version}`);
   }
 }
