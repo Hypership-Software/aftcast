@@ -29,7 +29,7 @@ func acquireInstanceLock(dir string) (release func(), ok bool, err error) {
 // /dev/null, so it outlives the launching process and holds no terminal.
 func spawnDetached(bin, home string) (int, error) {
 	cmd := exec.Command(bin, "daemon", "run")
-	cmd.Env = append(os.Environ(), "GATED_HOME="+home)
+	cmd.Env = append(os.Environ(), "AFTCAST_HOME="+home)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	devNull, err := os.OpenFile(os.DevNull, os.O_RDONLY, 0)
 	if err != nil {

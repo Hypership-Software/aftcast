@@ -112,7 +112,7 @@ func renderScopedEmpty(global, hasHistory bool) string {
 			ui.Hint("? help · q quit")
 	}
 	return "Nothing captured yet — start a Claude Code session in a wired project.\n" +
-		ui.Hint("Check `gated status` if you expected data.")
+		ui.Hint("Check `aftcast status` if you expected data.")
 }
 
 func renderEmptyList(coach analytics.PlanAssociation, empty string) string {

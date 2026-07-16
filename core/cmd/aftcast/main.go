@@ -19,9 +19,9 @@ import (
 )
 
 func helpText() string {
-	return ui.Bold("gated — local observability for AI coding agents") + `
+	return ui.Bold("aftcast — local observability for AI coding agents") + `
 
-usage: gated <command>
+usage: aftcast <command>
 
 commands:
   init         wire Claude Code hooks and start the observer daemon
@@ -99,9 +99,9 @@ func run(args []string) int {
 
 // insightsCmd opens the project-scoped insights TUI, falling back to the global
 // view with --all. The "not set up" hint only shows when hooks are unwired AND
-// there is no captured data, so history stays reachable after `gated uninstall`
+// there is no captured data, so history stays reachable after `aftcast uninstall`
 // and a settings-read error can't hide a populated dashboard. This is also what
-// bare `gated` dispatches to.
+// bare `aftcast` dispatches to.
 func insightsCmd(args []string) int {
 	global := false
 	for _, a := range args {
@@ -110,7 +110,7 @@ func insightsCmd(args []string) int {
 		}
 	}
 	wired := install.HooksWired(install.Options{})
-	notSetUp := ui.Hint("Aftcast isn't set up yet — run `gated init`.")
+	notSetUp := ui.Hint("Aftcast isn't set up yet — run `aftcast init`.")
 	store, err := svc.OpenReadModel("")
 	if err != nil {
 		if !wired {
@@ -142,7 +142,7 @@ func insightsCmd(args []string) int {
 // writes one fingerprint's evidence bundle to stdout for an agent to encode.
 func coachCmd(args []string) int {
 	usage := func() int {
-		fmt.Fprintln(os.Stderr, "usage: gated coach [export <id>]")
+		fmt.Fprintln(os.Stderr, "usage: aftcast coach [export <id>]")
 		return 2
 	}
 	if len(args) > 0 && (args[0] != "export" || len(args) != 2) {
@@ -167,7 +167,7 @@ func coachCmd(args []string) int {
 
 // fail prints a styled error line to stderr and returns exit code 1.
 func fail(cmd string, err error) int {
-	fmt.Fprintf(os.Stderr, "%s gated %s: %v\n", ui.Bad("error:"), cmd, err)
+	fmt.Fprintf(os.Stderr, "%s aftcast %s: %v\n", ui.Bad("error:"), cmd, err)
 	return 1
 }
 
@@ -187,10 +187,10 @@ func daemon(args []string) int {
 		}
 		return 0
 	case "install", "uninstall":
-		fmt.Fprintf(os.Stderr, "%s OS-service registration is not wired yet — run `gated daemon run` in the foreground for now.\n", ui.Warn("gated daemon "+sub+":"))
+		fmt.Fprintf(os.Stderr, "%s OS-service registration is not wired yet — run `aftcast daemon run` in the foreground for now.\n", ui.Warn("aftcast daemon "+sub+":"))
 		return 2
 	default:
-		fmt.Fprintln(os.Stderr, "usage: gated daemon <run>")
+		fmt.Fprintln(os.Stderr, "usage: aftcast daemon <run>")
 		return 2
 	}
 }

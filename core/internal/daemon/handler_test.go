@@ -132,7 +132,7 @@ func TestHandlePostToolRecordsOnlyAndSkipsEval(t *testing.T) {
 }
 
 func TestServeRoundTrip(t *testing.T) {
-	t.Setenv("GATED_IPC_ID", "daemon-serve-test")
+	t.Setenv("AFTCAST_IPC_ID", "daemon-serve-test")
 	ln, err := ipc.Listen()
 	if err != nil {
 		t.Fatal(err)

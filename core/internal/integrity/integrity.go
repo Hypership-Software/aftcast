@@ -29,8 +29,8 @@ type Drift struct {
 // Config points the checker at what to verify. An empty field skips that check.
 type Config struct {
 	SettingsPath string // harness settings file that must contain our hook entries
-	HookMarker   string // substring our hook entries carry (e.g. the daemon URL or "gated hook")
-	BinaryPath   string // the running gated binary
+	HookMarker   string // substring our hook entries carry (e.g. the daemon URL or "aftcast hook")
+	BinaryPath   string // the running aftcast binary
 	BinaryHash   string // expected SHA-256 hex from the install manifest
 }
 

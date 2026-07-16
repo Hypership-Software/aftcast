@@ -241,7 +241,7 @@ func TestRenderScopedEmpty(t *testing.T) {
 		{name: "project has history", hasHistory: true, want: []string{"No Aftcast activity for this project in the last 7 days.", "Press g to view all projects"}},
 		{name: "project has no history", want: []string{"No Aftcast activity for this project yet.", "Press g to view all projects"}},
 		{name: "global has history", global: true, hasHistory: true, want: []string{"No Aftcast activity in the last 7 days.", "? help"}},
-		{name: "global has no history", global: true, want: []string{"Nothing captured yet", "gated status"}},
+		{name: "global has no history", global: true, want: []string{"Nothing captured yet", "aftcast status"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

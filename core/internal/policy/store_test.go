@@ -46,9 +46,9 @@ func TestStarterSetEnforces(t *testing.T) {
 	check("clean fetch asks", schema.RiskUnknown,
 		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassNetFetch, Domain: "example.com"})
 	check("self-dir write denied", schema.RiskDanger,
-		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassFileWrite, Files: []string{"/home/dev/.gated/policies/x.cedar"}})
+		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassFileWrite, Files: []string{"/home/dev/.aftcast/policies/x.cedar"}})
 	check("self-disable denied", schema.RiskDanger,
-		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"gated"}, Argv: []string{"gated", "off"}})
+		schema.Descriptor{SessionID: "s", ToolClass: schema.ClassExec, Verbs: []string{"aftcast"}, Argv: []string{"aftcast", "off"}})
 }
 
 func TestLoadWithStarterKeepsBaselineAndLayersUser(t *testing.T) {

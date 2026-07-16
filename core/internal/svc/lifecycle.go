@@ -22,7 +22,7 @@ var spawnDaemon = spawnDetached
 // EnsureOptions configures Ensure.
 type EnsureOptions struct {
 	Home    string        // gate state dir; "" resolves like Options.Home
-	Bin     string        // gated binary path; "" => os.Executable()
+	Bin     string        // aftcast binary path; "" => os.Executable()
 	WaitFor time.Duration // readiness deadline; 0 => defaultEnsureWait
 }
 
@@ -48,7 +48,7 @@ func Ensure(opts EnsureOptions) (info Info, started bool, err error) {
 	if bin == "" {
 		exe, err := os.Executable()
 		if err != nil {
-			return Info{}, false, fmt.Errorf("locate gated binary: %w", err)
+			return Info{}, false, fmt.Errorf("locate aftcast binary: %w", err)
 		}
 		bin = exe
 	}

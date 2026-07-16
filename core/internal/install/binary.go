@@ -12,9 +12,9 @@ import (
 // shim launch it by this name from <home>/bin.
 func binaryName() string {
 	if runtime.GOOS == "windows" {
-		return "gated.exe"
+		return "aftcast.exe"
 	}
-	return "gated"
+	return "aftcast"
 }
 
 // sourceBinary resolves the binary to install from: the caller-provided path, else

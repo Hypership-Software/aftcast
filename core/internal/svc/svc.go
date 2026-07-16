@@ -4,7 +4,7 @@
 // HTTP hook listener). Every hook is recorded and classified; the daemon returns
 // no decision, so Aftcast observes without blocking.
 //
-// It runs in the foreground (`gated daemon run`); OS-service auto-start and a
+// It runs in the foreground (`aftcast daemon run`); OS-service auto-start and a
 // periodic read-model projection tick are deferred (the HMAC log is the source of
 // truth, the projection a downstream rebuild).
 package svc
@@ -41,9 +41,9 @@ const (
 )
 
 // Options configures a daemon run. The zero value is a valid production run
-// against ~/.gated on the default hook port.
+// against ~/.aftcast on the default hook port.
 type Options struct {
-	// Home is the gate's state directory. "" => $GATED_HOME, else ~/.gated.
+	// Home is the gate's state directory. "" => $AFTCAST_HOME, else ~/.aftcast.
 	Home string
 	// HTTPPort is the preferred hook port. 0 => ipc.DefaultHTTPPort, with a
 	// fallback scan if taken (the bound port is reported in Info).
@@ -87,7 +87,7 @@ func Run(ctx context.Context, opts Options) error {
 
 	logf := opts.Logf
 	if logf == nil {
-		l := log.New(os.Stderr, "gated: ", log.LstdFlags)
+		l := log.New(os.Stderr, "aftcast: ", log.LstdFlags)
 		logf = func(f string, a ...any) { l.Printf(f, a...) }
 	}
 
@@ -229,11 +229,11 @@ func resolveHome(home string) string {
 	if home != "" {
 		return home
 	}
-	if env := os.Getenv("GATED_HOME"); env != "" {
+	if env := os.Getenv("AFTCAST_HOME"); env != "" {
 		return env
 	}
 	h, _ := os.UserHomeDir()
-	return filepath.Join(h, ".gated")
+	return filepath.Join(h, ".aftcast")
 }
 
 // loadOrCreateKey returns the HMAC key at path, generating a fresh 32-byte key

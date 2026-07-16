@@ -1,5 +1,5 @@
 // Package project resolves a working directory to a stable, opaque project
-// identity shared by the capture hook and the `gated` client. Only the hash is
+// identity shared by the capture hook and the `aftcast` client. Only the hash is
 // ever persisted; neither the path nor the remote URL leaves this process.
 package project
 

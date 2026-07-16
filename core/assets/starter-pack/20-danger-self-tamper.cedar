@@ -1,7 +1,9 @@
-// Classify tampering with Atlas itself as DANGER: the agent reading/writing the
-// gate's own state directory, or trying to disable Atlas. This surfaces "the
-// agent tried to turn off its own monitoring" as a risk signal — it does not
-// prevent it (non-removability is the managed tier's job, ADR-007).
+// Classify tampering with Aftcast itself as DANGER: the agent reading/writing
+// the observer's own state directory, or trying to disable Aftcast. This
+// surfaces "the agent tried to turn off its own monitoring" as a risk signal —
+// it does not prevent it (non-removability is the managed tier's job, ADR-007).
+// The legacy .gated path and binary name stay covered: pre-rename installs
+// exist and their state deserves the same signal.
 @id("danger-self-directory-access")
 forbid (
     principal,
@@ -10,7 +12,7 @@ forbid (
 )
 when {
     context has file &&
-    (context.file like "*/.gated/*" || context.file like "*/.atlas/*")
+    (context.file like "*/.aftcast/*" || context.file like "*/.gated/*")
 };
 
 @id("danger-self-disable")
@@ -20,6 +22,6 @@ forbid (
     resource
 )
 when {
-    context.verbs.contains("gated") &&
+    (context.verbs.contains("aftcast") || context.verbs.contains("gated")) &&
     (context.argv.contains("off") || context.argv.contains("uninstall"))
 };

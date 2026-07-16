@@ -11,7 +11,7 @@ func TestVersionSubcommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("version failed: %v: %s", err, out)
 	}
-	if !strings.Contains(string(out), "gated") {
+	if !strings.Contains(string(out), "aftcast") {
 		t.Fatalf("want name, got: %s", out)
 	}
 }

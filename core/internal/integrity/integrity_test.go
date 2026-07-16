@@ -19,7 +19,7 @@ func TestNoDriftWhenIntact(t *testing.T) {
 	dir := t.TempDir()
 	settings := filepath.Join(dir, "settings.json")
 	writeFile(t, settings, `{"hooks":{"PreToolUse":[{"hooks":[{"type":"http","url":"http://127.0.0.1:47100/hook"}]}]}}`)
-	bin := filepath.Join(dir, "gated")
+	bin := filepath.Join(dir, "aftcast")
 	writeFile(t, bin, "binary-v1")
 	hash, err := hashFile(bin)
 	if err != nil {
@@ -52,7 +52,7 @@ func TestDriftWhenSettingsUnreadable(t *testing.T) {
 
 func TestDriftWhenBinaryAltered(t *testing.T) {
 	dir := t.TempDir()
-	bin := filepath.Join(dir, "gated")
+	bin := filepath.Join(dir, "aftcast")
 	writeFile(t, bin, "binary-v1")
 	original, err := hashFile(bin)
 	if err != nil {

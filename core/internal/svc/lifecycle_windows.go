@@ -40,7 +40,7 @@ const (
 
 func spawnDetached(bin, home string) (int, error) {
 	cmd := exec.Command(bin, "daemon", "run")
-	cmd.Env = append(os.Environ(), "GATED_HOME="+home)
+	cmd.Env = append(os.Environ(), "AFTCAST_HOME="+home)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: detachedProcess | createNewProcessGroup,
 		HideWindow:    true,

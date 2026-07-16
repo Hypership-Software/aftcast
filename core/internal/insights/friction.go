@@ -80,10 +80,10 @@ func renderFriction(clusters []analytics.FrictionCluster) string {
 	for _, c := range shown {
 		lines = append(lines,
 			"  "+frictionLine(c),
-			"    "+ui.Hint("→ gated coach export "+c.Slug()))
+			"    "+ui.Hint("→ aftcast coach export "+c.Slug()))
 	}
 	if rest := len(clusters) - len(shown); rest > 0 {
-		lines = append(lines, "  "+ui.Hint(fmt.Sprintf("…%d more worth a look · gated coach", rest)))
+		lines = append(lines, "  "+ui.Hint(fmt.Sprintf("…%d more worth a look · aftcast coach", rest)))
 	}
 	return strings.Join(lines, "\n")
 }
