@@ -175,7 +175,7 @@ func extract(d *schema.Descriptor, class schema.ToolClass, h ccHook) string {
 			toks = strings.Fields(in.Command)
 		}
 		d.Argv = toks
-		if v := commandVerb(toks); v != "" {
+		if v := execVerb(h.ToolName, in.Command, toks); v != "" {
 			d.Verbs = []string{v}
 		}
 		return in.Command
@@ -205,6 +205,15 @@ func extract(d *schema.Descriptor, class schema.ToolClass, h ccHook) string {
 		d.Skill = in.Skill
 	}
 	return ""
+}
+
+// execVerb picks the verb extractor by shell dialect. A PowerShell command
+// never falls back to the POSIX token walk — a wrong verb is worse than none.
+func execVerb(tool, command string, toks []string) string {
+	if dialect, ok := deliveryDialect(tool); ok && dialect == dialectPowerShell {
+		return powerShellCommandVerb(command)
+	}
+	return commandVerb(toks)
 }
 
 // commandVerb returns the invoked program's name. It skips leading NAME=value
