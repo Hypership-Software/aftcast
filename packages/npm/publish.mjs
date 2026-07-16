@@ -63,8 +63,9 @@ async function alreadyPublished(name) {
 // Platform packages are scoped: unscoped <name>-win32-x64 style names from a
 // young account trip npm's spam detection (observed live on the first v0.1.0
 // publish attempt); a scope is an owned namespace, so the heuristics don't apply.
+// @hypership-tech is the publishing account's user scope - no org required.
 function stagePlatform(target) {
-  const name = `@aftcast/${target.os}-${target.cpu}`;
+  const name = `@hypership-tech/aftcast-${target.os}-${target.cpu}`;
   const binName = target.goos === 'windows' ? 'aftcast.exe' : 'aftcast';
   const srcBin = path.join(dist, `${target.goos}-${target.goarch}`, binName);
   if (!fs.existsSync(srcBin)) return null;

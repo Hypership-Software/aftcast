@@ -4,12 +4,12 @@
 const { spawnSync } = require('node:child_process');
 
 const PLATFORM_PACKAGES = {
-  'darwin arm64': '@aftcast/darwin-arm64',
-  'darwin x64': '@aftcast/darwin-x64',
-  'linux arm64': '@aftcast/linux-arm64',
-  'linux x64': '@aftcast/linux-x64',
-  'win32 arm64': '@aftcast/win32-arm64',
-  'win32 x64': '@aftcast/win32-x64',
+  'darwin arm64': '@hypership-tech/aftcast-darwin-arm64',
+  'darwin x64': '@hypership-tech/aftcast-darwin-x64',
+  'linux arm64': '@hypership-tech/aftcast-linux-arm64',
+  'linux x64': '@hypership-tech/aftcast-linux-x64',
+  'win32 arm64': '@hypership-tech/aftcast-win32-arm64',
+  'win32 x64': '@hypership-tech/aftcast-win32-x64',
 };
 
 const key = `${process.platform} ${process.arch}`;
