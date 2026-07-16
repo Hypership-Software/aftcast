@@ -1,13 +1,42 @@
-# Aftcast
+<div align="center">
 
-Aftcast is a local observability layer for AI coding agents. It watches Claude
-Code's tool calls, records a tamper-evident metadata trail, and turns that trail
-into a project-first view of what shipped, how long the work took, what changed,
-where the agent needed recovery, and what keeps failing often enough to deserve
-a permanent fix.
+```txt
+  /$$$$$$  /$$$$$$$$ /$$$$$$$$ /$$$$$$   /$$$$$$   /$$$$$$  /$$$$$$$$
+ /$$__  $$| $$_____/|__  $$__//$$__  $$ /$$__  $$ /$$__  $$|__  $$__/
+| $$  \ $$| $$         | $$  | $$  \__/| $$  \ $$| $$  \__/   | $$
+| $$$$$$$$| $$$$$      | $$  | $$      | $$$$$$$$|  $$$$$$    | $$
+| $$__  $$| $$__/      | $$  | $$      | $$__  $$ \____  $$   | $$
+| $$  | $$| $$         | $$  | $$    $$| $$  | $$ /$$  \ $$   | $$
+| $$  | $$| $$         | $$  |  $$$$$$/| $$  | $$|  $$$$$$/   | $$
+|__/  |__/|__/         |__/   \______/ |__/  |__/ \______/    |__/
+```
 
-Aftcast observes; it never blocks a tool call. Prompts and file contents are not
-persisted. The local record contains operational metadata such as timings,
+**See what your agents actually do.**
+
+**Local observability for AI coding agents.**
+
+[![npm version](https://img.shields.io/npm/v/aftcast?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/aftcast)
+[![npm downloads](https://img.shields.io/npm/dm/aftcast?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/aftcast)
+[![GitHub stars](https://img.shields.io/github/stars/Hypership-Software/aftcast?style=for-the-badge&logo=github&color=181717)](https://github.com/Hypership-Software/aftcast)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=for-the-badge)](LICENSE)
+
+```bash
+npx aftcast@latest init
+```
+
+Works with **Claude Code** today. Windows, macOS, and Linux.
+
+</div>
+
+---
+
+Aftcast watches Claude Code's tool calls, records a tamper-evident metadata
+trail, and turns that trail into a project-first view of what shipped, how
+long the work took, what changed, where the agent needed recovery, and what
+keeps failing often enough to deserve a permanent fix.
+
+Aftcast observes; it never blocks a tool call. Prompts and file contents are
+not persisted. The local record contains operational metadata such as timings,
 repository-relative paths, invoked skills, risk classifications, and numeric
 line-change counts.
 
@@ -31,11 +60,11 @@ Or with npm — if you run Claude Code, you already have it:
 npx aftcast@latest init
 ```
 
-One line does everything: it downloads the [latest release](https://github.com/Hypership-Software/aftcast/releases)
-binary for your platform, verifies its checksum, and runs `aftcast init` —
-which installs to `~/.aftcast/bin`, adds that to PATH, starts the daemon, and
-wires the Claude Code hooks. `init` prints each action it takes and verifies
-the local hook endpoint.
+Every path does the same thing: it fetches the [latest release](https://github.com/Hypership-Software/aftcast/releases)
+binary for your platform, verifies it, and runs `aftcast init` — which
+installs to `~/.aftcast/bin`, adds that to PATH, starts the daemon, and wires
+the Claude Code hooks. `init` prints each action it takes and verifies the
+local hook endpoint.
 
 To pin a release instead of latest:
 
@@ -53,28 +82,24 @@ aftcast doctor
 `status` should report a running daemon and wired Claude Code hooks. Every check
 in `doctor` should report `ok`.
 
-## Start using it
-
-Start a new Claude Code session after installation so it loads the hooks.
+Start a new Claude Code session after installation so it loads the hooks —
 Aftcast observes sessions from that point forward.
 
-From any Git repository, run:
+## Commands
 
-```bash
-aftcast
-```
-
-That opens the current repository's workspace. `aftcast insights --all` browses
-every observed repository. To see what keeps failing across your sessions —
-the same kind of failure in three or more sessions on two or more days:
-
-```bash
-aftcast coach
-```
-
-`aftcast coach export <id>` writes a plain-English evidence bundle for one of
-those recurring failures: counts, dates, and session references only, never
-command content. Hand it to your agent to encode a permanent fix.
+| Command | What it does |
+|---|---|
+| `aftcast init` | One-time setup: install the binary, add it to PATH, start the daemon, wire the Claude Code hooks |
+| `aftcast` | Open the current repository's workspace — sessions, outcomes, work mix, friction |
+| `aftcast insights --all` | Browse every observed repository |
+| `aftcast coach` | What keeps failing across your sessions often enough to deserve a permanent fix |
+| `aftcast coach export <id>` | Plain-English evidence bundle for one recurring failure — hand it to your agent to encode a fix |
+| `aftcast status` | Daemon and hook health at a glance |
+| `aftcast doctor` | Detailed wiring checks |
+| `aftcast stop` | Stop the background daemon |
+| `aftcast uninstall` | Remove the hooks and PATH entry, stop the daemon — your local history stays |
+| `aftcast daemon run` | Run the daemon in the foreground |
+| `aftcast version` | Print the version |
 
 ## What `aftcast init` changes
 
@@ -121,13 +146,6 @@ it fresh from the log, so there is no database file to manage, migrate, or
 corrupt. The JSONL log is the whole record — inspect it with any text tool,
 back it up by copying the directory.
 
-## About this repository
-
-This is the open-source core of Aftcast (Apache-2.0), mirrored from a private
-monorepo where development happens. `core/` is the Go binary — adapters, audit
-log, telemetry read-model, analytics, and the terminal UI. History is mirrored;
-issues are welcome here.
-
 ## Install from source
 
 If there is no release binary for your platform (or you prefer to build your
@@ -143,6 +161,13 @@ CGO_ENABLED=0 go build -trimpath -o aftcast ./cmd/aftcast
 `init` copies the binary into `~/.aftcast/bin`, so the build artifact can be
 deleted afterwards.
 
+## About this repository
+
+This is the open-source core of Aftcast (Apache-2.0), mirrored from a private
+monorepo where development happens. `core/` is the Go binary — adapters, audit
+log, telemetry read-model, analytics, and the terminal UI; `packages/npm/` is
+the npm distribution. History is mirrored; issues are welcome here.
+
 ## Development
 
 ```bash
@@ -154,3 +179,7 @@ go vet ./...
 
 The binary is CGO-free and cross-compiles for Windows, Linux, and macOS. SQLite
 uses the pure-Go `modernc.org/sqlite` driver.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Hypership-Software/aftcast&type=date&legend=top-left)](https://www.star-history.com/?repos=Hypership-Software%2Faftcast&type=date&legend=top-left)
