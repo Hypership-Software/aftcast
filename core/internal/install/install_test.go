@@ -68,7 +68,7 @@ func TestStatusFlagsPortMismatch(t *testing.T) {
 	}
 	// Settings wired at a different port than the daemon actually bound.
 	settings := filepath.Join(dir, "settings.json")
-	body := fmt.Sprintf(`{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"http","url":"http://127.0.0.1:%d/hook"}]}],"SessionStart":[{"hooks":[{"type":"command","command":"gated hook claudecode"}]}]}}`, port+1)
+	body := fmt.Sprintf(`{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"http","url":"http://127.0.0.1:%d/hook"}]}],"SessionStart":[{"hooks":[{"type":"command","command":"aftcast hook claudecode"}]}]}}`, port+1)
 	if err := os.WriteFile(settings, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestInitStartsDaemonAndPointsHooksAtBoundPort(t *testing.T) {
 	t.Cleanup(func() { ensureDaemon = prev })
 
 	var out bytes.Buffer
-	opts := Options{Home: filepath.Join(dir, "h"), SettingsPath: settings, BinaryPath: "C:/opt/gated.exe"}
+	opts := Options{Home: filepath.Join(dir, "h"), SettingsPath: settings, BinaryPath: "C:/opt/aftcast.exe"}
 	if err := Init(opts, &out); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestInitWritesHooksAndBacksUp(t *testing.T) {
 	opts := Options{
 		Home:         home,
 		SettingsPath: settings,
-		BinaryPath:   "C:/opt/gated.exe",
+		BinaryPath:   "C:/opt/aftcast.exe",
 	}
 	var out bytes.Buffer
 	if err := Init(opts, &out); err != nil {
@@ -208,7 +208,7 @@ func TestInitThenUninstallRestores(t *testing.T) {
 	if err := os.WriteFile(settings, []byte(orig), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	opts := Options{Home: filepath.Join(dir, "h"), SettingsPath: settings, BinaryPath: "C:/opt/gated.exe"}
+	opts := Options{Home: filepath.Join(dir, "h"), SettingsPath: settings, BinaryPath: "C:/opt/aftcast.exe"}
 
 	if err := Init(opts, new(bytes.Buffer)); err != nil {
 		t.Fatal(err)
@@ -238,7 +238,7 @@ func TestInitReportsAddedToPath(t *testing.T) {
 	t.Cleanup(func() { ensurePath = prev })
 
 	var out bytes.Buffer
-	opts := Options{Home: filepath.Join(dir, "h"), SettingsPath: settings, BinaryPath: "C:/opt/gated.exe"}
+	opts := Options{Home: filepath.Join(dir, "h"), SettingsPath: settings, BinaryPath: "C:/opt/aftcast.exe"}
 	if err := Init(opts, &out); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestInitReportsPathFailureWithoutAborting(t *testing.T) {
 	t.Cleanup(func() { ensurePath = prev })
 
 	var out bytes.Buffer
-	opts := Options{Home: filepath.Join(dir, "h"), SettingsPath: settings, BinaryPath: "C:/opt/gated.exe"}
+	opts := Options{Home: filepath.Join(dir, "h"), SettingsPath: settings, BinaryPath: "C:/opt/aftcast.exe"}
 	if err := Init(opts, &out); err != nil {
 		t.Fatalf("Init must not abort on a PATH-wiring failure: %v", err)
 	}
@@ -290,13 +290,13 @@ func TestUninstallReportsPathFailure(t *testing.T) {
 
 func TestResolveSettingsPathHonorsEnv(t *testing.T) {
 	want := filepath.Join(t.TempDir(), "proj", "settings.json")
-	t.Setenv("GATED_SETTINGS", want)
+	t.Setenv("AFTCAST_SETTINGS", want)
 	got, err := resolveSettingsPath("")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got != want {
-		t.Errorf("resolveSettingsPath = %q, want %q (GATED_SETTINGS override)", got, want)
+		t.Errorf("resolveSettingsPath = %q, want %q (AFTCAST_SETTINGS override)", got, want)
 	}
 }
 

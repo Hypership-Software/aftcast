@@ -12,10 +12,10 @@ import (
 	"time"
 )
 
-// instanceID isolates the control-plane endpoint via GATED_IPC_ID. Empty in
+// instanceID isolates the control-plane endpoint via AFTCAST_IPC_ID. Empty in
 // production; set by tests so parallel test binaries don't collide on the one
 // fixed socket/pipe path.
-func instanceID() string { return os.Getenv("GATED_IPC_ID") }
+func instanceID() string { return os.Getenv("AFTCAST_IPC_ID") }
 
 // MaxFrame bounds a single control-plane message — a guard against a hostile or
 // buggy peer. 1 MiB is far above any real descriptor or telemetry event.
@@ -59,7 +59,7 @@ func Dial(timeout time.Duration) (net.Conn, error) { return platformDial(timeout
 
 // DefaultHTTPPort is the fixed localhost port baked into the harness hook
 // settings; it must stay stable across installs. HTTPListen falls back to a
-// nearby port only if it is taken, and `gated doctor` reconciles settings with
+// nearby port only if it is taken, and `aftcast doctor` reconciles settings with
 // the bound port.
 const DefaultHTTPPort = 47100
 

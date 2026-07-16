@@ -26,8 +26,8 @@ func TestRunEnsuresDaemonOnSessionStart(t *testing.T) {
 	prev := ensureDaemon
 	ensureDaemon = func(svc.EnsureOptions) (svc.Info, bool, error) { called = true; return svc.Info{}, true, nil }
 	t.Cleanup(func() { ensureDaemon = prev })
-	t.Setenv("GATED_IPC_ID", "hookcmd-sessionstart")
-	t.Setenv("GATED_HOME", t.TempDir())
+	t.Setenv("AFTCAST_IPC_ID", "hookcmd-sessionstart")
+	t.Setenv("AFTCAST_HOME", t.TempDir())
 
 	Run("claudecode", strings.NewReader(sessionStart), new(bytes.Buffer), new(bytes.Buffer))
 	if !called {
@@ -40,8 +40,8 @@ func TestRunDoesNotEnsureOnToolEvents(t *testing.T) {
 	prev := ensureDaemon
 	ensureDaemon = func(svc.EnsureOptions) (svc.Info, bool, error) { called = true; return svc.Info{}, false, nil }
 	t.Cleanup(func() { ensureDaemon = prev })
-	t.Setenv("GATED_IPC_ID", "hookcmd-notool")
-	t.Setenv("GATED_HOME", t.TempDir())
+	t.Setenv("AFTCAST_IPC_ID", "hookcmd-notool")
+	t.Setenv("AFTCAST_HOME", t.TempDir())
 
 	Run("claudecode", strings.NewReader(preToolBash), new(bytes.Buffer), new(bytes.Buffer))
 	if called {
@@ -85,7 +85,7 @@ const postToolBash = `{"session_id":"t","hook_event_name":"PostToolUse","tool_na
 // The shim observes: it records via the daemon and emits NO decision, even for a
 // dangerous action.
 func TestRunObservesAndEmitsNoDecision(t *testing.T) {
-	t.Setenv("GATED_IPC_ID", "hookcmd-observe")
+	t.Setenv("AFTCAST_IPC_ID", "hookcmd-observe")
 	ln, err := ipc.Listen()
 	if err != nil {
 		t.Fatal(err)
@@ -117,9 +117,9 @@ func TestRunObservesAndEmitsNoDecision(t *testing.T) {
 // With the daemon down, a pre_tool event is spooled and exits 0 (Aftcast does not
 // gate).
 func TestRunPreToolSpoolsWhenDaemonDown(t *testing.T) {
-	t.Setenv("GATED_IPC_ID", "hookcmd-down-pre")
+	t.Setenv("AFTCAST_IPC_ID", "hookcmd-down-pre")
 	home := t.TempDir()
-	t.Setenv("GATED_HOME", home)
+	t.Setenv("AFTCAST_HOME", home)
 
 	var out, errb bytes.Buffer
 	code := Run("claudecode", strings.NewReader(preToolBash), &out, &errb)
@@ -139,9 +139,9 @@ func TestRunPreToolSpoolsWhenDaemonDown(t *testing.T) {
 }
 
 func TestRunPostToolSpoolsWhenDaemonDown(t *testing.T) {
-	t.Setenv("GATED_IPC_ID", "hookcmd-down-post")
+	t.Setenv("AFTCAST_IPC_ID", "hookcmd-down-post")
 	home := t.TempDir()
-	t.Setenv("GATED_HOME", home)
+	t.Setenv("AFTCAST_HOME", home)
 
 	var out, errb bytes.Buffer
 	code := Run("claudecode", strings.NewReader(postToolBash), &out, &errb)
@@ -168,7 +168,7 @@ func TestRunUnknownHarness(t *testing.T) {
 }
 
 func TestLiveReflectsDaemonReachability(t *testing.T) {
-	t.Setenv("GATED_IPC_ID", "hookcmd-live")
+	t.Setenv("AFTCAST_IPC_ID", "hookcmd-live")
 	if Live(500 * time.Millisecond) {
 		t.Error("Live reported true with no daemon listening")
 	}

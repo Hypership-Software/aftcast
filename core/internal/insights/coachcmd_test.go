@@ -69,7 +69,7 @@ func TestCoachReportListsWorthFixing(t *testing.T) {
 	for _, want := range []string{
 		"Worth a permanent fix",
 		"Your agents failed to change directory 4 times across 3 sessions on 3 days this week.",
-		"gated coach export cd-exit-1",
+		"aftcast coach export cd-exit-1",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report missing %q in:\n%s", want, out.String())
@@ -124,7 +124,7 @@ func TestCoachExportUnknownSlug(t *testing.T) {
 	if err == nil {
 		t.Fatalf("want error for unknown fingerprint")
 	}
-	if !strings.Contains(err.Error(), "nope") || !strings.Contains(err.Error(), "gated coach") {
-		t.Fatalf("error should name the id and point at gated coach: %v", err)
+	if !strings.Contains(err.Error(), "nope") || !strings.Contains(err.Error(), "aftcast coach") {
+		t.Fatalf("error should name the id and point at aftcast coach: %v", err)
 	}
 }

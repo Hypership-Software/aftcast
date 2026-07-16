@@ -13,7 +13,7 @@ import (
 func TestInstallBinaryCopiesIntoHomeBin(t *testing.T) {
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")
-	src := filepath.Join(dir, "build", "gated-fresh")
+	src := filepath.Join(dir, "build", "aftcast-fresh")
 	if err := os.MkdirAll(filepath.Dir(src), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestInitInstallsBinaryAndPointsSettingsAtIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A real source binary outside home, so the install actually copies.
-	src := filepath.Join(dir, "build", "gated-fresh.exe")
+	src := filepath.Join(dir, "build", "aftcast-fresh.exe")
 	if err := os.MkdirAll(filepath.Dir(src), 0o755); err != nil {
 		t.Fatal(err)
 	}

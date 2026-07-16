@@ -15,9 +15,9 @@ import (
 func socketPath() string {
 	dir := os.Getenv("XDG_RUNTIME_DIR")
 	if dir == "" {
-		dir = filepath.Join(os.TempDir(), fmt.Sprintf("gated-%d", os.Getuid()))
+		dir = filepath.Join(os.TempDir(), fmt.Sprintf("aftcast-%d", os.Getuid()))
 	}
-	return filepath.Join(dir, "gated"+instanceID()+".sock")
+	return filepath.Join(dir, "aftcast"+instanceID()+".sock")
 }
 
 func platformListen() (net.Listener, error) {

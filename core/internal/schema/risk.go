@@ -64,14 +64,20 @@ const (
 	EventIntegrity       EventType = "integrity"
 )
 
-// SelfCheckSessionID is the session_id `gated init` stamps on the probe it posts
+// SelfCheckSessionID is the session_id `aftcast init` stamps on the probe it posts
 // to prove the hook path is live. It is an operational marker recorded in the
 // audit log, not an agent session, so the read-model excludes it from analytics.
-const SelfCheckSessionID = "gated-init-selfcheck"
+// The legacy value must stay recognized forever: logs written before the rename
+// contain it, and treating it as a real session would resurrect the phantom
+// self-check sessions bug.
+const (
+	SelfCheckSessionID       = "aftcast-init-selfcheck"
+	legacySelfCheckSessionID = "gated-init-selfcheck"
+)
 
 // IsInternalSession reports whether a session_id is an Aftcast-generated marker
 // rather than a real agent session — such events belong in the audit log but not
 // in the analytics read-model.
 func IsInternalSession(id string) bool {
-	return id == SelfCheckSessionID
+	return id == SelfCheckSessionID || id == legacySelfCheckSessionID
 }

@@ -23,7 +23,7 @@ func TestRunSecondInstanceForSameHomeExitsClean(t *testing.T) {
 	t.Cleanup(func() { cancelA(); <-errcA })
 
 	// A different control-plane id isolates the test to the home lock, not the pipe.
-	t.Setenv("GATED_IPC_ID", "svc-single-b")
+	t.Setenv("AFTCAST_IPC_ID", "svc-single-b")
 	ctxB, cancelB := context.WithCancel(context.Background())
 	defer cancelB()
 	readyB := make(chan svc.Info, 1)
@@ -57,9 +57,9 @@ func writeTestDaemonFile(t *testing.T, home string, pid int) {
 }
 
 func TestMain(m *testing.M) {
-	// Re-exec support for TestStop: a child launched with GATED_TEST_BLOCK blocks
+	// Re-exec support for TestStop: a child launched with AFTCAST_TEST_BLOCK blocks
 	// forever so Stop has a real process to terminate.
-	if os.Getenv("GATED_TEST_BLOCK") == "1" {
+	if os.Getenv("AFTCAST_TEST_BLOCK") == "1" {
 		select {}
 	}
 	os.Exit(m.Run())
@@ -100,7 +100,7 @@ func TestStopTerminatesRecordedDaemon(t *testing.T) {
 	}
 
 	child := exec.Command(os.Args[0])
-	child.Env = append(os.Environ(), "GATED_TEST_BLOCK=1")
+	child.Env = append(os.Environ(), "AFTCAST_TEST_BLOCK=1")
 	if err := child.Start(); err != nil {
 		t.Fatal(err)
 	}

@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	pathBlockStart = "# >>> atlas gated >>>"
-	pathBlockEnd   = "# <<< atlas gated <<<"
+	pathBlockStart = "# >>> aftcast >>>"
+	pathBlockEnd   = "# <<< aftcast <<<"
 )
 
 // ensurePathEntry appends an idempotent, marked block to the user's shell profile

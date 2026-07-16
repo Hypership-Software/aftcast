@@ -12,7 +12,7 @@ import (
 )
 
 // CoachReport prints what keeps failing and is worth a permanent fix — the
-// non-TUI twin of the overview card, for `gated coach`.
+// non-TUI twin of the overview card, for `aftcast coach`.
 func CoachReport(store *telemetry.Store, w io.Writer, now time.Time) error {
 	clusters, err := windowedClusters(store, now)
 	if err != nil {
@@ -28,7 +28,7 @@ func CoachReport(store *telemetry.Store, w io.Writer, now time.Time) error {
 	fmt.Fprintln(w)
 	for _, c := range worth {
 		fmt.Fprintf(w, "  %s\n", frictionLine(c))
-		fmt.Fprintf(w, "    %s\n", ui.Hint("→ gated coach export "+c.Slug()))
+		fmt.Fprintf(w, "    %s\n", ui.Hint("→ aftcast coach export "+c.Slug()))
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, ui.Hint("Export a bundle and hand it to your agent to encode the fix."))
@@ -49,7 +49,7 @@ func CoachExport(store *telemetry.Store, slug string, w io.Writer, now time.Time
 			return nil
 		}
 	}
-	return fmt.Errorf("nothing matches %q this week — run gated coach to see what's worth fixing", slug)
+	return fmt.Errorf("nothing matches %q this week — run aftcast coach to see what's worth fixing", slug)
 }
 
 func windowedClusters(store *telemetry.Store, now time.Time) ([]analytics.FrictionCluster, error) {

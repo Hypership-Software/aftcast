@@ -11,7 +11,7 @@ import (
 	winio "github.com/Microsoft/go-winio"
 )
 
-func pipePath() string { return `\\.\pipe\gated` + instanceID() }
+func pipePath() string { return `\\.\pipe\aftcast` + instanceID() }
 
 func platformListen() (net.Listener, error) {
 	sddl, err := ownerOnlySDDL()

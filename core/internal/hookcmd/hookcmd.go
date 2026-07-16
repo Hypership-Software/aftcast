@@ -1,4 +1,4 @@
-// Package hookcmd is the `gated hook` shim. HTTP hooks are the per-call hot path
+// Package hookcmd is the `aftcast hook` shim. HTTP hooks are the per-call hot path
 // (ADR-001); this shim survives only for the SessionStart command-hook fallback,
 // since SessionStart does not fire over HTTP in 2.1.205. Pure observation — it
 // records via the daemon (spooling if it is down) and never blocks or emits a
@@ -37,17 +37,17 @@ var ensureDaemon = svc.Ensure
 func Run(harness string, stdin io.Reader, stdout, stderr io.Writer) int {
 	a, ok := adapter.Get(harness)
 	if !ok {
-		fmt.Fprintf(stderr, "gated: unknown harness %q\n", harness)
+		fmt.Fprintf(stderr, "aftcast: unknown harness %q\n", harness)
 		return 0
 	}
 	raw, err := io.ReadAll(stdin)
 	if err != nil {
-		fmt.Fprintf(stderr, "gated: read hook payload: %v\n", err)
+		fmt.Fprintf(stderr, "aftcast: read hook payload: %v\n", err)
 		return 0
 	}
 	desc, ev, err := a.Normalize("", raw)
 	if err != nil {
-		fmt.Fprintf(stderr, "gated: normalize hook payload: %v\n", err)
+		fmt.Fprintf(stderr, "aftcast: normalize hook payload: %v\n", err)
 		return 0
 	}
 
@@ -61,7 +61,7 @@ func Run(harness string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 	if derr := deliver(daemon.Request{Event: ev, Descriptor: desc}); derr != nil {
 		if serr := spool(ev); serr != nil {
-			fmt.Fprintf(stderr, "gated: spool telemetry: %v\n", serr)
+			fmt.Fprintf(stderr, "aftcast: spool telemetry: %v\n", serr)
 		}
 	}
 	return 0
@@ -117,9 +117,9 @@ func spool(ev schema.TelemetryEvent) error {
 }
 
 func spoolDir() string {
-	if home := os.Getenv("GATED_HOME"); home != "" {
+	if home := os.Getenv("AFTCAST_HOME"); home != "" {
 		return filepath.Join(home, "spool")
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".gated", "spool")
+	return filepath.Join(home, ".aftcast", "spool")
 }

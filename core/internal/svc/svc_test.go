@@ -23,7 +23,7 @@ import (
 // off) and returns once both listeners are bound. cancel + <-errc shut it down.
 func startDaemon(t *testing.T, ipcID string, opts svc.Options) (svc.Info, context.CancelFunc, <-chan error) {
 	t.Helper()
-	t.Setenv("GATED_IPC_ID", ipcID)
+	t.Setenv("AFTCAST_IPC_ID", ipcID)
 	ready := make(chan svc.Info, 1)
 	opts.Ready = ready
 	opts.IntegrityTick = -1 // no background ticker during tests

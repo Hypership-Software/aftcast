@@ -28,16 +28,16 @@ var (
 const (
 	defaultTimeout  = 30 // seconds, per hook
 	defaultHookPort = 47100
-	backupSuffix    = ".gated-backup"
+	backupSuffix    = ".aftcast-backup"
 	probeTimeout    = 2 * time.Second
 )
 
 // Options configures init/uninstall/doctor. The zero value targets the current
-// user's Claude Code settings and ~/.gated (or $GATED_HOME).
+// user's Claude Code settings and ~/.aftcast (or $AFTCAST_HOME).
 type Options struct {
-	Home         string // gate state dir; "" => $GATED_HOME, else ~/.gated
+	Home         string // gate state dir; "" => $AFTCAST_HOME, else ~/.aftcast
 	SettingsPath string // "" => ~/.claude/settings.json
-	BinaryPath   string // gated binary for the SessionStart shim; "" => os.Executable
+	BinaryPath   string // aftcast binary for the SessionStart shim; "" => os.Executable
 	Timeout      int    // per-hook timeout (seconds); 0 => defaultTimeout
 }
 
@@ -49,7 +49,7 @@ type daemonInfo struct {
 }
 
 // Init merges the gate's hook entries into Claude Code's settings (backing up
-// the original first) so the next session is gated and observed. It self-verifies
+// the original first) so the next session is aftcast and observed. It self-verifies
 // the wiring against a running daemon if one is reachable, and prints guidance if
 // not. Writing hooks does not require the daemon to be running.
 func Init(opts Options, w io.Writer) error {
@@ -75,7 +75,7 @@ func Init(opts Options, w io.Writer) error {
 	if added, perr := ensurePath(binDir); perr != nil {
 		fmt.Fprintf(w, "%s could not add %s to PATH (%v) — add it manually\n", ui.Warn("note:"), binDir, perr)
 	} else if added {
-		fmt.Fprintf(w, "added %s to PATH — open a new terminal to use `gated`\n", binDir)
+		fmt.Fprintf(w, "added %s to PATH — open a new terminal to use `aftcast`\n", binDir)
 	}
 
 	cfg, err := hookConfig(opts)
@@ -92,7 +92,7 @@ func Init(opts Options, w io.Writer) error {
 	} else {
 		cfg.HTTPURL = info.HTTPURL
 		if started {
-			fmt.Fprintf(w, "started the Aftcast daemon in the background (port %d); stop it with `gated stop`\n", info.HTTPPort)
+			fmt.Fprintf(w, "started the Aftcast daemon in the background (port %d); stop it with `aftcast stop`\n", info.HTTPPort)
 		} else {
 			fmt.Fprintf(w, "Aftcast daemon already running (port %d)\n", info.HTTPPort)
 		}
@@ -124,7 +124,7 @@ func Init(opts Options, w io.Writer) error {
 
 	if err := selfVerify(cfg.HTTPURL); err != nil {
 		fmt.Fprintf(w, "%s could not verify a running daemon (%v)\n", ui.Warn("note:"), err)
-		fmt.Fprint(w, ui.Hint("      start it with `gated daemon run`, then `gated doctor`.\n"))
+		fmt.Fprint(w, ui.Hint("      start it with `aftcast daemon run`, then `aftcast doctor`.\n"))
 	} else {
 		fmt.Fprintf(w, "%s the daemon answered a probe over the hook endpoint.\n", ui.OK("verified:"))
 	}
@@ -187,7 +187,7 @@ func Doctor(opts Options, w io.Writer) bool {
 	if up {
 		pass("daemon running", true, fmt.Sprintf(" (port %d)", info.HTTPPort))
 	} else {
-		pass("daemon running", false, " — start it with `gated init` or `gated daemon run`")
+		pass("daemon running", false, " — start it with `aftcast init` or `aftcast daemon run`")
 	}
 
 	orig, serr := readSettings(settingsPath)
@@ -199,7 +199,7 @@ func Doctor(opts Options, w io.Writer) bool {
 		match := settingsPointAt(orig, info.HTTPURL)
 		detail := " (" + info.HTTPURL + ")"
 		if !match {
-			detail += " — re-run `gated init` to repoint the hooks"
+			detail += " — re-run `aftcast init` to repoint the hooks"
 		}
 		pass("settings port matches daemon", match, detail)
 	}
@@ -228,21 +228,21 @@ func Status(opts Options, w io.Writer) bool {
 	if up {
 		fmt.Fprintf(w, "daemon:  %s\n", ui.OK(fmt.Sprintf("running (port %d)", info.HTTPPort)))
 	} else {
-		fmt.Fprintf(w, "daemon:  %s%s\n", ui.Bad("not running"), ui.Hint(" — start it with `gated init` or `gated daemon run`"))
+		fmt.Fprintf(w, "daemon:  %s%s\n", ui.Bad("not running"), ui.Hint(" — start it with `aftcast init` or `aftcast daemon run`"))
 	}
 	if wired {
 		fmt.Fprintf(w, "hooks:   %s\n", ui.OK("wired into Claude Code settings"))
 	} else {
-		fmt.Fprintf(w, "hooks:   %s%s\n", ui.Bad("not wired"), ui.Hint(" — run `gated init`"))
+		fmt.Fprintf(w, "hooks:   %s%s\n", ui.Bad("not wired"), ui.Hint(" — run `aftcast init`"))
 	}
 	if !portMatch {
-		fmt.Fprintf(w, "port:    %s\n", ui.Warn(fmt.Sprintf("settings point at a different port than the daemon bound (%d) — re-run `gated init`", info.HTTPPort)))
+		fmt.Fprintf(w, "port:    %s\n", ui.Warn(fmt.Sprintf("settings point at a different port than the daemon bound (%d) — re-run `aftcast init`", info.HTTPPort)))
 	}
 	return up && wired && portMatch
 }
 
 // HooksWired reports whether Aftcast's hooks are present in Claude Code settings,
-// without printing. The bare `gated` command uses it to show a "run gated init"
+// without printing. The bare `aftcast` command uses it to show a "run aftcast init"
 // hint instead of an empty dashboard when Aftcast was never set up.
 func HooksWired(opts Options) bool {
 	settingsPath, err := resolveSettingsPath(opts.SettingsPath)
@@ -264,7 +264,7 @@ func hookConfig(opts Options) (HookConfig, error) {
 	if bin == "" {
 		exe, err := os.Executable()
 		if err != nil {
-			return HookConfig{}, fmt.Errorf("locate gated binary: %w", err)
+			return HookConfig{}, fmt.Errorf("locate aftcast binary: %w", err)
 		}
 		bin = exe
 	}
@@ -291,7 +291,7 @@ func hookConfig(opts Options) (HookConfig, error) {
 // probe records one event as an audit marker that init ran; its reserved
 // session_id keeps it out of the analytics read-model (schema.IsInternalSession).
 func selfVerify(hookURL string) error {
-	payload := fmt.Sprintf(`{"hook_event_name":"PreToolUse","session_id":%q,"tool_name":"Read","tool_input":{"file_path":"/tmp/gated-selfcheck"}}`, schema.SelfCheckSessionID)
+	payload := fmt.Sprintf(`{"hook_event_name":"PreToolUse","session_id":%q,"tool_name":"Read","tool_input":{"file_path":"/tmp/aftcast-selfcheck"}}`, schema.SelfCheckSessionID)
 	client := &http.Client{Timeout: probeTimeout}
 	resp, err := client.Post(hookURL, "application/json", strings.NewReader(payload))
 	if err != nil {
@@ -381,9 +381,9 @@ func resolveSettingsPath(path string) (string, error) {
 	if path != "" {
 		return path, nil
 	}
-	// GATED_SETTINGS redirects the target (a project-level .claude/settings.json,
+	// AFTCAST_SETTINGS redirects the target (a project-level .claude/settings.json,
 	// or a sandbox during testing) so init/doctor never touch the wrong file.
-	if env := os.Getenv("GATED_SETTINGS"); env != "" {
+	if env := os.Getenv("AFTCAST_SETTINGS"); env != "" {
 		return env, nil
 	}
 	home, err := os.UserHomeDir()
@@ -397,11 +397,11 @@ func resolveHome(home string) string {
 	if home != "" {
 		return home
 	}
-	if env := os.Getenv("GATED_HOME"); env != "" {
+	if env := os.Getenv("AFTCAST_HOME"); env != "" {
 		return env
 	}
 	h, _ := os.UserHomeDir()
-	return filepath.Join(h, ".gated")
+	return filepath.Join(h, ".aftcast")
 }
 
 func defaultHookURL() string {

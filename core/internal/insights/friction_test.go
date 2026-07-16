@@ -53,7 +53,7 @@ func TestRenderFrictionCard(t *testing.T) {
 	for _, want := range []string{
 		"Worth a permanent fix · across your projects",
 		"Your agents failed to change directory 20 times across 4 sessions on 3 days this week.",
-		"gated coach export cd-exit-1",
+		"aftcast coach export cd-exit-1",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("card missing %q in:\n%s", want, out)
@@ -78,7 +78,7 @@ func TestRenderFrictionCapsAtTwo(t *testing.T) {
 	if strings.Contains(out, "had go commands fail") {
 		t.Fatalf("third cluster should be behind the more-hint:\n%s", out)
 	}
-	if !strings.Contains(out, "1 more worth a look · gated coach") {
+	if !strings.Contains(out, "1 more worth a look · aftcast coach") {
 		t.Fatalf("more-hint missing:\n%s", out)
 	}
 }

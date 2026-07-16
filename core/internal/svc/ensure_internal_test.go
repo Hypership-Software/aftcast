@@ -37,7 +37,7 @@ func fakeSpawn(t *testing.T) *bool {
 // TestEnsureStartsDaemonWhenDown: with no daemon up, Ensure spawns one, waits
 // until it answers, and reports started=true with the port it bound.
 func TestEnsureStartsDaemonWhenDown(t *testing.T) {
-	t.Setenv("GATED_IPC_ID", "svc-ensure-down")
+	t.Setenv("AFTCAST_IPC_ID", "svc-ensure-down")
 	home := t.TempDir()
 	fakeSpawn(t)
 
@@ -56,7 +56,7 @@ func TestEnsureStartsDaemonWhenDown(t *testing.T) {
 // TestEnsureNoopWhenAlreadyRunning: a daemon already up is detected and returned
 // without spawning a second one.
 func TestEnsureNoopWhenAlreadyRunning(t *testing.T) {
-	t.Setenv("GATED_IPC_ID", "svc-ensure-up")
+	t.Setenv("AFTCAST_IPC_ID", "svc-ensure-up")
 	home := t.TempDir()
 
 	ctx, cancel := context.WithCancel(context.Background())

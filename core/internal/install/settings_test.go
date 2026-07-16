@@ -8,7 +8,7 @@ import (
 )
 
 const testHTTPURL = "http://127.0.0.1:47100/hook"
-const testCommand = "C:/Users/dev/.gated/bin/gated.exe hook claudecode"
+const testCommand = "C:/Users/dev/.aftcast/bin/aftcast.exe hook claudecode"
 
 func testConfig() HookConfig {
 	return HookConfig{HTTPURL: testHTTPURL, Command: testCommand, Timeout: 30}

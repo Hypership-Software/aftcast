@@ -38,7 +38,7 @@ func TestWriteFrameRejectsOversize(t *testing.T) {
 }
 
 func TestControlPlaneRoundTrip(t *testing.T) {
-	t.Setenv("GATED_IPC_ID", "ipc-controlplane-test")
+	t.Setenv("AFTCAST_IPC_ID", "ipc-controlplane-test")
 	ln, err := Listen()
 	if err != nil {
 		t.Fatalf("Listen: %v", err)
