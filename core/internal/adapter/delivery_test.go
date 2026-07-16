@@ -74,6 +74,14 @@ func TestDeliverySignalGitPushVariants(t *testing.T) {
 		{"escaped command substitution literal", `git push origin \$\(literal\)`, schema.DeliveryGitPush},
 		{"escaped glob literal", `git push origin refs/heads/\*`, schema.DeliveryGitPush},
 		{"escaped brace literal", `git push origin \{main,release\}`, schema.DeliveryGitPush},
+		{"stderr redirect", `git push 2>&1`, schema.DeliveryGitPush},
+		{"combined redirect", `git push &> push.log`, schema.DeliveryGitPush},
+		{"redirect in earlier segment", `make build &> build.log && git push`, schema.DeliveryGitPush},
+		{"substitution in earlier segment", `HEAD=$(git rev-parse HEAD) && git push`, schema.DeliveryGitPush},
+		{"quoted heredoc commit then push", "git commit -m \"$(cat <<'EOF'\nmsg\nEOF\n)\" && git push", schema.DeliveryGitPush},
+		{"backgrounded push", `git push &`, ""},
+		{"parenthesised push", `(git push)`, ""},
+		{"push with trailing subshell close", `echo $(true && git push)`, ""},
 	}
 
 	for _, tt := range tests {
@@ -86,7 +94,7 @@ func TestDeliverySignalGitPushVariants(t *testing.T) {
 }
 
 func TestSuccessfulDeliverySignalShellDialects(t *testing.T) {
-	for _, shell := range []string{"Bash", "sh", "/bin/dash", "zsh", "ksh"} {
+	for _, shell := range []string{"Bash", "sh", "/bin/dash", "zsh", "ksh", "PowerShell", "pwsh"} {
 		t.Run(shell, func(t *testing.T) {
 			if got := detectToolCommand(t, shell, "git push"); got != schema.DeliveryGitPush {
 				t.Fatalf("successfulDeliverySignal(%q, git push) = %q, want git_push", shell, got)
@@ -94,11 +102,40 @@ func TestSuccessfulDeliverySignalShellDialects(t *testing.T) {
 		})
 	}
 
-	for _, shell := range []string{"PowerShell", "pwsh", "cmd"} {
-		t.Run(shell, func(t *testing.T) {
-			command := `git push definitely-not-a-remote\; exit 0`
-			if got := detectToolCommand(t, shell, command); got != "" {
-				t.Fatalf("successfulDeliverySignal(%q, %q) = %q, want empty", shell, command, got)
+	t.Run("cmd unsupported", func(t *testing.T) {
+		if got := detectToolCommand(t, "cmd", "git push"); got != "" {
+			t.Fatalf("successfulDeliverySignal(cmd, git push) = %q, want empty", got)
+		}
+	})
+}
+
+func TestDeliverySignalPowerShellDialect(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		want    schema.DeliverySignal
+	}{
+		{"bare push", `git push`, schema.DeliveryGitPush},
+		{"origin branch", `git push origin main`, schema.DeliveryGitPush},
+		{"cd chained", `cd C:\Users\dev\agent-gate; git push`, schema.DeliveryGitPush},
+		{"env assignment first", `$env:GIT_DIR='x'; git push`, schema.DeliveryGitPush},
+		{"stderr redirect", `git push 2>&1`, schema.DeliveryGitPush},
+		{"backslash is not an escape", `git push definitely-not-a-remote\; exit 0`, ""},
+		{"push before masking statement", `git push; if ($?) { Write-Output ok }`, ""},
+		{"variable expansion", `git push origin "$branch"`, ""},
+		{"variable expansion bare", `git push origin $branch`, ""},
+		{"subexpression", `git push origin (git branch --show-current)`, ""},
+		{"backtick escape stays literal", "git push origin `$literal", schema.DeliveryGitPush},
+		{"single quoted dollar literal", `git push origin '$literal'`, schema.DeliveryGitPush},
+		{"call operator", `& git push`, ""},
+		{"piped push", `git push | Tee-Object push.log`, ""},
+		{"dry run", `git push --dry-run`, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := detectToolCommand(t, "PowerShell", tt.command); got != tt.want {
+				t.Fatalf("successfulDeliverySignal(PowerShell, %q) = %q, want %q", tt.command, got, tt.want)
 			}
 		})
 	}

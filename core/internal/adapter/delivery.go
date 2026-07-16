@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"errors"
 	"path"
 	"path/filepath"
 	"strings"
@@ -9,11 +10,26 @@ import (
 	"github.com/google/shlex"
 )
 
+type shellDialect int
+
+const (
+	dialectPOSIX shellDialect = iota
+	dialectPowerShell
+)
+
+func (d shellDialect) escapeChar() byte {
+	if d == dialectPowerShell {
+		return '`'
+	}
+	return '\\'
+}
+
 func successfulDeliverySignal(tool, command string) schema.DeliverySignal {
-	if !isPOSIXShell(tool) {
+	dialect, ok := deliveryDialect(tool)
+	if !ok {
 		return ""
 	}
-	segments, operators, ok := parseShellCommand(command)
+	segments, operators, ok := parseShellCommand(command, dialect)
 	if !ok {
 		return ""
 	}
@@ -36,7 +52,7 @@ func successfulDeliverySignal(tool, command string) schema.DeliverySignal {
 			return ""
 		}
 		if isGitPush(segment.argv) {
-			if hasDynamicShellSyntax(segment.raw) {
+			if hasDynamicShellSyntax(segment.raw, dialect) {
 				return ""
 			}
 			found = true
@@ -48,12 +64,14 @@ func successfulDeliverySignal(tool, command string) schema.DeliverySignal {
 	return ""
 }
 
-func isPOSIXShell(tool string) bool {
+func deliveryDialect(tool string) (shellDialect, bool) {
 	switch programName(tool) {
 	case "bash", "sh", "dash", "zsh", "ksh":
-		return true
+		return dialectPOSIX, true
+	case "powershell", "pwsh":
+		return dialectPowerShell, true
 	default:
-		return false
+		return dialectPOSIX, false
 	}
 }
 
@@ -62,14 +80,14 @@ type shellSegment struct {
 	argv []string
 }
 
-func parseShellCommand(command string) ([]shellSegment, []string, bool) {
-	rawSegments, operators, ok := splitShellCommand(command)
+func parseShellCommand(command string, dialect shellDialect) ([]shellSegment, []string, bool) {
+	rawSegments, operators, ok := splitShellCommand(command, dialect)
 	if !ok {
 		return nil, nil, false
 	}
 	segments := make([]shellSegment, 0, len(rawSegments))
 	for _, raw := range rawSegments {
-		argv, err := shlex.Split(raw)
+		argv, err := segmentFields(raw, dialect)
 		if err != nil || len(argv) == 0 {
 			return nil, nil, false
 		}
@@ -78,9 +96,21 @@ func parseShellCommand(command string) ([]shellSegment, []string, bool) {
 	return segments, operators, true
 }
 
-func hasDynamicShellSyntax(raw string) bool {
+func segmentFields(raw string, dialect shellDialect) ([]string, error) {
+	if dialect == dialectPowerShell {
+		return powerShellFields(raw)
+	}
+	return shlex.Split(raw)
+}
+
+// hasDynamicShellSyntax reports content whose runtime value cannot be read from
+// the text: expansions, substitutions, globs — and unquoted parens, whose
+// grouping this parser does not model. Single quotes protect literally in both
+// dialects; the dialect's escape char protects the next character.
+func hasDynamicShellSyntax(raw string, dialect shellDialect) bool {
 	var quote byte
 	escaped := false
+	escape := dialect.escapeChar()
 	for i := 0; i < len(raw); i++ {
 		ch := raw[i]
 		if escaped {
@@ -93,7 +123,7 @@ func hasDynamicShellSyntax(raw string) bool {
 			}
 			continue
 		}
-		if ch == '\\' {
+		if ch == escape {
 			escaped = true
 			continue
 		}
@@ -111,21 +141,25 @@ func hasDynamicShellSyntax(raw string) bool {
 			}
 			continue
 		}
-		if ch == '$' || ch == '`' {
+		if ch == '$' {
 			return true
 		}
-		if quote == 0 && strings.ContainsRune("*?[{}", rune(ch)) {
+		if dialect == dialectPOSIX && ch == '`' {
+			return true
+		}
+		if quote == 0 && strings.ContainsRune("*?[{}()", rune(ch)) {
 			return true
 		}
 	}
 	return false
 }
 
-func splitShellCommand(command string) ([]string, []string, bool) {
+func splitShellCommand(command string, dialect shellDialect) ([]string, []string, bool) {
 	var segments []string
 	var operators []string
 	var quote byte
 	escaped := false
+	escape := dialect.escapeChar()
 	start := 0
 
 scan:
@@ -136,7 +170,7 @@ scan:
 			continue
 		}
 		if quote != 0 {
-			if quote == '"' && ch == '\\' {
+			if quote == '"' && ch == escape {
 				escaped = true
 				continue
 			}
@@ -145,16 +179,13 @@ scan:
 			}
 			continue
 		}
-		if ch == '\\' {
+		if ch == escape {
 			escaped = true
 			continue
 		}
 		if ch == '\'' || ch == '"' {
 			quote = ch
 			continue
-		}
-		if ch == '(' || ch == ')' || ch == '`' {
-			return nil, nil, false
 		}
 		if ch == '#' && startsShellComment(command, i) {
 			newline := strings.IndexByte(command[i:], '\n')
@@ -170,11 +201,19 @@ scan:
 		width := 1
 		switch ch {
 		case '&':
-			if i+1 >= len(command) || command[i+1] != '&' {
+			switch {
+			case i+1 < len(command) && command[i+1] == '&':
+				operator = "&&"
+				width = 2
+			case i > 0 && command[i-1] == '>':
+				continue // stream duplication: 2>&1, >&2
+			case i+1 < len(command) && command[i+1] == '>':
+				continue // redirect-all: &> log
+			default:
+				// Backgrounding (POSIX) or the call operator (PowerShell):
+				// either way the push's completion is unprovable from exit 0.
 				return nil, nil, false
 			}
-			operator = "&&"
-			width = 2
 		case '|':
 			operator = "|"
 			if i+1 < len(command) && command[i+1] == '|' {
@@ -213,6 +252,59 @@ scan:
 		return nil, nil, false
 	}
 	return segments, operators, true
+}
+
+var errUnterminatedToken = errors.New("adapter: unterminated powershell token")
+
+func powerShellFields(raw string) ([]string, error) {
+	var fields []string
+	var current strings.Builder
+	var quote byte
+	escaped := false
+	inToken := false
+	for i := 0; i < len(raw); i++ {
+		ch := raw[i]
+		switch {
+		case escaped:
+			current.WriteByte(ch)
+			escaped = false
+			inToken = true
+		case quote == '\'':
+			if ch == '\'' {
+				quote = 0
+			} else {
+				current.WriteByte(ch)
+			}
+		case ch == '`':
+			escaped = true
+			inToken = true
+		case quote == '"':
+			if ch == '"' {
+				quote = 0
+			} else {
+				current.WriteByte(ch)
+			}
+		case ch == '\'' || ch == '"':
+			quote = ch
+			inToken = true
+		case ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n':
+			if inToken {
+				fields = append(fields, current.String())
+				current.Reset()
+				inToken = false
+			}
+		default:
+			current.WriteByte(ch)
+			inToken = true
+		}
+	}
+	if quote != 0 || escaped {
+		return nil, errUnterminatedToken
+	}
+	if inToken {
+		fields = append(fields, current.String())
+	}
+	return fields, nil
 }
 
 func startsShellComment(command string, i int) bool {
