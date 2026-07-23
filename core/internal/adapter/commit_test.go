@@ -185,3 +185,19 @@ func TestCommitSHA(t *testing.T) {
 		})
 	}
 }
+
+// transcript_path rides the eval-only Descriptor so the daemon can sample
+// context usage at a stop — it must never reach the persisted event.
+func TestNormalizeCarriesTranscriptPathOnDescriptorOnly(t *testing.T) {
+	d, e := normalize(t, "pretooluse-bash.json")
+	if d.TranscriptPath == "" {
+		t.Error("descriptor transcript_path is empty, want the payload's path")
+	}
+	blob, err := json.Marshal(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(blob), "spike-transcript-0001") {
+		t.Errorf("transcript path leaked into recorded event: %s", blob)
+	}
+}

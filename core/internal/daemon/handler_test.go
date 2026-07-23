@@ -169,3 +169,55 @@ func TestServeRoundTrip(t *testing.T) {
 		t.Errorf("ruleID = %q, want no-exec", resp.RuleID)
 	}
 }
+
+// A stop event samples context occupancy from the harness transcript; every
+// other path leaves it absent. The sampler is optional — a handler built
+// without one records stops unchanged.
+func TestHandleSamplesContextOnStop(t *testing.T) {
+	rec := &fakeRecorder{}
+	h := NewHandler(Deps{
+		Eval:   &fakeEval{v: schema.RiskSafe},
+		Taint:  &fakeTaint{},
+		Record: rec,
+		Sample: func(path string) int64 {
+			if path != "/tmp/session.jsonl" {
+				t.Errorf("sample path = %q", path)
+			}
+			return 92500
+		},
+	})
+	stop := Request{
+		Event:      schema.TelemetryEvent{EventType: schema.EventStop, SessionID: "s"},
+		Descriptor: schema.Descriptor{SessionID: "s", TranscriptPath: "/tmp/session.jsonl"},
+	}
+	if _, err := h.Handle(stop); err != nil {
+		t.Fatal(err)
+	}
+	if got := rec.events[0].ContextTokens; got != 92500 {
+		t.Errorf("context_tokens = %d, want 92500", got)
+	}
+
+	pre := preToolReq()
+	pre.Descriptor.TranscriptPath = "/tmp/session.jsonl"
+	if _, err := h.Handle(pre); err != nil {
+		t.Fatal(err)
+	}
+	if got := rec.events[1].ContextTokens; got != 0 {
+		t.Errorf("pre_tool context_tokens = %d, want 0", got)
+	}
+}
+
+func TestHandleStopWithoutSamplerIsUnchanged(t *testing.T) {
+	rec := &fakeRecorder{}
+	h := handlerWith(&fakeEval{}, &fakeTaint{}, rec)
+	stop := Request{
+		Event:      schema.TelemetryEvent{EventType: schema.EventStop, SessionID: "s"},
+		Descriptor: schema.Descriptor{SessionID: "s", TranscriptPath: "/tmp/session.jsonl"},
+	}
+	if _, err := h.Handle(stop); err != nil {
+		t.Fatal(err)
+	}
+	if got := rec.events[0].ContextTokens; got != 0 {
+		t.Errorf("context_tokens = %d, want 0", got)
+	}
+}

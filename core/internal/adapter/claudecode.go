@@ -45,7 +45,8 @@ type ccHook struct {
 	} `json:"effort"`
 	// ToolResponse is decoded only far enough to extract a commit SHA; the
 	// output itself is content and never reaches the event (ADR-011).
-	ToolResponse json.RawMessage `json:"tool_response"`
+	ToolResponse   json.RawMessage `json:"tool_response"`
+	TranscriptPath string          `json:"transcript_path"`
 }
 
 var exitCodeRe = regexp.MustCompile(`^Exit code (\d+)`)
@@ -64,10 +65,11 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 	}
 
 	desc := schema.Descriptor{
-		Version:   schema.SchemaVersion,
-		SessionID: h.SessionID,
-		ToolRaw:   h.ToolName,
-		Cwd:       h.Cwd,
+		Version:        schema.SchemaVersion,
+		SessionID:      h.SessionID,
+		ToolRaw:        h.ToolName,
+		Cwd:            h.Cwd,
+		TranscriptPath: h.TranscriptPath,
 	}
 	ev := schema.TelemetryEvent{
 		V:              schema.SchemaVersion,

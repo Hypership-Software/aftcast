@@ -33,6 +33,7 @@ import (
 	"github.com/Hypership-Software/aftcast/internal/policy"
 	"github.com/Hypership-Software/aftcast/internal/schema"
 	"github.com/Hypership-Software/aftcast/internal/taint"
+	"github.com/Hypership-Software/aftcast/internal/transcript"
 )
 
 const (
@@ -148,7 +149,7 @@ func Run(ctx context.Context, opts Options) error {
 		ledger.Rebuild(evs)
 	}
 
-	h := daemon.NewHandler(daemon.Deps{Eval: engine, Taint: ledger, Record: alog})
+	h := daemon.NewHandler(daemon.Deps{Eval: engine, Taint: ledger, Record: alog, Sample: transcript.ContextTokens})
 
 	// Drain telemetry the shim spooled while the daemon was down, before accepting
 	// new events (no concurrency during drain).

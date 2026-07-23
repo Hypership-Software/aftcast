@@ -63,7 +63,11 @@ type TelemetryEvent struct {
 	PermissionMode string `json:"permission_mode,omitempty"`
 	Effort         string `json:"effort,omitempty"`
 	CommitSHA      string `json:"commit_sha,omitempty"`
-	PolicyHash     string `json:"policy_hash,omitempty"`
+	// ContextTokens is the context-window occupancy sampled from the harness
+	// transcript at a stop event — a derived number only, never content
+	// (ADR-011). Added later per the append-only rule.
+	ContextTokens int64  `json:"context_tokens,omitempty"`
+	PolicyHash    string `json:"policy_hash,omitempty"`
 	// Project is an opaque 12-hex hash of the project's identity (normalized git
 	// remote or canonical path) — never the path or URL itself. Added later per the
 	// append-only rule; omitempty keeps pre-field events' hashes intact.

@@ -22,6 +22,10 @@ type Descriptor struct {
 	MCPTool     string    `json:"mcp_tool,omitempty"`
 	Skill       string    `json:"skill,omitempty"`
 	Tainted     bool      `json:"taint"`
+	// TranscriptPath locates the harness's local transcript so the daemon can
+	// sample context usage at a stop. Eval-only like Cwd — the path names a
+	// content file and stays out of the persisted event.
+	TranscriptPath string `json:"transcript_path,omitempty"`
 }
 
 func (d Descriptor) Canonical() ([]byte, error) {

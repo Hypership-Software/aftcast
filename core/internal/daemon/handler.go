@@ -39,6 +39,9 @@ type Deps struct {
 	Eval   Evaluator
 	Taint  Tainter
 	Record Recorder
+	// Sample derives context-window occupancy from a harness transcript path.
+	// Optional: nil records stop events without a sample.
+	Sample func(path string) int64
 }
 
 // Handler classifies and records one Request. The action always proceeds — Aftcast
@@ -54,6 +57,9 @@ func (h *Handler) Handle(req Request) (Response, error) {
 	if req.Event.EventType != schema.EventPreTool {
 		ev := req.Event
 		ev.Taint = h.deps.Taint.IsTainted(ev.SessionID)
+		if ev.EventType == schema.EventStop && h.deps.Sample != nil {
+			ev.ContextTokens = h.deps.Sample(req.Descriptor.TranscriptPath)
+		}
 		if err := h.deps.Record.Record(ev); err != nil {
 			return Response{}, err
 		}
