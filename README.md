@@ -81,6 +81,7 @@ Aftcast observes sessions from that point forward.
 | `aftcast insights --all` | Browse every observed repository |
 | `aftcast coach` | What keeps failing across your sessions often enough to deserve a permanent fix |
 | `aftcast coach export <id>` | Plain-English evidence bundle for one recurring failure — hand it to your agent to encode a fix |
+| `aftcast handoff [ref]` | Digest skeleton for a branch or commit: how the change came to exist, with a verifiable attestation |
 | `aftcast status` | Daemon and hook health at a glance |
 | `aftcast doctor` | Detailed wiring checks |
 | `aftcast stop` | Stop the background daemon |

@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Hypership-Software/aftcast/internal/handoff"
 	"github.com/Hypership-Software/aftcast/internal/hookcmd"
 	"github.com/Hypership-Software/aftcast/internal/insights"
 	"github.com/Hypership-Software/aftcast/internal/install"
@@ -29,6 +30,7 @@ commands:
   doctor       detailed wiring checks
   insights     browse captured sessions and analytics
   coach        what keeps failing and is worth a permanent fix (coach export <id>)
+  handoff      digest skeleton for a branch or commit (how it came to exist)
   stop         stop the background daemon
   uninstall    remove hooks and stop the daemon
   daemon run   run the daemon in the foreground
@@ -91,6 +93,8 @@ func run(args []string) int {
 		return insightsCmd(args[1:])
 	case "coach":
 		return coachCmd(args[1:])
+	case "handoff":
+		return handoffCmd(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s\n", args[0], helpText())
 		return 2
@@ -163,6 +167,47 @@ func coachCmd(args []string) int {
 		return fail("coach", err)
 	}
 	return 0
+}
+
+// handoffCmd assembles the digest skeleton for a ref (branch or commit,
+// defaulting to HEAD) and writes it to the working directory.
+func handoffCmd(args []string) int {
+	ref := ""
+	if len(args) > 0 {
+		ref = args[0]
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fail("handoff", err)
+	}
+	out, err := handoff.Run("", cwd, ref)
+	if err != nil {
+		return fail("handoff", err)
+	}
+	name := ref
+	if name == "" {
+		name = "HEAD"
+	}
+	path := "aftcast-handoff-" + sanitizeRef(name) + ".md"
+	if err := os.WriteFile(path, out, 0o600); err != nil {
+		return fail("handoff", err)
+	}
+	fmt.Printf("wrote %s — the narrative sections carry instructions for your own Claude; review before sharing.\n", path)
+	return 0
+}
+
+// sanitizeRef makes a ref safe for use in a filename: every byte outside
+// [A-Za-z0-9._-] becomes a hyphen.
+func sanitizeRef(ref string) string {
+	b := []byte(ref)
+	for i, c := range b {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '.', c == '_', c == '-':
+		default:
+			b[i] = '-'
+		}
+	}
+	return string(b)
 }
 
 // fail prints a styled error line to stderr and returns exit code 1.
