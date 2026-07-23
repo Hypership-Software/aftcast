@@ -40,8 +40,26 @@ func TestCoachUnknownSubcommand(t *testing.T) {
 	}
 }
 
+func TestEvidenceBadSince(t *testing.T) {
+	if code := run([]string{"evidence", "--since", "bogus"}); code != 2 {
+		t.Fatalf("evidence --since bogus: exit = %d, want 2", code)
+	}
+}
+
+func TestEvidenceSinceMissingValue(t *testing.T) {
+	if code := run([]string{"evidence", "--since"}); code != 2 {
+		t.Fatalf("evidence --since (no value): exit = %d, want 2", code)
+	}
+}
+
 func TestHelpMentionsCoach(t *testing.T) {
 	if !strings.Contains(helpText(), "coach") {
 		t.Fatalf("help text should list the coach command")
+	}
+}
+
+func TestHelpMentionsEvidence(t *testing.T) {
+	if !strings.Contains(helpText(), "evidence") {
+		t.Fatalf("help text should list the evidence command")
 	}
 }

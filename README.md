@@ -82,6 +82,7 @@ Aftcast observes sessions from that point forward.
 | `aftcast coach` | What keeps failing across your sessions often enough to deserve a permanent fix |
 | `aftcast coach export <id>` | Plain-English evidence bundle for one recurring failure — hand it to your agent to encode a fix |
 | `aftcast coach distill <id>` | Skill-drafting bundle for one recurring failure — transcript coordinates only, tainted sessions excluded, hand it to your own Claude to draft a SKILL.md |
+| `aftcast evidence` | Period evidence document for your team: what shipped, provably |
 | `aftcast handoff [ref]` | Digest skeleton for a branch or commit: how the change came to exist, with a verifiable attestation |
 | `aftcast status` | Daemon and hook health at a glance |
 | `aftcast doctor` | Detailed wiring checks |
@@ -90,8 +91,8 @@ Aftcast observes sessions from that point forward.
 | `aftcast daemon run` | Run the daemon in the foreground |
 | `aftcast version` | Print the version |
 
-`coach export` and `coach distill` write counts, dates, and session and prompt
-references only, never command content.
+`coach export`, `coach distill`, and `evidence` write counts, dates, and session
+and prompt references only, never command content.
 
 ## What `aftcast init` changes
 

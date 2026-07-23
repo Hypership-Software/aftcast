@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -30,6 +32,7 @@ commands:
   doctor       detailed wiring checks
   insights     browse captured sessions and analytics
   coach        what keeps failing and is worth a permanent fix (coach export <id>, coach distill <id>)
+  evidence     period evidence document for your team: what shipped, provably (--since <N>d, default 14)
   handoff      digest skeleton for a branch or commit (how it came to exist)
   stop         stop the background daemon
   uninstall    remove hooks and stop the daemon
@@ -93,6 +96,8 @@ func run(args []string) int {
 		return insightsCmd(args[1:])
 	case "coach":
 		return coachCmd(args[1:])
+	case "evidence":
+		return evidenceCmd(args[1:])
 	case "handoff":
 		return handoffCmd(args[1:])
 	default:
@@ -179,6 +184,59 @@ func coachCmd(args []string) int {
 		return fail("coach", err)
 	}
 	return 0
+}
+
+// evidenceCmd writes the period evidence document to stdout: per-repository
+// facts attested against the audit chain. --since <N>d sets the window
+// (default 14 days); any other form is a usage error.
+func evidenceCmd(args []string) int {
+	usage := func() int {
+		fmt.Fprintln(os.Stderr, "usage: aftcast evidence [--since <N>d]")
+		return 2
+	}
+	days := 14
+	switch len(args) {
+	case 0:
+	case 2:
+		if args[0] != "--since" {
+			return usage()
+		}
+		n, err := parseSinceDays(args[1])
+		if err != nil {
+			return usage()
+		}
+		days = n
+	default:
+		return usage()
+	}
+	store, err := svc.OpenReadModel("")
+	if err != nil {
+		return fail("evidence", err)
+	}
+	defer store.Close()
+	rep, err := svc.VerifyLog("")
+	if err != nil {
+		return fail("evidence", err)
+	}
+	now := time.Now()
+	if err := insights.EvidenceReport(store, now.AddDate(0, 0, -days), rep, os.Stdout, now); err != nil {
+		return fail("evidence", err)
+	}
+	return 0
+}
+
+// parseSinceDays accepts exactly the "<N>d" form (e.g. "14d"): a positive
+// integer with a trailing "d". Anything else is rejected — the caller turns
+// that into a usage error rather than guessing what was meant.
+func parseSinceDays(s string) (int, error) {
+	if !strings.HasSuffix(s, "d") {
+		return 0, fmt.Errorf("since: want form like 14d")
+	}
+	n, err := strconv.Atoi(strings.TrimSuffix(s, "d"))
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("since: want form like 14d")
+	}
+	return n, nil
 }
 
 // handoffCmd assembles the digest skeleton for a ref (branch or commit,
