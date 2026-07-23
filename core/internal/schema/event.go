@@ -51,10 +51,19 @@ type TelemetryEvent struct {
 	// the main agent); AgentID is that subagent's instance id; PromptID ties the
 	// event — parent or subagent — to the human prompt that initiated it. Added
 	// later per the append-only rule (omitempty leaves old events' hashes intact).
-	Subagent   string `json:"subagent,omitempty"`
-	AgentID    string `json:"agent_id,omitempty"`
-	PromptID   string `json:"prompt_id,omitempty"`
-	PolicyHash string `json:"policy_hash,omitempty"`
+	Subagent string `json:"subagent,omitempty"`
+	AgentID  string `json:"agent_id,omitempty"`
+	PromptID string `json:"prompt_id,omitempty"`
+	// PermissionMode and Effort are the harness's session posture at the moment
+	// of the call (e.g. "bypassPermissions", "xhigh"). CommitSHA is extracted
+	// from a successful `git commit`'s output — the join key from this session's
+	// conduct to the git/PR record of its outcome; only the SHA is captured,
+	// never the surrounding output (ADR-011). Added later per the append-only
+	// rule (omitempty leaves old events' hashes intact).
+	PermissionMode string `json:"permission_mode,omitempty"`
+	Effort         string `json:"effort,omitempty"`
+	CommitSHA      string `json:"commit_sha,omitempty"`
+	PolicyHash     string `json:"policy_hash,omitempty"`
 	// Project is an opaque 12-hex hash of the project's identity (normalized git
 	// remote or canonical path) — never the path or URL itself. Added later per the
 	// append-only rule; omitempty keeps pre-field events' hashes intact.

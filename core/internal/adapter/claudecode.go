@@ -37,8 +37,15 @@ type ccHook struct {
 	// ExpansionType/CommandName come from a UserPromptExpansion hook. The sibling
 	// command_args and prompt fields are content and are deliberately not decoded,
 	// so they cannot leak into the log (ADR-011 metadata-only).
-	ExpansionType string `json:"expansion_type"`
-	CommandName   string `json:"command_name"`
+	ExpansionType  string `json:"expansion_type"`
+	CommandName    string `json:"command_name"`
+	PermissionMode string `json:"permission_mode"`
+	Effort         struct {
+		Level string `json:"level"`
+	} `json:"effort"`
+	// ToolResponse is decoded only far enough to extract a commit SHA; the
+	// output itself is content and never reaches the event (ADR-011).
+	ToolResponse json.RawMessage `json:"tool_response"`
 }
 
 var exitCodeRe = regexp.MustCompile(`^Exit code (\d+)`)
@@ -63,16 +70,18 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 		Cwd:       h.Cwd,
 	}
 	ev := schema.TelemetryEvent{
-		V:         schema.SchemaVersion,
-		SessionID: h.SessionID,
-		Harness:   "claudecode",
-		EventType: eventType(event),
-		ToolRaw:   h.ToolName,
-		ToolUseID: h.ToolUseID,
-		LatencyMS: h.DurationMS,
-		PromptID:  h.PromptID,
-		AgentID:   h.AgentID,
-		Subagent:  h.AgentType,
+		V:              schema.SchemaVersion,
+		SessionID:      h.SessionID,
+		Harness:        "claudecode",
+		EventType:      eventType(event),
+		ToolRaw:        h.ToolName,
+		ToolUseID:      h.ToolUseID,
+		LatencyMS:      h.DurationMS,
+		PromptID:       h.PromptID,
+		AgentID:        h.AgentID,
+		Subagent:       h.AgentType,
+		PermissionMode: h.PermissionMode,
+		Effort:         h.Effort.Level,
 	}
 
 	root, id := project.Identify(h.Cwd)
@@ -108,6 +117,7 @@ func (claudeCode) Normalize(event string, raw []byte) (schema.Descriptor, schema
 		}
 		if ev.ToolOK == schema.OutcomeOK && ev.ToolClass == schema.ClassExec {
 			ev.DeliverySignal = successfulDeliverySignal(h.ToolName, command)
+			ev.CommitSHA = commitSHA(h.ToolName, command, responseStdout(h.ToolResponse))
 		}
 	}
 

@@ -1,0 +1,25 @@
+{
+  "session_id": "spike-sess-1111-2222-3333",
+  "transcript_path": "C:\\Users\\dev\\.claude\\projects\\C--Users-dev-project\\spike-transcript-0001.jsonl",
+  "cwd": "C:\\Users\\dev\\project",
+  "prompt_id": "spike-prompt-aaaa-bbbb",
+  "permission_mode": "default",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git add -A && git commit -m \"fix(adapter): capture the join key\"",
+    "description": "Stage and commit the adapter change"
+  },
+  "tool_response": {
+    "stdout": "[main bb16536] fix(adapter): capture the join key\n 5 files changed, 214 insertions(+), 32 deletions(-)",
+    "stderr": "",
+    "interrupted": false,
+    "isImage": false,
+    "noOutputExpected": false
+  },
+  "tool_use_id": "toolu_SAMPLEgitcommit01",
+  "duration_ms": 812
+}
