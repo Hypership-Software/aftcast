@@ -1,6 +1,7 @@
 package analytics
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -30,6 +31,20 @@ func okCall(session, ts string) schema.TelemetryEvent {
 		ToolRaw:   "Bash",
 		Verbs:     []string{"cd"},
 		ToolOK:    schema.OutcomeOK,
+	}
+}
+
+func failEvent(session, ts string, verb string, exitCode int, promptID string) schema.TelemetryEvent {
+	return schema.TelemetryEvent{
+		TS:           ts,
+		SessionID:    session,
+		EventType:    schema.EventPostTool,
+		ToolClass:    schema.ClassExec,
+		ToolRaw:      "Bash",
+		Verbs:        []string{verb},
+		ToolOK:       schema.OutcomeFailed,
+		BashExitCode: exitCode,
+		PromptID:     promptID,
 	}
 }
 
@@ -163,4 +178,27 @@ func slugsOf(clusters []FrictionCluster) []string {
 		out[i] = c.Slug()
 	}
 	return out
+}
+
+func TestFrictionClusterCarriesPromptCoordinates(t *testing.T) {
+	events := []schema.TelemetryEvent{
+		failEvent("s1", "2026-07-20T10:00:00Z", "cd", 1, "prompt-a"),
+		failEvent("s1", "2026-07-20T10:05:00Z", "cd", 1, "prompt-a"),
+		failEvent("s1", "2026-07-20T10:10:00Z", "cd", 1, "prompt-b"),
+		failEvent("s2", "2026-07-21T10:00:00Z", "cd", 1, "prompt-c"),
+	}
+	clusters := FrictionClusters(events)
+	if len(clusters) != 1 {
+		t.Fatalf("got %d clusters, want 1", len(clusters))
+	}
+	byID := map[string][]string{}
+	for _, s := range clusters[0].Sessions {
+		byID[s.SessionID] = s.PromptIDs
+	}
+	if got := byID["s1"]; !reflect.DeepEqual(got, []string{"prompt-a", "prompt-b"}) {
+		t.Errorf("s1 PromptIDs = %v, want [prompt-a prompt-b] (deduped, first-seen order)", got)
+	}
+	if got := byID["s2"]; !reflect.DeepEqual(got, []string{"prompt-c"}) {
+		t.Errorf("s2 PromptIDs = %v", got)
+	}
 }

@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ type SessionFailures struct {
 	SessionID string
 	Failures  int
 	First     time.Time
+	PromptIDs []string
 }
 
 // FrictionCluster is one recurring failure signature: the same kind of tool
@@ -107,6 +109,9 @@ func FrictionClusters(events []schema.TelemetryEvent) []FrictionCluster {
 			acc.sessions[e.SessionID] = sess
 		}
 		sess.Failures++
+		if e.PromptID != "" && !slices.Contains(sess.PromptIDs, e.PromptID) {
+			sess.PromptIDs = append(sess.PromptIDs, e.PromptID)
+		}
 		ts, err := time.Parse(time.RFC3339Nano, e.TS)
 		if err != nil {
 			continue
