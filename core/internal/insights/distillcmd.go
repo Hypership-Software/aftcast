@@ -16,7 +16,10 @@ import (
 // transcript content. A tainted session's coordinates are never offered —
 // skill persistence is injection persistence, so a skill drafted from a
 // session that touched untrusted input would persist whatever that source
-// injected.
+// injected. The same reasoning extends to the record itself: a broken HMAC
+// chain means the taint gate's own inputs can't be trusted, so a broken
+// chain refuses coordinates and the drafting scaffold exactly like an
+// all-tainted cluster does.
 func CoachDistill(store *telemetry.Store, slug string, rep audit.Report, w io.Writer, now time.Time) error {
 	clusters, err := windowedClusters(store, now)
 	if err != nil {
@@ -32,6 +35,14 @@ func CoachDistill(store *telemetry.Store, slug string, rep audit.Report, w io.Wr
 	}
 	if !found {
 		return fmt.Errorf("nothing matches %q this week — run aftcast coach to see what's worth fixing", slug)
+	}
+
+	fmt.Fprintln(w, "# Distill a skill from a recurring failure")
+	fmt.Fprintln(w)
+	writeDistillAttestation(w, rep)
+	if !rep.OK {
+		fmt.Fprintln(w, "This cluster cannot be distilled: the record that would supply its coordinates just failed verification.")
+		return nil
 	}
 
 	sessions, err := store.Sessions()
@@ -52,9 +63,6 @@ func CoachDistill(store *telemetry.Store, slug string, rep audit.Report, w io.Wr
 		}
 	}
 
-	fmt.Fprintln(w, "# Distill a skill from a recurring failure")
-	fmt.Fprintln(w)
-	writeDistillAttestation(w, rep)
 	fmt.Fprintf(w, "Your agents %s %d times across %s %s.\n", describeFriction(target), target.Failures,
 		countNoun(len(target.Sessions), "session", "sessions"), bundleDates(target))
 	fmt.Fprintln(w, "This bundle contains counts, dates, and session and prompt references only —")
@@ -65,8 +73,12 @@ func CoachDistill(store *telemetry.Store, slug string, rep audit.Report, w io.Wr
 		fmt.Fprintln(w, "## Coordinates")
 		fmt.Fprintln(w)
 		for _, s := range clean {
-			fmt.Fprintf(w, "- session %s — %s, prompts %s — transcript at ~/.claude/projects/<project-dir>/<session-id>.jsonl\n",
-				shortID(s.SessionID), countNoun(s.Failures, "failure", "failures"), joinPromptIDs(s.PromptIDs))
+			// The full session id is what a reader substitutes into <session-id> in
+			// the transcript template below — shortID's 8-char prefix can't resolve
+			// to a real transcript filename, so this is the one place shortID must
+			// not be used.
+			fmt.Fprintf(w, "- session %s — %s — transcript at ~/.claude/projects/<project-dir>/<session-id>.jsonl\n",
+				s.SessionID, promptCoordinates(s.Failures, s.PromptIDs))
 		}
 		fmt.Fprintln(w)
 	}
@@ -114,9 +126,18 @@ func writeDistillAttestation(w io.Writer, rep audit.Report) {
 	fmt.Fprintln(w)
 }
 
-func joinPromptIDs(ids []string) string {
-	if len(ids) == 0 {
-		return "no prompt ids recorded"
+// promptCoordinates describes a session's failures alongside the prompts
+// that caused them. A session can fail before Aftcast starts recording
+// prompt ids (or on a harness that doesn't emit them), so an empty
+// PromptIDs is a real, expected case — not an error — and gets its own
+// plain sentence rather than an empty "at prompts " fragment.
+func promptCoordinates(failures int, promptIDs []string) string {
+	if len(promptIDs) == 0 {
+		return countNoun(failures, "failure", "failures") + "; its failures carry no prompt references"
 	}
-	return strings.Join(ids, ", ")
+	word := "prompt"
+	if len(promptIDs) > 1 {
+		word = "prompts"
+	}
+	return fmt.Sprintf("%s at %s %s", countNoun(failures, "failure", "failures"), word, strings.Join(promptIDs, ", "))
 }

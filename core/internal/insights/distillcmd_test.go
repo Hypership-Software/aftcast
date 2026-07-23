@@ -58,6 +58,24 @@ func allTaintedDistillFixture(t *testing.T) *telemetry.Store {
 	return coachStore(t, events)
 }
 
+// promptCopyFixture exercises promptCoordinates' three branches directly:
+// a single prompt id, several prompt ids, and none at all.
+func promptCopyFixture(t *testing.T) *telemetry.Store {
+	t.Helper()
+	var events []schema.TelemetryEvent
+	events = append(events, distillSession("solo-prompt", "2026-07-13T09:00:00Z", 1, false, "p3")...)
+	events = append(events, distillSession("multi-prompt", "2026-07-14T09:00:00Z", 3, false, "p1", "p2", "p5")...)
+	events = append(events, distillSession("no-prompt", "2026-07-15T09:00:00Z", 2, false)...)
+	return coachStore(t, events)
+}
+
+// longIDDistillFixture uses a session id longer than shortID's 8-char cutoff
+// so a regression to the truncated id in Coordinates is directly observable.
+func longIDDistillFixture(t *testing.T) *telemetry.Store {
+	t.Helper()
+	return coachStore(t, distillSession("session-with-a-very-long-identifier", "2026-07-13T09:00:00Z", 1, false, "p9"))
+}
+
 func TestCoachDistillBundleCoordinatesAndScaffold(t *testing.T) {
 	var out strings.Builder
 	rep := audit.Report{OK: true, Count: 42}
@@ -69,12 +87,45 @@ func TestCoachDistillBundleCoordinatesAndScaffold(t *testing.T) {
 		"# Distill a skill from a recurring failure",
 		"chain verified",
 		"session s1",
-		"p1, p2",
+		"2 failures at prompts p1, p2",
 		"session s2",
-		"p3",
+		"1 failure at prompt p3",
 		"no commands or content were captured",
 		"## Drafting scaffold",
 		"SKILL.md",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("bundle missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestCoachDistillCoordinatesUseFullSessionID(t *testing.T) {
+	var out strings.Builder
+	rep := audit.Report{OK: true, Count: 42}
+	if err := CoachDistill(longIDDistillFixture(t), "cd-exit-1", rep, &out, distillNow); err != nil {
+		t.Fatalf("CoachDistill: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "session session-with-a-very-long-identifier —") {
+		t.Errorf("coordinates must carry the full session id (the reader substitutes it into <session-id>):\n%s", got)
+	}
+	if strings.Contains(got, "session session- —") {
+		t.Errorf("coordinates must not truncate the session id to shortID's 8-char prefix:\n%s", got)
+	}
+}
+
+func TestCoachDistillCoordinatesPromptCopy(t *testing.T) {
+	var out strings.Builder
+	rep := audit.Report{OK: true, Count: 42}
+	if err := CoachDistill(promptCopyFixture(t), "cd-exit-1", rep, &out, distillNow); err != nil {
+		t.Fatalf("CoachDistill: %v", err)
+	}
+	got := out.String()
+	for _, want := range []string{
+		"1 failure at prompt p3",
+		"3 failures at prompts p1, p2, p5",
+		"its failures carry no prompt references",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("bundle missing %q in:\n%s", want, got)
@@ -128,13 +179,22 @@ func TestCoachDistillBrokenChainIsLoud(t *testing.T) {
 	if strings.Contains(got, "chain verified") {
 		t.Error("broken chain must not read as verified")
 	}
-	failedIdx := strings.Index(got, "ATTESTATION FAILED")
-	sessionIdx := strings.Index(got, "session s1")
-	if sessionIdx < 0 {
-		t.Fatal("fixture should still surface session s1's coordinates")
+	if !strings.Contains(got, "cannot be distilled") {
+		t.Errorf("broken chain must refuse in plain English, got:\n%s", got)
 	}
-	if failedIdx > sessionIdx {
-		t.Error("ATTESTATION FAILED must appear before any session id")
+	// The taint gate's own inputs come from the record that just failed
+	// verification, so a broken chain must withhold coordinates and the
+	// scaffold exactly like an all-tainted cluster does — not just move the
+	// banner ahead of them.
+	if strings.Contains(got, "## Coordinates") || strings.Contains(got, "session s1") || strings.Contains(got, "session s2") {
+		t.Errorf("broken chain must not surface any session coordinates:\n%s", got)
+	}
+	if strings.Contains(got, "## Drafting scaffold") || strings.Contains(got, "SKILL.md") {
+		t.Errorf("broken chain must not offer a drafting scaffold:\n%s", got)
+	}
+	failedIdx := strings.Index(got, "ATTESTATION FAILED")
+	if failedIdx < 0 || failedIdx > strings.Index(got, "cannot be distilled") {
+		t.Error("ATTESTATION FAILED must appear before the refusal sentence")
 	}
 }
 

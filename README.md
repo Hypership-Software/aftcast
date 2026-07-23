@@ -90,6 +90,9 @@ Aftcast observes sessions from that point forward.
 | `aftcast daemon run` | Run the daemon in the foreground |
 | `aftcast version` | Print the version |
 
+`coach export` and `coach distill` write counts, dates, and session and prompt
+references only, never command content.
+
 ## What `aftcast init` changes
 
 All changes are local and reversible:
