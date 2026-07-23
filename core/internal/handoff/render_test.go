@@ -47,6 +47,25 @@ func TestRenderBrokenChainIsLoud(t *testing.T) {
 	if strings.Contains(out, "chain verified") {
 		t.Error("broken chain must not read as verified")
 	}
+
+	// Verify banner appears before Intent section (banner is under title, before narrative sections)
+	banner := "**ATTESTATION FAILED:** the record's HMAC chain broke at record 7 (hash mismatch (record was altered))"
+	bannerIdx := strings.Index(out, banner)
+	intentIdx := strings.Index(out, "## Intent")
+	if bannerIdx < 0 {
+		t.Error("banner with 'record 7' detail must appear under title")
+	}
+	if intentIdx < 0 {
+		t.Error("Intent section should exist")
+	}
+	if bannerIdx > intentIdx {
+		t.Error("banner must appear BEFORE Intent section")
+	}
+
+	// Verify "in this digest" phrasing is used
+	if !strings.Contains(out, "Nothing in this digest can be trusted") {
+		t.Error("must use 'in this digest' phrasing in banner")
+	}
 }
 
 func TestRenderNamesReviewShapedActors(t *testing.T) {
@@ -88,7 +107,22 @@ func TestRenderGuardsEmptyCommitSHAs(t *testing.T) {
 	if !strings.Contains(out, "recorded 42 events across 3 prompts") {
 		t.Error("events/prompts sentence must still appear")
 	}
-	if !strings.Contains(out, "sent 1 delivery signals") {
-		t.Error("delivery signals sentence must appear after commit clause")
+	if !strings.Contains(out, "sent 1 delivery signal") {
+		t.Error("delivery signals sentence must appear with singular form")
+	}
+}
+
+func TestRenderSingularCounts(t *testing.T) {
+	f := baseFacts()
+	// baseFacts() has Deliveries: 1, Failures: 1
+	out := render(t, f, audit.Report{OK: true, Count: 42})
+	if !strings.Contains(out, "sent 1 delivery signal") {
+		t.Error("must use singular 'delivery signal' when count is 1")
+	}
+	if !strings.Contains(out, "had 1 failed tool call") {
+		t.Error("must use singular 'failed tool call' when count is 1")
+	}
+	if strings.Contains(out, "delivery signals") || strings.Contains(out, "tool calls") {
+		t.Error("must not use plural forms for count of 1")
 	}
 }

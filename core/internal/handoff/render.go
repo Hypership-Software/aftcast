@@ -14,6 +14,10 @@ func Render(ref string, facts []SessionFacts, rep audit.Report) []byte {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Handoff digest — %s\n\n", ref)
 
+	if !rep.OK {
+		fmt.Fprintf(&b, "**ATTESTATION FAILED:** the record's HMAC chain broke at record %d (%s). Nothing in this digest can be trusted.\n\n", rep.BadSeq, rep.Detail)
+	}
+
 	ids := make([]string, 0, len(facts))
 	for _, f := range facts {
 		ids = append(ids, f.ID)
@@ -47,8 +51,8 @@ func Render(ref string, facts []SessionFacts, rep audit.Report) []byte {
 		if len(f.CommitSHAs) > 0 {
 			fmt.Fprintf(&b, "It committed %s. ", strings.Join(f.CommitSHAs, ", "))
 		}
-		fmt.Fprintf(&b, "It sent %d delivery signals and had %d failed tool calls. ",
-			f.Deliveries, f.Failures)
+		fmt.Fprintf(&b, "It sent %s and had %s. ",
+			count(f.Deliveries, "delivery signal"), count(f.Failures, "failed tool call"))
 		if len(f.Skills) > 0 {
 			fmt.Fprintf(&b, "Skills invoked: %s. ", strings.Join(f.Skills, ", "))
 		}
@@ -65,7 +69,7 @@ func Render(ref string, facts []SessionFacts, rep audit.Report) []byte {
 	if rep.OK {
 		fmt.Fprintf(&b, "The record's HMAC chain is intact: chain verified across %s records.\n\n", thousands(rep.Count))
 	} else {
-		fmt.Fprintf(&b, "**ATTESTATION FAILED:** the record's HMAC chain broke at record %d (%s). Nothing below can be trusted.\n\n", rep.BadSeq, rep.Detail)
+		fmt.Fprintf(&b, "**ATTESTATION FAILED:** the record's HMAC chain broke at record %d (%s). Nothing in this digest can be trusted.\n\n", rep.BadSeq, rep.Detail)
 	}
 	b.WriteString("Within the observed sessions: ")
 	review := reviewShaped(facts)
@@ -124,6 +128,13 @@ func tainted(facts []SessionFacts) bool {
 		}
 	}
 	return false
+}
+
+func count(n int, noun string) string {
+	if n == 1 {
+		return fmt.Sprintf("1 %s", noun)
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 func thousands(n int) string {
