@@ -27,3 +27,21 @@ func TestEvidenceRowsWindowsGroupsAndSums(t *testing.T) {
 		t.Errorf("rows:\n got %+v\nwant %+v", rows, want)
 	}
 }
+
+func TestEvidenceRowsOrdersByEarliestSessionNotInputOrder(t *testing.T) {
+	now := time.Date(2026, 7, 23, 12, 0, 0, 0, time.UTC)
+	since := now.AddDate(0, 0, -14)
+	sessions := []telemetry.Session{
+		{SessionID: "z1", Started: "2026-07-22T09:00:00Z", ProjectName: "zeta"},
+		{SessionID: "a1", Started: "2026-07-20T09:00:00Z", ProjectName: "alpha"},
+		{SessionID: "z2", Started: "2026-07-22T10:00:00Z", ProjectName: "zeta"},
+	}
+	rows := EvidenceRows(sessions, since, now)
+	want := []RepoEvidence{
+		{Repo: "alpha", SessionIDs: []string{"a1"}, Sessions: 1},
+		{Repo: "zeta", SessionIDs: []string{"z1", "z2"}, Sessions: 2},
+	}
+	if !reflect.DeepEqual(rows, want) {
+		t.Errorf("rows:\n got %+v\nwant %+v", rows, want)
+	}
+}

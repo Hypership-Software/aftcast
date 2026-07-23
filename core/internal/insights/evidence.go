@@ -20,17 +20,17 @@ type RepoEvidence struct {
 
 func EvidenceRows(sessions []telemetry.Session, since, now time.Time) []RepoEvidence {
 	repoMap := make(map[string]*RepoEvidence)
-	repoOrder := []string{}                        // track first appearance order
-	sessionPairs := make(map[string][]sessionTime) // (Started, SessionID) pairs per repo
+	repoMin := make(map[string]time.Time) // minimum Started per repo for ordering
+	sessionPairs := make(map[string][]sessionTime)
 
 	for _, s := range sessions {
 		started, err := time.Parse(time.RFC3339Nano, s.Started)
 		if err != nil {
-			continue // exclude unparseable
+			continue
 		}
 
 		if started.Before(since) || started.After(now) {
-			continue // exclude out-of-window
+			continue
 		}
 
 		repo := s.ProjectName
@@ -39,11 +39,10 @@ func EvidenceRows(sessions []telemetry.Session, since, now time.Time) []RepoEvid
 		}
 
 		if _, exists := repoMap[repo]; !exists {
-			repoMap[repo] = &RepoEvidence{
-				Repo:       repo,
-				SessionIDs: []string{},
-			}
-			repoOrder = append(repoOrder, repo)
+			repoMap[repo] = &RepoEvidence{Repo: repo}
+			repoMin[repo] = started
+		} else if started.Before(repoMin[repo]) {
+			repoMin[repo] = started
 		}
 
 		evidence := repoMap[repo]
@@ -64,7 +63,6 @@ func EvidenceRows(sessions []telemetry.Session, since, now time.Time) []RepoEvid
 		})
 	}
 
-	// Sort SessionIDs per repo by Started time
 	for repo := range sessionPairs {
 		pairs := sessionPairs[repo]
 		sort.Slice(pairs, func(i, j int) bool {
@@ -77,9 +75,16 @@ func EvidenceRows(sessions []telemetry.Session, since, now time.Time) []RepoEvid
 		repoMap[repo].SessionIDs = ids
 	}
 
-	// Build result in first-appearance order
-	result := make([]RepoEvidence, len(repoOrder))
-	for i, repo := range repoOrder {
+	repoNames := make([]string, 0, len(repoMap))
+	for repo := range repoMap {
+		repoNames = append(repoNames, repo)
+	}
+	sort.Slice(repoNames, func(i, j int) bool {
+		return repoMin[repoNames[i]].Before(repoMin[repoNames[j]])
+	})
+
+	result := make([]RepoEvidence, len(repoNames))
+	for i, repo := range repoNames {
 		result[i] = *repoMap[repo]
 	}
 
