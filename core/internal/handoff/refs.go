@@ -16,7 +16,7 @@ func ResolveSHAs(repoDir, ref string, limit int) ([]string, error) {
 	if ref == "" {
 		ref = "HEAD"
 	}
-	cmd := exec.Command("git", "rev-list", fmt.Sprintf("--max-count=%d", limit), ref)
+	cmd := exec.Command("git", "rev-list", fmt.Sprintf("--max-count=%d", limit), "--end-of-options", ref)
 	cmd.Dir = repoDir
 	out, err := cmd.Output()
 	if err != nil {

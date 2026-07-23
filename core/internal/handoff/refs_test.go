@@ -67,6 +67,13 @@ func TestResolveSHAsUnknownRefErrors(t *testing.T) {
 	}
 }
 
+func TestResolveSHAsOptionShapedRefErrors(t *testing.T) {
+	dir := gitRepo(t, 1)
+	if _, err := ResolveSHAs(dir, "--all", 10); err == nil {
+		t.Fatal("want error for option-shaped ref")
+	}
+}
+
 func TestMatchesAny(t *testing.T) {
 	full := []string{"bb16536aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
 	if !MatchesAny("bb16536", full) {
