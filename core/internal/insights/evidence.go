@@ -80,6 +80,9 @@ func EvidenceRows(sessions []telemetry.Session, since, now time.Time) []RepoEvid
 		repoNames = append(repoNames, repo)
 	}
 	sort.Slice(repoNames, func(i, j int) bool {
+		if repoMin[repoNames[i]].Equal(repoMin[repoNames[j]]) {
+			return repoNames[i] < repoNames[j]
+		}
 		return repoMin[repoNames[i]].Before(repoMin[repoNames[j]])
 	})
 
