@@ -29,7 +29,7 @@ commands:
   status       daemon + hook health at a glance
   doctor       detailed wiring checks
   insights     browse captured sessions and analytics
-  coach        what keeps failing and is worth a permanent fix (coach export <id>)
+  coach        what keeps failing and is worth a permanent fix (coach export <id>, coach distill <id>)
   handoff      digest skeleton for a branch or commit (how it came to exist)
   stop         stop the background daemon
   uninstall    remove hooks and stop the daemon
@@ -144,12 +144,14 @@ func insightsCmd(args []string) int {
 
 // coachCmd surfaces recurring friction worth a permanent fix; `export <id>`
 // writes one fingerprint's evidence bundle to stdout for an agent to encode.
+// `distill <id>` writes a skill-drafting bundle instead — transcript
+// coordinates only, taint-gated, attested against the audit chain.
 func coachCmd(args []string) int {
 	usage := func() int {
-		fmt.Fprintln(os.Stderr, "usage: aftcast coach [export <id>]")
+		fmt.Fprintln(os.Stderr, "usage: aftcast coach [export <id>|distill <id>]")
 		return 2
 	}
-	if len(args) > 0 && (args[0] != "export" || len(args) != 2) {
+	if len(args) > 0 && ((args[0] != "export" && args[0] != "distill") || len(args) != 2) {
 		return usage()
 	}
 	store, err := svc.OpenReadModel("")
@@ -159,6 +161,16 @@ func coachCmd(args []string) int {
 	defer store.Close()
 	if len(args) == 0 {
 		if err := insights.CoachReport(store, os.Stdout, time.Now()); err != nil {
+			return fail("coach", err)
+		}
+		return 0
+	}
+	if args[0] == "distill" {
+		rep, err := svc.VerifyLog("")
+		if err != nil {
+			return fail("coach", err)
+		}
+		if err := insights.CoachDistill(store, args[1], rep, os.Stdout, time.Now()); err != nil {
 			return fail("coach", err)
 		}
 		return 0
