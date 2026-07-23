@@ -38,14 +38,17 @@ func Render(ref string, facts []SessionFacts, rep audit.Report) []byte {
 
 	b.WriteString("## Sessions\n\n")
 	if len(facts) == 0 {
-		b.WriteString("No captured session recorded a commit on this ref. Sessions from before\n")
-		b.WriteString("commit capture (2026-07-23) cannot join and are not listed.\n\n")
+		b.WriteString("No captured session recorded a commit on this ref. Sessions recorded before\n")
+		b.WriteString("commit capture existed cannot join and are not listed.\n\n")
 	}
 	for _, f := range facts {
 		fmt.Fprintf(&b, "Session `%s` ran from %s to %s and recorded %d events across %d prompts. ",
 			f.ID, f.Started, f.Ended, f.Events, f.Prompts)
-		fmt.Fprintf(&b, "It committed %s, sent %d delivery signal(s), and had %d failed tool call(s). ",
-			strings.Join(f.CommitSHAs, ", "), f.Deliveries, f.Failures)
+		if len(f.CommitSHAs) > 0 {
+			fmt.Fprintf(&b, "It committed %s. ", strings.Join(f.CommitSHAs, ", "))
+		}
+		fmt.Fprintf(&b, "It sent %d delivery signals and had %d failed tool calls. ",
+			f.Deliveries, f.Failures)
 		if len(f.Skills) > 0 {
 			fmt.Fprintf(&b, "Skills invoked: %s. ", strings.Join(f.Skills, ", "))
 		}
@@ -60,7 +63,7 @@ func Render(ref string, facts []SessionFacts, rep audit.Report) []byte {
 
 	b.WriteString("## Attestation\n\n")
 	if rep.OK {
-		fmt.Fprintf(&b, "The record's HMAC chain verified intact: chain verified across %s records.\n\n", thousands(rep.Count))
+		fmt.Fprintf(&b, "The record's HMAC chain is intact: chain verified across %s records.\n\n", thousands(rep.Count))
 	} else {
 		fmt.Fprintf(&b, "**ATTESTATION FAILED:** the record's HMAC chain broke at record %d (%s). Nothing below can be trusted.\n\n", rep.BadSeq, rep.Detail)
 	}

@@ -77,3 +77,18 @@ func TestRenderNarrationBlockCarriesCoordinatesOnly(t *testing.T) {
 		t.Error("narrative sections missing")
 	}
 }
+
+func TestRenderGuardsEmptyCommitSHAs(t *testing.T) {
+	f := baseFacts()
+	f[0].CommitSHAs = []string{}
+	out := render(t, f, audit.Report{OK: true, Count: 42})
+	if strings.Contains(out, "committed ,") {
+		t.Error("empty CommitSHAs must not render 'committed ,'")
+	}
+	if !strings.Contains(out, "recorded 42 events across 3 prompts") {
+		t.Error("events/prompts sentence must still appear")
+	}
+	if !strings.Contains(out, "sent 1 delivery signals") {
+		t.Error("delivery signals sentence must appear after commit clause")
+	}
+}
