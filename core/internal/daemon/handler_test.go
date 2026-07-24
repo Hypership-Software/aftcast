@@ -3,6 +3,8 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -220,4 +222,70 @@ func TestHandleStopWithoutSamplerIsUnchanged(t *testing.T) {
 	if got := rec.events[0].ContextTokens; got != 0 {
 		t.Errorf("context_tokens = %d, want 0", got)
 	}
+}
+
+func TestHandleAssignsTurnIndexPerSession(t *testing.T) {
+	rec := &fakeRecorder{}
+	h := handlerWith(&fakeEval{v: schema.RiskUnknown}, &fakeTaint{}, rec)
+
+	send := func(et schema.EventType, session string) {
+		req := Request{Event: schema.TelemetryEvent{EventType: et, SessionID: session}}
+		if et == schema.EventPreTool {
+			req.Descriptor = schema.Descriptor{SessionID: session}
+		}
+		if _, err := h.Handle(req); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	send(schema.EventSessionStart, "a")
+	send(schema.EventUserPrompt, "a")
+	send(schema.EventPreTool, "a")
+	send(schema.EventPostTool, "a")
+	send(schema.EventUserPrompt, "a")
+	send(schema.EventPreTool, "a")
+	send(schema.EventSessionStart, "b")
+	send(schema.EventUserPrompt, "b")
+
+	want := []int{0, 1, 1, 1, 2, 2, 0, 1}
+	if len(rec.events) != len(want) {
+		t.Fatalf("recorded %d events, want %d", len(rec.events), len(want))
+	}
+	for i, w := range want {
+		if got := rec.events[i].TurnIndex; got != w {
+			t.Fatalf("event %d (%s/%s) turn_index = %d, want %d",
+				i, rec.events[i].SessionID, rec.events[i].EventType, got, w)
+		}
+	}
+}
+
+// One Handler serves both the IPC listener and the HTTP hook endpoint from
+// separate goroutines, so the turn counter is shared mutable state.
+func TestHandleTurnIndexIsConcurrencySafe(t *testing.T) {
+	h := handlerWith(&fakeEval{v: schema.RiskUnknown}, &fakeTaint{}, &syncRecorder{})
+	var wg sync.WaitGroup
+	for i := range 32 {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			session := fmt.Sprintf("s%d", i%4)
+			req := Request{Event: schema.TelemetryEvent{EventType: schema.EventUserPrompt, SessionID: session}}
+			if _, err := h.Handle(req); err != nil {
+				t.Error(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+}
+
+type syncRecorder struct {
+	mu     sync.Mutex
+	events []schema.TelemetryEvent
+}
+
+func (s *syncRecorder) Record(e schema.TelemetryEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append(s.events, e)
+	return nil
 }

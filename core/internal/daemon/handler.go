@@ -3,7 +3,11 @@
 // telemetry.
 package daemon
 
-import "github.com/Hypership-Software/aftcast/internal/schema"
+import (
+	"sync"
+
+	"github.com/Hypership-Software/aftcast/internal/schema"
+)
 
 // Request is one telemetry message from a harness. Descriptor is populated for
 // tool events (pre_tool); Event carries the record for every event type.
@@ -46,9 +50,30 @@ type Deps struct {
 
 // Handler classifies and records one Request. The action always proceeds — Aftcast
 // observes, it does not gate.
-type Handler struct{ deps Deps }
+//
+// One Handler is shared by the IPC listener and the HTTP hook endpoint, which run
+// in separate goroutines, so the turn counters are mutex-guarded.
+type Handler struct {
+	deps  Deps
+	mu    sync.Mutex
+	turns map[string]int
+}
 
-func NewHandler(d Deps) *Handler { return &Handler{deps: d} }
+func NewHandler(d Deps) *Handler {
+	return &Handler{deps: d, turns: map[string]int{}}
+}
+
+// turnIndex advances the session's turn on a user prompt and returns the turn every
+// event until the next prompt belongs to. Events before a session's first prompt —
+// session_start, a lone probe marker — stay at 0.
+func (h *Handler) turnIndex(sessionID string, et schema.EventType) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if et == schema.EventUserPrompt {
+		h.turns[sessionID]++
+	}
+	return h.turns[sessionID]
+}
 
 // Handle records every event; only pre_tool consults the classifier and taint
 // ledger. Session taint is stamped onto every recorded event so it is durable in
@@ -56,6 +81,7 @@ func NewHandler(d Deps) *Handler { return &Handler{deps: d} }
 func (h *Handler) Handle(req Request) (Response, error) {
 	if req.Event.EventType != schema.EventPreTool {
 		ev := req.Event
+		ev.TurnIndex = h.turnIndex(ev.SessionID, ev.EventType)
 		ev.Taint = h.deps.Taint.IsTainted(ev.SessionID)
 		if ev.EventType == schema.EventStop && h.deps.Sample != nil {
 			ev.ContextTokens = h.deps.Sample(req.Descriptor.TranscriptPath)
@@ -76,6 +102,7 @@ func (h *Handler) Handle(req Request) (Response, error) {
 	h.deps.Taint.MarkFromResult(d.SessionID, d)
 
 	ev := req.Event
+	ev.TurnIndex = h.turnIndex(ev.SessionID, ev.EventType)
 	ev.Risk = risk
 	ev.RuleID = ruleID
 	ev.Taint = h.deps.Taint.IsTainted(d.SessionID)
