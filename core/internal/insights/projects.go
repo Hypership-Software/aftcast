@@ -33,9 +33,11 @@ type projectSummary struct {
 }
 
 func groupProjects(sessions []telemetry.Session, scope Scope, now time.Time) []projectSummary {
+	names := repositoryNamesByProjectID(sessions)
 	groups := make(map[string][]telemetry.Session)
 	for _, session := range sessions {
-		groups[projectGroupKey(session)] = append(groups[projectGroupKey(session)], session)
+		key := projectGroupKey(session, names)
+		groups[key] = append(groups[key], session)
 	}
 
 	projects := make([]projectSummary, 0, len(groups))
@@ -128,18 +130,52 @@ func summarizeProject(key string, sessions []telemetry.Session, scope Scope, now
 	return out
 }
 
-func projectGroupKey(session telemetry.Session) string {
+func projectGroupKey(session telemetry.Session, names map[string]string) string {
 	switch {
 	case session.ProjectName != "":
 		// Historical sessions can carry different project IDs for the same
 		// repository as capture moved from path to remote-backed identity. The
 		// local, proven repository name is the stable developer-facing join key.
 		return "name:" + strings.ToLower(strings.TrimSpace(session.ProjectName))
+	case names[session.ProjectID] != "":
+		return "name:" + names[session.ProjectID]
 	case session.ProjectID != "":
 		return "id:" + session.ProjectID
 	default:
 		return "other"
 	}
+}
+
+// A session that never touched a file has no path evidence to resolve a
+// repository name from, so it reaches here carrying only its project id. Keying
+// it on that id alone would split one repository into two cards; the named
+// sessions sharing its id already prove the name. A session that edits files
+// outside the repository it started in names that other repository instead, so
+// the id can carry several names — the majority of its sessions wins.
+func repositoryNamesByProjectID(sessions []telemetry.Session) map[string]string {
+	counts := make(map[string]map[string]int)
+	for _, session := range sessions {
+		name := strings.ToLower(strings.TrimSpace(session.ProjectName))
+		if session.ProjectID == "" || name == "" {
+			continue
+		}
+		if counts[session.ProjectID] == nil {
+			counts[session.ProjectID] = make(map[string]int)
+		}
+		counts[session.ProjectID][name]++
+	}
+
+	names := make(map[string]string, len(counts))
+	for id, byName := range counts {
+		best, bestCount := "", 0
+		for name, count := range byName {
+			if count > bestCount || (count == bestCount && (best == "" || name < best)) {
+				best, bestCount = name, count
+			}
+		}
+		names[id] = best
+	}
+	return names
 }
 
 func projectDisplayName(sessions []telemetry.Session, scope Scope) string {
