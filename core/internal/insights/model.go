@@ -118,12 +118,26 @@ func (m model) applyScope() model {
 	if !m.scopeGlobal {
 		m.mode = modeProject
 		m.surface = surfaceOverview
-		m.selectedProject = projectSummary{Name: m.scope.Name, ID: m.scope.ProjectID, Key: "id:" + m.scope.ProjectID, Aggregate: m.agg}
-		if len(m.projects) > 0 {
-			m.selectedProject = m.projects[0]
-		}
+		m.selectedProject = m.scopedProject()
 	}
 	return m.rebuildRows()
+}
+
+// A scope is one project by definition — scopeSessions has already established that
+// every session in it shares the scoped id — so the card summarizes all of them.
+// Rendering one name-group instead split the card whenever a session edited files
+// outside the repository it started in, and showed only whichever part held the
+// most recently started session.
+func (m model) scopedProject() projectSummary {
+	placeholder := projectSummary{Name: m.scope.Name, ID: m.scope.ProjectID, Key: "id:" + m.scope.ProjectID, Aggregate: m.agg}
+	if len(m.all) == 0 {
+		return placeholder
+	}
+	out := summarizeProject(placeholder.Key, m.all, m.scope, m.now)
+	if m.scope.Name != "" {
+		out.Name = m.scope.Name
+	}
+	return out
 }
 
 func scopeSessions(all []telemetry.Session, projectID string, global bool) []telemetry.Session {

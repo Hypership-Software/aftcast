@@ -286,6 +286,46 @@ func TestSecuritySurfaceHonoursScopeAndHasHonestEmptyState(t *testing.T) {
 	}
 }
 
+// A scoped view is one project by definition, so its card must summarize every
+// scoped session. Grouping by repository name inside a scope split the card when a
+// session edited files outside the repository it started in, and only one part was
+// rendered — the one whose newest session happened to sort first.
+func TestApplyScopeSummarizesEveryScopedSessionInOneCard(t *testing.T) {
+	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
+	sessions := []telemetry.Session{
+		{
+			SessionID: "strayed-elsewhere", ProjectID: "p1", ProjectName: "other-repo",
+			Started: sampleNow.Add(-time.Minute).Format(time.RFC3339Nano), ToolCalls: 1,
+			FilesChanged: 1, ChangedFiles: []string{"x.go"}, LinesAdded: 5, ObservedToolMS: 10,
+		},
+		{
+			SessionID: "did-the-work", ProjectID: "p1", ProjectName: "aftcast",
+			Started: sampleNow.Add(-2 * time.Hour).Format(time.RFC3339Nano), ToolCalls: 4,
+			FilesChanged: 2, ChangedFiles: []string{"a.go", "b.go"}, LinesAdded: 100, ObservedToolMS: 5000,
+		},
+	}
+
+	m := build(sessions, Scope{ProjectID: "p1", Name: "aftcast"}, provider, nil, sampleNow)
+	got := m.selectedProject
+	if got.Name != "aftcast" {
+		t.Fatalf("scoped card name = %q, want the scoped project's own name", got.Name)
+	}
+	if len(got.Sessions) != 2 {
+		t.Fatalf("scoped card sessions = %d, want 2: %+v", len(got.Sessions), got.Sessions)
+	}
+	if got.FilesChanged != 3 || got.LinesAdded != 105 || got.ObservedToolMS != 5010 {
+		t.Fatalf("scoped card aggregate = %+v", got)
+	}
+}
+
+func TestApplyScopeKeepsAPlaceholderCardWhenTheScopeHasNoSessions(t *testing.T) {
+	provider := func(string) ([]schema.TelemetryEvent, error) { return nil, nil }
+	m := build(nil, Scope{ProjectID: "p1", Name: "aftcast"}, provider, nil, sampleNow)
+	if m.selectedProject.Name != "aftcast" || m.selectedProject.ID != "p1" {
+		t.Fatalf("empty scoped card = %+v", m.selectedProject)
+	}
+}
+
 func TestSecurityColumnsAndRecentSortAreStable(t *testing.T) {
 	sessions := []telemetry.Session{
 		{SessionID: "older", ToolCalls: 2, Taint: true, Started: sampleNow.Add(-2 * time.Hour).Format(time.RFC3339Nano)},
