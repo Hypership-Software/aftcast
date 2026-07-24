@@ -75,14 +75,16 @@ func (s *Store) Project(log *audit.Log) error {
 	}
 
 	upsert, err := tx.Prepare(`INSERT INTO sessions
-		(session_id, user, org, harness, started, ended, exit_reason,
+		(key, first_seq, last_seq, session_id, user, org, harness, started, ended, exit_reason,
 		 turn_count, tool_calls, danger_detected, taint, skills_used, duration_ms,
 		 files_touched, files_changed, shipped, capture_version, plan_style,
 		 outcome, clean_delivery, correction_turns, task_type, project_id, project_name,
 		 changed_files, lines_added, lines_removed, change_stats_covered, observed_tool_ms,
 		 plan_ms, build_ms, review_ms, work_mix_covered)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-		ON CONFLICT(session_id) DO UPDATE SET
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(key) DO UPDATE SET
+			first_seq=excluded.first_seq, last_seq=excluded.last_seq,
+			session_id=excluded.session_id,
 			user=excluded.user, org=excluded.org, harness=excluded.harness,
 			started=excluded.started, ended=excluded.ended, exit_reason=excluded.exit_reason,
 			turn_count=excluded.turn_count, tool_calls=excluded.tool_calls,
@@ -108,7 +110,8 @@ func (s *Store) Project(log *audit.Log) error {
 		if err != nil {
 			return err
 		}
-		if _, err := upsert.Exec(sess.SessionID, sess.User, sess.Org, sess.Harness,
+		if _, err := upsert.Exec(sess.Key, sess.FirstSeq, sess.LastSeq,
+			sess.SessionID, sess.User, sess.Org, sess.Harness,
 			sess.Started, sess.Ended, sess.ExitReason,
 			sess.TurnCount, sess.ToolCalls, sess.DangerDetected, b2i(sess.Taint),
 			sess.SkillsUsed, sess.DurationMS, sess.FilesTouched, sess.FilesChanged,
@@ -127,9 +130,14 @@ func (s *Store) Project(log *audit.Log) error {
 	return tx.Commit()
 }
 
-// foldSessions groups events by session_id into the structural summary columns.
-// Pure, and it requires events in seq order (as Log.Events returns them) so the
-// first/last timestamps per session are its start/end.
+// foldSessions groups events into the structural summary columns. Pure, and it
+// requires events in seq order (as Log.Events returns them) so the first/last
+// timestamps per session are its start/end.
+//
+// A harness reuses one session id when a session is resumed, so a session_start
+// for an id already seen opens a new session rather than extending the previous
+// one. Without that, a session resumed across days folds into a single record
+// whose span covers all of them and whose latest work dates to the first.
 func foldSessions(evs []schema.TelemetryEvent) []Session {
 	type acc struct {
 		sess    *Session
@@ -138,16 +146,34 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		changed map[string]struct{}
 		events  []schema.TelemetryEvent
 	}
-	byID := make(map[string]*acc)
+	byKey := make(map[string]*acc)
+	currentKey := make(map[string]string)
+	runs := make(map[string]int)
 	var order []string
 
 	for _, e := range evs {
-		a := byID[e.SessionID]
-		if a == nil {
-			a = &acc{sess: &Session{SessionID: e.SessionID, Started: e.TS}, skills: map[string]struct{}{}, files: map[string]struct{}{}, changed: map[string]struct{}{}}
-			byID[e.SessionID] = a
-			order = append(order, e.SessionID)
+		key, resumed := currentKey[e.SessionID], false
+		if e.EventType == schema.EventSessionStart && key != "" {
+			resumed = true
 		}
+		if key == "" || resumed {
+			runs[e.SessionID]++
+			key = resumeKey(e.SessionID, runs[e.SessionID])
+			currentKey[e.SessionID] = key
+		}
+
+		a := byKey[key]
+		if a == nil {
+			a = &acc{
+				sess:    &Session{Key: key, SessionID: e.SessionID, Started: e.TS, FirstSeq: e.Seq},
+				skills:  map[string]struct{}{},
+				files:   map[string]struct{}{},
+				changed: map[string]struct{}{},
+			}
+			byKey[key] = a
+			order = append(order, key)
+		}
+		a.sess.LastSeq = e.Seq
 		a.events = append(a.events, e)
 		s := a.sess
 		if e.V > s.CaptureVersion {
@@ -203,8 +229,8 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 	}
 
 	out := make([]Session, 0, len(order))
-	for _, id := range order {
-		a := byID[id]
+	for _, key := range order {
+		a := byKey[key]
 		if !hasAgentActivity(a.sess) {
 			continue
 		}
@@ -234,6 +260,15 @@ func foldSessions(evs []schema.TelemetryEvent) []Session {
 		out = append(out, *a.sess)
 	}
 	return out
+}
+
+// resumeKey leaves a session's first run keyed by its bare id, so the common case
+// reads as the id the harness reports and only resumes carry a suffix.
+func resumeKey(sessionID string, run int) string {
+	if run <= 1 {
+		return sessionID
+	}
+	return sessionID + "#" + strconv.Itoa(run)
 }
 
 func observedToolMS(events []schema.TelemetryEvent) int64 {

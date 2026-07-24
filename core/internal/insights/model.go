@@ -525,7 +525,7 @@ func (m model) openDetail(sess telemetry.Session) (tea.Model, tea.Cmd) {
 	m.mode = modeDetail
 	m.detailSess = sess
 	m.showRaw = false
-	evs, err := m.events(sess.SessionID)
+	evs, err := m.events(sess.Key)
 	if err != nil {
 		m.detailEvs = nil
 		m.detail.SetContent("failed to load events: " + err.Error())

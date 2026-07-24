@@ -7,7 +7,7 @@ import (
 
 type Source interface {
 	Sessions() ([]telemetry.Session, error)
-	EventsForSession(id string) ([]schema.TelemetryEvent, error)
+	EventsForSession(key string) ([]schema.TelemetryEvent, error)
 }
 
 type Selected struct {
@@ -27,7 +27,7 @@ func SelectSessions(src Source, fullSHAs []string) ([]Selected, error) {
 	}
 	var out []Selected
 	for _, s := range sessions {
-		evs, err := src.EventsForSession(s.SessionID)
+		evs, err := src.EventsForSession(s.Key)
 		if err != nil {
 			return nil, err
 		}

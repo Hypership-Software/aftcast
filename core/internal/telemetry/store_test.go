@@ -354,13 +354,13 @@ func TestSessions_ScansProjectID(t *testing.T) {
 	}
 	defer s.Close()
 	if _, err := s.db.Exec(`INSERT INTO sessions
-		(session_id, user, org, harness, started, ended, exit_reason,
+		(key, first_seq, last_seq, session_id, user, org, harness, started, ended, exit_reason,
 		 turn_count, tool_calls, danger_detected, taint, outcome, clean_delivery,
 		 correction_turns, task_type, skills_used, duration_ms, files_touched,
 		 files_changed, shipped, capture_version, plan_style, project_id, project_name,
 		 changed_files, lines_added, lines_removed, change_stats_covered, observed_tool_ms,
 		 plan_ms, build_ms, review_ms, work_mix_covered)
-		VALUES ('s1','','','','','','',0,5,0,0,'',0,0,'','',0,0,0,0,0,'','proj123','my-repo',
+		VALUES ('s1',1,9,'s1','','','','','','',0,5,0,0,'',0,0,'','',0,0,0,0,0,'','proj123','my-repo',
 		 '["a.go"]',3,1,1,50,10,20,20,1)`); err != nil {
 		t.Fatal(err)
 	}

@@ -19,7 +19,7 @@ func (f *fakeSource) EventsForSession(id string) ([]schema.TelemetryEvent, error
 
 func TestSelectSessionsJoinsOnCommitSHA(t *testing.T) {
 	src := &fakeSource{
-		sessions: []telemetry.Session{{SessionID: "a"}, {SessionID: "b"}, {SessionID: "c"}},
+		sessions: []telemetry.Session{{Key: "a", SessionID: "a"}, {Key: "b", SessionID: "b"}, {Key: "c", SessionID: "c"}},
 		events: map[string][]schema.TelemetryEvent{
 			"a": {{EventType: schema.EventPostTool, CommitSHA: "bb16536"}},
 			"b": {{EventType: schema.EventPostTool, CommitSHA: "1234567"}},
@@ -44,7 +44,7 @@ func TestSelectSessionsJoinsOnCommitSHA(t *testing.T) {
 
 func TestSelectSessionsDedupesSHAs(t *testing.T) {
 	src := &fakeSource{
-		sessions: []telemetry.Session{{SessionID: "a"}},
+		sessions: []telemetry.Session{{Key: "a", SessionID: "a"}},
 		events: map[string][]schema.TelemetryEvent{
 			"a": {
 				{EventType: schema.EventPostTool, CommitSHA: "bb16536"},

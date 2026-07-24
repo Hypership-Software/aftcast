@@ -49,9 +49,12 @@ func CoachDistill(store *telemetry.Store, slug string, rep audit.Report, w io.Wr
 	if err != nil {
 		return fmt.Errorf("coach distill: load sessions: %w", err)
 	}
+	// A resumed id owns several folded sessions and failures are attributed by raw
+	// id, so taint accumulates across an id's runs: a later clean run must not clear
+	// an earlier tainted one and readmit it to the scaffold.
 	taintByID := make(map[string]bool, len(sessions))
 	for _, s := range sessions {
-		taintByID[s.SessionID] = s.Taint
+		taintByID[s.SessionID] = taintByID[s.SessionID] || s.Taint
 	}
 
 	var clean, tainted []analytics.SessionFailures

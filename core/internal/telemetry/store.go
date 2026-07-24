@@ -20,6 +20,13 @@ import (
 // analytical columns (Outcome, CleanDelivery, CorrectionTurns, TaskType) are
 // populated separately.
 type Session struct {
+	// Key identifies one folded session and is the read-model's primary key. A
+	// harness reuses a session id across resumes, so Key is the id for a session's
+	// first run and "<id>#<n>" for the nth; SessionID stays the raw id the event
+	// log records.
+	Key                string
+	FirstSeq           uint64
+	LastSeq            uint64
 	SessionID          string
 	User               string
 	Org                string
@@ -61,7 +68,10 @@ type Store struct {
 
 const schemaDDL = `
 CREATE TABLE IF NOT EXISTS sessions (
-	session_id       TEXT PRIMARY KEY,
+	key              TEXT PRIMARY KEY,
+	first_seq        INTEGER,
+	last_seq         INTEGER,
+	session_id       TEXT,
 	user             TEXT,
 	org              TEXT,
 	harness          TEXT,
@@ -127,15 +137,16 @@ func OpenStore(path string) (*Store, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
-// Sessions returns every folded session row, ordered by session_id.
+// Sessions returns every folded session row, ordered by session_id then by the
+// resume's position in the log, so a resumed id's runs stay in chronological order.
 func (s *Store) Sessions() ([]Session, error) {
-	rows, err := s.db.Query(`SELECT session_id, user, org, harness, started, ended, exit_reason,
+	rows, err := s.db.Query(`SELECT key, first_seq, last_seq, session_id, user, org, harness, started, ended, exit_reason,
 		turn_count, tool_calls, danger_detected, taint,
 		outcome, clean_delivery, correction_turns, task_type, skills_used, duration_ms,
 		files_touched, files_changed, shipped, capture_version, plan_style, project_id, project_name,
 		changed_files, lines_added, lines_removed, change_stats_covered, observed_tool_ms,
 		plan_ms, build_ms, review_ms, work_mix_covered
-		FROM sessions ORDER BY session_id`)
+		FROM sessions ORDER BY session_id, first_seq`)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +157,8 @@ func (s *Store) Sessions() ([]Session, error) {
 		var session Session
 		var taint, clean, shipped, changeCovered, mixCovered int
 		var changedFiles string
-		if err := rows.Scan(&session.SessionID, &session.User, &session.Org, &session.Harness, &session.Started, &session.Ended, &session.ExitReason,
+		if err := rows.Scan(&session.Key, &session.FirstSeq, &session.LastSeq,
+			&session.SessionID, &session.User, &session.Org, &session.Harness, &session.Started, &session.Ended, &session.ExitReason,
 			&session.TurnCount, &session.ToolCalls, &session.DangerDetected, &taint,
 			&session.Outcome, &clean, &session.CorrectionTurns, &session.TaskType, &session.SkillsUsed, &session.DurationMS,
 			&session.FilesTouched, &session.FilesChanged, &shipped, &session.CaptureVersion, &session.PlanStyle, &session.ProjectID, &session.ProjectName,
@@ -194,10 +206,15 @@ func (s *Store) FailedCalls() ([]schema.TelemetryEvent, error) {
 	return out, rows.Err()
 }
 
-// EventsForSession returns a session's events in seq order, decoded from the
-// events table's raw column (the marshaled TelemetryEvent Project stored).
-func (s *Store) EventsForSession(id string) ([]schema.TelemetryEvent, error) {
-	rows, err := s.db.Query(`SELECT raw FROM events WHERE session_id = ? ORDER BY seq`, id)
+// EventsForSession returns one folded session's events in seq order, decoded from
+// the events table's raw column (the marshaled TelemetryEvent Project stored). The
+// argument is a Session.Key, not a raw session id: a resumed id owns several folded
+// sessions, so the seq range recorded for the key is what bounds the run.
+func (s *Store) EventsForSession(key string) ([]schema.TelemetryEvent, error) {
+	rows, err := s.db.Query(`SELECT e.raw FROM events e
+		JOIN sessions s ON s.session_id = e.session_id
+		WHERE s.key = ? AND e.seq >= s.first_seq AND e.seq <= s.last_seq
+		ORDER BY e.seq`, key)
 	if err != nil {
 		return nil, err
 	}
