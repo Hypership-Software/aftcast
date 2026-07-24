@@ -22,13 +22,7 @@ type WorkMix struct {
 func ObservedWorkMix(events []schema.TelemetryEvent) WorkMix {
 	out := WorkMix{Covered: observationCaptured(events)}
 	calls := pairCalls(events)
-	firstWrite := -1
-	for i, call := range calls {
-		if call.Post.ToolOK == schema.OutcomeOK && call.Pre.ToolClass == schema.ClassFileWrite {
-			firstWrite = i
-			break
-		}
-	}
+	firstWrite := firstWritePerTurn(calls)
 
 	seen := map[*WorkBucket]map[schema.Operation]struct{}{
 		&out.Plan:   {},
@@ -46,7 +40,7 @@ func ObservedWorkMix(events []schema.TelemetryEvent) WorkMix {
 		switch {
 		case reviewOperation(call.Pre.Operation):
 			bucket = &out.Review
-		case (firstWrite < 0 || i < firstWrite) && planningActivity(call.Pre):
+		case beforeTurnsFirstWrite(firstWrite, call.Pre.TurnIndex, i) && planningActivity(call.Pre):
 			bucket = &out.Plan
 		}
 		bucket.Calls++
@@ -65,6 +59,28 @@ func ObservedWorkMix(events []schema.TelemetryEvent) WorkMix {
 		sort.Slice(bucket.Operations, func(i, j int) bool { return bucket.Operations[i] < bucket.Operations[j] })
 	}
 	return out
+}
+
+// The planning window is per turn, not per session: reading and searching before
+// you start writing is planning, and a prompt reopens that window. Scoped to the
+// whole session, the first write would close planning permanently, so every long
+// session decayed to Build-only however much later investigation it did.
+func firstWritePerTurn(calls []observedCall) map[int]int {
+	first := make(map[int]int)
+	for i, call := range calls {
+		if call.Post.ToolOK != schema.OutcomeOK || call.Pre.ToolClass != schema.ClassFileWrite {
+			continue
+		}
+		if _, found := first[call.Pre.TurnIndex]; !found {
+			first[call.Pre.TurnIndex] = i
+		}
+	}
+	return first
+}
+
+func beforeTurnsFirstWrite(firstWrite map[int]int, turn, i int) bool {
+	write, found := firstWrite[turn]
+	return !found || i < write
 }
 
 func planningActivity(event schema.TelemetryEvent) bool {

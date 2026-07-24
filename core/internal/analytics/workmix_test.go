@@ -67,14 +67,51 @@ func TestObservedWorkMixRecognizesExplicitPlanningSkill(t *testing.T) {
 	}
 }
 
+// The planning window renews each turn: a session that already wrote in an early
+// turn still credits a later turn's reads as planning. A session-wide window let
+// the first write close planning for the rest of the session's life, so any long
+// session decayed to Build-only.
+func TestObservedWorkMixRenewsThePlanningWindowEachTurn(t *testing.T) {
+	var events []schema.TelemetryEvent
+	events = appendTurnCall(events, 1, "read-1", schema.ClassFileRead, schema.OperationRead, schema.OutcomeOK, 10)
+	events = appendTurnCall(events, 1, "edit-1", schema.ClassFileWrite, schema.OperationEdit, schema.OutcomeOK, 20)
+	events = appendTurnCall(events, 3, "read-3", schema.ClassFileRead, schema.OperationRead, schema.OutcomeOK, 40)
+	events = appendTurnCall(events, 3, "edit-3", schema.ClassFileWrite, schema.OperationEdit, schema.OutcomeOK, 80)
+
+	got := ObservedWorkMix(events)
+	if got.Plan.Calls != 2 || got.Plan.DurationMS != 50 {
+		t.Fatalf("plan = %+v", got.Plan)
+	}
+	if got.Build.Calls != 2 || got.Build.DurationMS != 100 {
+		t.Fatalf("build = %+v", got.Build)
+	}
+}
+
+// A read after its own turn's write is still Build — the within-turn ordering rule
+// survives; only its scope changed.
+func TestObservedWorkMixKeepsPostWriteReadsAsBuildWithinATurn(t *testing.T) {
+	var events []schema.TelemetryEvent
+	events = appendTurnCall(events, 1, "edit", schema.ClassFileWrite, schema.OperationEdit, schema.OutcomeOK, 20)
+	events = appendTurnCall(events, 1, "verify", schema.ClassFileRead, schema.OperationRead, schema.OutcomeOK, 5)
+
+	got := ObservedWorkMix(events)
+	if got.Plan.Calls != 0 || got.Build.Calls != 2 {
+		t.Fatalf("mix = %+v", got)
+	}
+}
+
 func appendCall(events []schema.TelemetryEvent, id string, class schema.ToolClass, operation schema.Operation, outcome schema.ToolOutcome, latency int64) []schema.TelemetryEvent {
+	return appendTurnCall(events, 0, id, class, operation, outcome, latency)
+}
+
+func appendTurnCall(events []schema.TelemetryEvent, turn int, id string, class schema.ToolClass, operation schema.Operation, outcome schema.ToolOutcome, latency int64) []schema.TelemetryEvent {
 	pre := schema.TelemetryEvent{
 		V: schema.ObservationVersion, EventType: schema.EventPreTool, ToolUseID: id,
-		ToolClass: class, Operation: operation,
+		ToolClass: class, Operation: operation, TurnIndex: turn,
 	}
 	post := schema.TelemetryEvent{
 		V: schema.ObservationVersion, EventType: schema.EventPostTool, ToolUseID: id,
-		ToolOK: outcome, LatencyMS: latency,
+		ToolOK: outcome, LatencyMS: latency, TurnIndex: turn,
 	}
 	return append(events, pre, post)
 }
